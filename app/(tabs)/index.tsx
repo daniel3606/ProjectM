@@ -1,98 +1,367 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+  type SharedValue,
+} from "react-native-reanimated";
+import Theme from "@/constants/theme";
+import MarshmallowCharacter from "@/components/MarshmallowCharacter";
+import ProfileAvatarButton from "@/components/ProfileAvatarButton";
+import ComparisonObjectPlaceholder from "@/components/ComparisonObjectPlaceholder";
+import {
+  getStageForSize,
+  OBJECT_STAGES,
+  type GrowthStage,
+} from "@/constants/growthStages";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+// ── Hardcoded user state — swap with context/store later ─────────────────────
+const INITIAL_SIZE_CM = 10;
+const MARSHMALLOW_COLOR = "#FFB5C2"; // Strawberry
+const MARSHMALLOW_NAME = "Mochi";
+// ─────────────────────────────────────────────────────────────────────────────
 
-export default function HomeScreen() {
+const BODY_HEIGHT = 222;
+const TARGET_HEIGHT = 140;
+function marshmallowWrapperScale(sizeCm: number) {
+  const internal = 0.9 + Math.min(sizeCm / 60, 0.4);
+  return TARGET_HEIGHT / (BODY_HEIGHT * internal);
+}
+
+const SCENE_HEIGHT = 300;
+const ANIM_DURATION = 400;
+const ANIM_EASING = Easing.out(Easing.cubic);
+const MIN_SIZE = 3;
+
+// Gap between each object on the horizontal line (in pixels)
+const GAP = 220;
+
+/**
+ * Compute the camera position on the object line based on marshmallow size.
+ *
+ * Each OBJECT_STAGE[i] sits at position i * GAP on the line.
+ * The camera position is interpolated so that when the marshmallow exactly
+ * matches a stage's size, the camera is centered on that stage's position.
+ * Between stages the camera smoothly slides from one to the next.
+ */
+function computeCameraPosition(sizeCm: number): number {
+  // Before the first object stage
+  if (sizeCm <= OBJECT_STAGES[0].sizeCm) {
+    const progress =
+      (sizeCm - MIN_SIZE) / (OBJECT_STAGES[0].sizeCm - MIN_SIZE);
+    return Math.max(0, progress) * 0; // camera at 0 (first object position)
+  }
+
+  // Between two object stages — interpolate
+  for (let i = 0; i < OBJECT_STAGES.length - 1; i++) {
+    if (sizeCm < OBJECT_STAGES[i + 1].sizeCm) {
+      const lo = OBJECT_STAGES[i].sizeCm;
+      const hi = OBJECT_STAGES[i + 1].sizeCm;
+      const progress = (sizeCm - lo) / (hi - lo);
+      return (i + progress) * GAP;
+    }
+  }
+
+  // At or beyond the last stage
+  return (OBJECT_STAGES.length - 1) * GAP;
+}
+
+// ── Per-object component ─────────────────────────────────────────────────────
+interface SceneObjectProps {
+  stage: GrowthStage;
+  index: number;
+  cameraPos: SharedValue<number>;
+  currentSizeCm: number;
+}
+
+function SceneObject({ stage, index, cameraPos, currentSizeCm }: SceneObjectProps) {
+  const scale = stage.sizeCm / currentSizeCm;
+
+  const animStyle = useAnimatedStyle(() => {
+    const screenX = index * GAP - cameraPos.value;
+    const absX = Math.abs(screenX);
+    // Fully visible within GAP range, fade out beyond, gone past 1.5× GAP
+    const FADE_START = 160;
+    const FADE_END = 340;
+    const opacity =
+      absX > FADE_END ? 0 : absX < FADE_START ? 0.85 : 0.85 * (1 - (absX - FADE_START) / (FADE_END - FADE_START));
+    return {
+      transform: [{ translateX: screenX }],
+      opacity: Math.max(0, opacity),
+    };
+  });
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <Animated.View style={[styles.objectPosition, animStyle]}>
+      <ComparisonObjectPlaceholder stage={stage} scale={scale} />
+    </Animated.View>
+  );
+}
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+// ── Main screen ──────────────────────────────────────────────────────────────
+export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const [sizeCm, setSizeCm] = useState(INITIAL_SIZE_CM);
+
+  const stage = getStageForSize(sizeCm);
+  const wrapperScale = marshmallowWrapperScale(sizeCm);
+
+  // Single animated camera position on the object line
+  const cameraPos = useSharedValue(computeCameraPosition(sizeCm));
+
+  useEffect(() => {
+    cameraPos.value = withTiming(computeCameraPosition(sizeCm), {
+      duration: ANIM_DURATION,
+      easing: ANIM_EASING,
+    });
+  }, [sizeCm]);
+
+  const handleStartFocus = () => {
+    Alert.alert("Focus Session", "Focus session feature coming soon!");
+  };
+
+  return (
+    <ScrollView
+      style={[styles.screen, { paddingTop: insets.top }]}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Marshmallow</Text>
+        <ProfileAvatarButton onPress={() => router.push("/profile")} />
+      </View>
+
+      {/* ── Comparison scene ────────────────────────────────────────── */}
+      <View style={styles.scene}>
+        <View style={styles.groundLine} />
+
+        {/* All objects on a single line — only visible ones show */}
+        {OBJECT_STAGES.map((obj, i) => (
+          <SceneObject
+            key={obj.id}
+            stage={obj}
+            index={i}
+            cameraPos={cameraPos}
+            currentSizeCm={sizeCm}
+          />
+        ))}
+
+        {/* Marshmallow (rendered last = foreground) */}
+        <View style={styles.marshmallowPosition}>
+          <View style={{ transform: [{ scale: wrapperScale }] }}>
+            <MarshmallowCharacter
+              color={MARSHMALLOW_COLOR}
+              name={MARSHMALLOW_NAME}
+              sizeCm={sizeCm}
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* ── Customize button ────────────────────────────────────────── */}
+      <View style={styles.customizeRow}>
+        <Pressable
+          onPress={() => router.push("/custominit")}
+          style={({ pressed }) => [
+            styles.customizeButton,
+            pressed && styles.customizePressed,
+          ]}
+        >
+          <Ionicons name="shirt-outline" size={16} color={Theme.colors.secondary} />
+          <Text style={styles.customizeText}>Customize</Text>
+        </Pressable>
+      </View>
+
+      {/* ── Info section ────────────────────────────────────────────── */}
+      <View style={styles.infoSection}>
+        <Text style={styles.sizeText}>
+          Your marshmallow is {sizeCm}cm tall
+        </Text>
+        <Text style={styles.messageText}>{stage.message}</Text>
+      </View>
+
+      {/* ── Dev: size controls (remove later) ───────────────────────── */}
+      <View style={styles.devRow}>
+        <Pressable
+          onPress={() => setSizeCm((s) => Math.max(3, +(s - 0.1).toFixed(1)))}
+          style={styles.devButton}
+        >
+          <Text style={styles.devButtonText}>− 0.1</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setSizeCm((s) => Math.min(170, +(s + 0.1).toFixed(1)))}
+          style={styles.devButton}
+        >
+          <Text style={styles.devButtonText}>+ 0.1</Text>
+        </Pressable>
+      </View>
+
+      {/* ── Start Focus button ──────────────────────────────────────── */}
+      <Pressable
+        onPress={handleStartFocus}
+        style={({ pressed }) => [
+          styles.focusButton,
+          pressed && styles.focusButtonPressed,
+        ]}
+      >
+        <Ionicons name="timer-outline" size={22} color={Theme.colors.white} />
+        <Text style={styles.focusButtonText}>Start Focus Session</Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  screen: {
+    flex: 1,
+    backgroundColor: Theme.colors.background,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 32,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
+
+  /* Header */
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  headerTitle: {
+    fontSize: 22,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.text,
+  },
+
+  /* Scene */
+  scene: {
+    height: SCENE_HEIGHT,
+    marginTop: 8,
+    position: "relative",
+    overflow: "hidden",
+  },
+  groundLine: {
+    position: "absolute",
+    bottom: 38,
     left: 0,
-    position: 'absolute',
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(139,99,92,0.10)",
+  },
+
+  /* All objects share this base — centered, moved by animated translateX */
+  objectPosition: {
+    position: "absolute",
+    bottom: 110,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+
+  /* Marshmallow */
+  marshmallowPosition: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+
+  /* Customize button */
+  customizeRow: {
+    alignItems: "center",
+    marginTop: 2,
+  },
+  customizeButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: Theme.colors.card,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+  },
+  customizePressed: {
+    opacity: 0.7,
+  },
+  customizeText: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.secondary,
+  },
+
+  /* Info */
+  infoSection: {
+    alignItems: "center",
+    marginTop: 12,
+    gap: 4,
+  },
+  sizeText: {
+    fontSize: 20,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.text,
+  },
+  messageText: {
+    fontSize: 15,
+    fontFamily: Theme.fonts.regular,
+    color: Theme.colors.textSecondary,
+    textAlign: "center",
+  },
+
+  /* Dev controls — remove later */
+  devRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 16,
+  },
+  devButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: Theme.colors.cardBorder,
+  },
+  devButtonText: {
+    fontSize: 14,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.text,
+  },
+
+  /* Focus button */
+  focusButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    backgroundColor: Theme.colors.secondary,
+    borderRadius: 16,
+    paddingVertical: 18,
+    marginTop: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  focusButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  focusButtonText: {
+    fontSize: 18,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.white,
   },
 });

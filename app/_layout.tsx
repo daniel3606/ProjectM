@@ -1,24 +1,89 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import Fonts from "@/constants/fonts";
+import { ClerkProvider } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+SplashScreen.preventAutoHideAsync();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
+export default function Layout() {
+  const [fontsLoaded] = useFonts({
+    [Fonts.regular]: require("../assets/fonts/SF-Compact-Rounded-Regular.ttf"),
+    [Fonts.medium]: require("../assets/fonts/SF-Compact-Rounded-Medium.ttf"),
+    [Fonts.semibold]: require("../assets/fonts/SF-Compact-Rounded-Semibold.ttf"),
+    [Fonts.bold]: require("../assets/fonts/SF-Compact-Rounded-Bold.ttf"),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
+        <BottomSheetModalProvider>
+          <Stack>
+            <Stack.Screen name="index" options={{ headerShown: false }} />
+
+            <Stack.Screen
+              name="login"
+              options={{
+                presentation: "formSheet",
+                headerShown: false,
+                sheetGrabberVisible: true,
+                sheetCornerRadius: 30,
+                sheetAllowedDetents: [0.5],
+              }}
+            />
+
+            <Stack.Screen
+              name="signin"
+              options={{
+                presentation: "formSheet",
+                animation: "slide_from_bottom",
+                headerShown: false,
+              }}
+            />
+
+            <Stack.Screen
+              name="custominit"
+              options={{
+                headerShown: false,
+                presentation: "card",
+                animation: "default",
+              }}
+            />
+
+            <Stack.Screen
+              name="(tabs)"
+              options={{
+                headerShown: false,
+                animation: "fade",
+              }}
+            />
+
+            <Stack.Screen
+              name="profile"
+              options={{
+                headerShown: false,
+                presentation: "card",
+              }}
+            />
+          </Stack>
+        </BottomSheetModalProvider>
+      </ClerkProvider>
+    </GestureHandlerRootView>
   );
 }
