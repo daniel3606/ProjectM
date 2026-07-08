@@ -1,0 +1,5 @@
+{
+  "name": "screen-time",
+  "version": "0.1.0",
+  "description": "Expo module wrapping Apple Screen Time"
+}

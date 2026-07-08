@@ -32,29 +32,29 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="size-preview"
+        name="customize"
         options={{
-          title: "Size",
+          title: "Customize",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="resize" size={size} color={color} />
+            <Ionicons name="color-palette-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="stats"
+        name="timed-block"
         options={{
-          title: "Stats",
+          title: "Timed Block",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bar-chart" size={size} color={color} />
+            <Ionicons name="hourglass-outline" size={size} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="goals"
+        name="friends"
         options={{
-          title: "Goals",
+          title: "Friends",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="flag" size={size} color={color} />
+            <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,23 +12,26 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { useFocusSession } from "@/contexts/FocusSessionContext";
+import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
+import * as ScreenTime from "@/modules/screen-time";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
 import ProfileAvatarButton from "@/components/ProfileAvatarButton";
 import ComparisonObjectPlaceholder from "@/components/ComparisonObjectPlaceholder";
+import FocusSessionSheet, {
+  type FocusSessionConfig,
+} from "@/components/FocusSessionSheet";
 import {
   getStageForSize,
   OBJECT_STAGES,
   type GrowthStage,
 } from "@/constants/growthStages";
 
-// ── Hardcoded user state — swap with context/store later ─────────────────────
 const INITIAL_SIZE_CM = 10;
-const MARSHMALLOW_COLOR = "#FFB5C2"; // Strawberry
-const MARSHMALLOW_NAME = "Mochi";
-// ─────────────────────────────────────────────────────────────────────────────
 
 const BODY_HEIGHT = 222;
-const TARGET_HEIGHT = 140;
+const TARGET_HEIGHT = 175;
 function marshmallowWrapperScale(sizeCm: number) {
   const internal = 0.9 + Math.min(sizeCm / 60, 0.4);
   return TARGET_HEIGHT / (BODY_HEIGHT * internal);
@@ -107,8 +111,13 @@ function SceneObject({ stage, index, cameraPos, currentSizeCm }: SceneObjectProp
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const profile = useMarshmallowProfile();
 
   const [sizeCm, setSizeCm] = useState(INITIAL_SIZE_CM);
+  const { activeSession, startSession, stopSession } = useFocusSession();
+  const isFocusActive = !!activeSession;
+  const [isLoading, setIsLoading] = useState(false);
+  const focusSheetRef = useRef<BottomSheetModal>(null);
 
   const stage = getStageForSize(sizeCm);
   const wrapperScale = marshmallowWrapperScale(sizeCm);
@@ -123,9 +132,32 @@ export default function HomeScreen() {
     });
   }, [sizeCm]);
 
-  const handleStartFocus = () => {
-    Alert.alert("Focus Session", "Focus session feature coming soon!");
-  };
+  const handleOpenFocusSheet = useCallback(async () => {
+    const authorized = await ensureScreenTimeAuthorized();
+    if (!authorized) return;
+    focusSheetRef.current?.present();
+  }, []);
+
+  const handleStartSession = useCallback(async (config: FocusSessionConfig) => {
+    setIsLoading(true);
+    try {
+      await ScreenTime.blockAll();
+      startSession(config);
+    } catch (error) {
+      Alert.alert("Error", `Failed to start focus session: ${error}`);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [startSession]);
+
+  const handleStopFocus = useCallback(async () => {
+    try {
+      await ScreenTime.clearBlocking();
+      stopSession();
+    } catch (error) {
+      Alert.alert("Error", `Failed to stop focus session: ${error}`);
+    }
+  }, [stopSession]);
 
   return (
     <ScrollView
@@ -141,8 +173,6 @@ export default function HomeScreen() {
 
       {/* ── Comparison scene ────────────────────────────────────────── */}
       <View style={styles.scene}>
-        <View style={styles.groundLine} />
-
         {/* All objects on a single line — only visible ones show */}
         {OBJECT_STAGES.map((obj, i) => (
           <SceneObject
@@ -158,63 +188,55 @@ export default function HomeScreen() {
         <View style={styles.marshmallowPosition}>
           <View style={{ transform: [{ scale: wrapperScale }] }}>
             <MarshmallowCharacter
-              color={MARSHMALLOW_COLOR}
-              name={MARSHMALLOW_NAME}
+              color={profile.color}
+              name={profile.name}
               sizeCm={sizeCm}
             />
           </View>
         </View>
       </View>
 
-      {/* ── Customize button ────────────────────────────────────────── */}
-      <View style={styles.customizeRow}>
-        <Pressable
-          onPress={() => router.push("/custominit")}
-          style={({ pressed }) => [
-            styles.customizeButton,
-            pressed && styles.customizePressed,
-          ]}
-        >
-          <Ionicons name="shirt-outline" size={16} color={Theme.colors.secondary} />
-          <Text style={styles.customizeText}>Customize</Text>
-        </Pressable>
-      </View>
 
       {/* ── Info section ────────────────────────────────────────────── */}
       <View style={styles.infoSection}>
         <Text style={styles.sizeText}>
-          Your marshmallow is {sizeCm}cm tall
+          {sizeCm}cm
         </Text>
         <Text style={styles.messageText}>{stage.message}</Text>
       </View>
 
-      {/* ── Dev: size controls (remove later) ───────────────────────── */}
-      <View style={styles.devRow}>
-        <Pressable
-          onPress={() => setSizeCm((s) => Math.max(3, +(s - 0.1).toFixed(1)))}
-          style={styles.devButton}
-        >
-          <Text style={styles.devButtonText}>− 0.1</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setSizeCm((s) => Math.min(170, +(s + 0.1).toFixed(1)))}
-          style={styles.devButton}
-        >
-          <Text style={styles.devButtonText}>+ 0.1</Text>
-        </Pressable>
-      </View>
 
-      {/* ── Start Focus button ──────────────────────────────────────── */}
+      {/* ── Start / End Focus button ──────────────────────────────────── */}
       <Pressable
-        onPress={handleStartFocus}
+        onPress={isFocusActive ? handleStopFocus : handleOpenFocusSheet}
+        disabled={isLoading}
         style={({ pressed }) => [
           styles.focusButton,
+          isFocusActive && styles.focusButtonActive,
           pressed && styles.focusButtonPressed,
+          isLoading && styles.focusButtonDisabled,
         ]}
       >
-        <Ionicons name="timer-outline" size={22} color={Theme.colors.white} />
-        <Text style={styles.focusButtonText}>Start Focus Session</Text>
+        <Ionicons
+          name={isFocusActive ? "stop-circle-outline" : "timer-outline"}
+          size={22}
+          color={Theme.colors.white}
+        />
+        <Text style={styles.focusButtonText}>
+          {isLoading
+            ? "Loading..."
+            : isFocusActive
+              ? "End Focus Session"
+              : "Start Focus Session"}
+        </Text>
       </Pressable>
+
+      {/* ── Focus session settings sheet ──────────────────────────── */}
+      <FocusSessionSheet
+        sheetRef={focusSheetRef}
+        currentSizeCm={sizeCm}
+        onStartSession={handleStartSession}
+      />
     </ScrollView>
   );
 }
@@ -250,14 +272,6 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
-  groundLine: {
-    position: "absolute",
-    bottom: 38,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "rgba(139,99,92,0.10)",
-  },
 
   /* All objects share this base — centered, moved by animated translateX */
   objectPosition: {
@@ -271,7 +285,7 @@ const styles = StyleSheet.create({
   /* Marshmallow */
   marshmallowPosition: {
     position: "absolute",
-    bottom: 40,
+    bottom: 0,
     left: 0,
     right: 0,
     alignItems: "center",
@@ -309,7 +323,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sizeText: {
-    fontSize: 20,
+    fontSize: 50,
     fontFamily: Theme.fonts.semibold,
     color: Theme.colors.text,
   },
@@ -354,6 +368,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 8,
     elevation: 6,
+  },
+  focusButtonActive: {
+    backgroundColor: Theme.colors.danger,
+  },
+  focusButtonDisabled: {
+    opacity: 0.6,
   },
   focusButtonPressed: {
     opacity: 0.85,

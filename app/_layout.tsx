@@ -1,4 +1,7 @@
 import Fonts from "@/constants/fonts";
+import { MarshmallowProfileProvider } from "@/contexts/MarshmallowProfileContext";
+import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
+import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
 import { ClerkProvider } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -34,54 +37,60 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
         <BottomSheetModalProvider>
-          <Stack>
-            <Stack.Screen name="index" options={{ headerShown: false }} />
+          <MarshmallowProfileProvider>
+            <FocusSessionProvider>
+              <TimedBlockPlansProvider>
+                <Stack>
+                  <Stack.Screen name="index" options={{ headerShown: false }} />
 
-            <Stack.Screen
-              name="login"
-              options={{
-                presentation: "formSheet",
-                headerShown: false,
-                sheetGrabberVisible: true,
-                sheetCornerRadius: 30,
-                sheetAllowedDetents: [0.5],
-              }}
-            />
+                  <Stack.Screen
+                    name="login"
+                    options={{
+                      presentation: "formSheet",
+                      headerShown: false,
+                      sheetGrabberVisible: true,
+                      sheetCornerRadius: 30,
+                      sheetAllowedDetents: [0.5],
+                    }}
+                  />
 
-            <Stack.Screen
-              name="signin"
-              options={{
-                presentation: "formSheet",
-                animation: "slide_from_bottom",
-                headerShown: false,
-              }}
-            />
+                  <Stack.Screen
+                    name="signin"
+                    options={{
+                      presentation: "formSheet",
+                      animation: "slide_from_bottom",
+                      headerShown: false,
+                    }}
+                  />
 
-            <Stack.Screen
-              name="custominit"
-              options={{
-                headerShown: false,
-                presentation: "card",
-                animation: "default",
-              }}
-            />
+                  <Stack.Screen
+                    name="custominit"
+                    options={{
+                      headerShown: false,
+                      presentation: "card",
+                      animation: "default",
+                    }}
+                  />
 
-            <Stack.Screen
-              name="(tabs)"
-              options={{
-                headerShown: false,
-                animation: "fade",
-              }}
-            />
+                  <Stack.Screen
+                    name="(tabs)"
+                    options={{
+                      headerShown: false,
+                      animation: "fade",
+                    }}
+                  />
 
-            <Stack.Screen
-              name="profile"
-              options={{
-                headerShown: false,
-                presentation: "card",
-              }}
-            />
-          </Stack>
+                  <Stack.Screen
+                    name="profile"
+                    options={{
+                      headerShown: false,
+                      presentation: "card",
+                    }}
+                  />
+                </Stack>
+              </TimedBlockPlansProvider>
+            </FocusSessionProvider>
+          </MarshmallowProfileProvider>
         </BottomSheetModalProvider>
       </ClerkProvider>
     </GestureHandlerRootView>

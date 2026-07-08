@@ -43,7 +43,8 @@
           }
         }
       ],
-      "expo-image"
+      "expo-image",
+      "./plugins/withFamilyControls"
     ],
     "experiments": {
       "typedRoutes": true,

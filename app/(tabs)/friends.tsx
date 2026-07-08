@@ -1,10 +1,10 @@
 import { StyleSheet, Text, View } from "react-native";
 import Theme from "@/constants/theme";
 
-export default function StatsScreen() {
+export default function FriendsScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Stats</Text>
+      <Text style={styles.title}>Friends</Text>
       <Text style={styles.subtitle}>Coming soon</Text>
     </View>
   );

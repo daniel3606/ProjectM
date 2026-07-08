@@ -1,6 +1,7 @@
 import Theme from "@/constants/theme";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 
 import { View, Text, StyleSheet, Pressable } from "react-native";
@@ -15,6 +16,7 @@ type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
 export default function Custominit() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const profile = useMarshmallowProfile();
 
   const [name, setName] = useState("");
   const [selectedColor, setSelectedColor] = useState<MarshmallowColorHex>(
@@ -72,7 +74,14 @@ export default function Custominit() {
                 </Pressable>
               ))}
             </View>
-          <Pressable style={styles.button} onPress={() => router.replace("/(tabs)")}>
+          <Pressable
+            style={styles.button}
+            onPress={() => {
+              profile.setName(name.trim() || "Mochi");
+              profile.setColor(selectedColor);
+              router.replace("/(tabs)");
+            }}
+          >
             <Text style={styles.buttonText}>Next</Text>
           </Pressable>
       </View>
