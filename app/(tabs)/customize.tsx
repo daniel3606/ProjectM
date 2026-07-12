@@ -1,5 +1,5 @@
 import React from "react";
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Pressable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
@@ -32,6 +32,8 @@ export default function CustomizeScreen() {
       style={[styles.screen, { paddingTop: insets.top }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
       <Text style={styles.title}>Customize</Text>
       <Text style={styles.subtitle}>Make your marshmallow your own</Text>
@@ -52,6 +54,7 @@ export default function CustomizeScreen() {
         onChangeText={profile.setName}
         maxLength={20}
         returnKeyType="done"
+        onSubmitEditing={Keyboard.dismiss}
       />
 
       <View style={styles.colorGrid}>

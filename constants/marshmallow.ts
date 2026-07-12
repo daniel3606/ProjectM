@@ -43,6 +43,23 @@ export function getGrowthForDuration(
   return Math.round(baseGrowth * multiplier * 10) / 10;
 }
 
+export const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+export const DAY_LABELS_FULL = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+export function formatClockTime(hour: number, minute: number): string {
+  const period = hour < 12 ? "AM" : "PM";
+  const displayHour = hour % 12 === 0 ? 12 : hour % 12;
+  return `${displayHour}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
 export function formatTimeRemaining(ms: number): string {
   if (ms <= 0) return "0:00";
   const totalSeconds = Math.ceil(ms / 1000);

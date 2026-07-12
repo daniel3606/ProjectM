@@ -24,10 +24,6 @@ import {
 import { getStageForSize, getNextStage } from "@/constants/growthStages";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
-import WheelPicker, {
-  ITEM_HEIGHT,
-  PICKER_HEIGHT,
-} from "@/components/WheelPicker";
 
 export interface FocusSessionConfig {
   durationMinutes: number;
@@ -35,8 +31,9 @@ export interface FocusSessionConfig {
   expectedGrowthCm: number;
 }
 
-const HOURS = [0, 1, 2, 3, 4];
-const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+const DURATION_STEP = 5;
+const MIN_DURATION = 5;
+const MAX_DURATION = 240;
 
 interface FocusSessionSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
@@ -51,15 +48,13 @@ export default function FocusSessionSheet({
 }: FocusSessionSheetProps) {
   const insets = useSafeAreaInsets();
 
-  const [durationHours, setDurationHours] = useState(0);
-  const [durationMinutes, setDurationMinutes] = useState(30);
+  const [totalMinutes, setTotalMinutes] = useState(30);
   const [focusMode, setFocusMode] = useState<FocusMode>("flexible");
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
 
   const snapPoints = useMemo(() => ["85%"], []);
 
-  const totalMinutes = durationHours * 60 + durationMinutes;
   const expectedGrowth = getGrowthForDuration(totalMinutes, focusMode);
   const projectedSize = currentSizeCm + expectedGrowth;
   const currentStage = getStageForSize(currentSizeCm);
@@ -118,6 +113,14 @@ export default function FocusSessionSheet({
     );
   }, []);
 
+  const handleDecreaseDuration = useCallback(() => {
+    setTotalMinutes((prev) => Math.max(MIN_DURATION, prev - DURATION_STEP));
+  }, []);
+
+  const handleIncreaseDuration = useCallback(() => {
+    setTotalMinutes((prev) => Math.min(MAX_DURATION, prev + DURATION_STEP));
+  }, []);
+
   const handleStart = useCallback(() => {
     if (totalSelected === 0 || totalMinutes === 0) return;
 
@@ -149,34 +152,9 @@ export default function FocusSessionSheet({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ─────────────────────────────────────────────── */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Focus Session</Text>
-          <Pressable
-            onPress={() => sheetRef.current?.dismiss()}
-            hitSlop={12}
-          >
-            <Ionicons
-              name="close-circle"
-              size={28}
-              color={Theme.colors.gray}
-            />
-          </Pressable>
-        </View>
 
-        {/* ── Expected Growth ────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Expected Growth</Text>
-        <View style={styles.card}>
-          <Text style={styles.growthAmount}>+{expectedGrowth}cm</Text>
-          <Text style={styles.growthTransition}>
-            {currentSizeCm}cm → {Math.round(projectedSize * 10) / 10}cm
-          </Text>
-          {willReachNewStage && nextStage && (
-            <Text style={styles.growthStageMessage}>
-              You&apos;ll reach {projectedStage.objectName} size!
-            </Text>
-          )}
-        </View>
+        <Text style={styles.growthAmount}>Expected Growth: {currentSizeCm}cm+({expectedGrowth}cm)</Text>
+
 
         {/* ── Focus Mode ─────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Focus Mode</Text>
@@ -326,22 +304,33 @@ export default function FocusSessionSheet({
         {/* ── Block Duration ─────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Block Duration</Text>
         <View style={styles.durationCard}>
-          <View pointerEvents="none" style={styles.selectionLineTop} />
-          <View pointerEvents="none" style={styles.selectionLineBottom} />
-          <View style={styles.durationRow}>
-            <WheelPicker
-              data={HOURS}
-              selectedValue={durationHours}
-              onChange={setDurationHours}
-              formatLabel={(h) => `${h} hr`}
-            />
-            <WheelPicker
-              data={MINUTES}
-              selectedValue={durationMinutes}
-              onChange={setDurationMinutes}
-              formatLabel={(m) => `${m} min`}
-            />
-          </View>
+          <Pressable
+            onPress={handleDecreaseDuration}
+            disabled={totalMinutes <= MIN_DURATION}
+            style={({ pressed }) => [
+              styles.durationStepButton,
+              pressed && styles.pressed,
+              totalMinutes <= MIN_DURATION && styles.durationStepButtonDisabled,
+            ]}
+          >
+            <Ionicons name="remove" size={22} color={Theme.colors.secondary} />
+          </Pressable>
+
+          <Text style={styles.durationValueText}>
+            {formatDuration(totalMinutes)}
+          </Text>
+
+          <Pressable
+            onPress={handleIncreaseDuration}
+            disabled={totalMinutes >= MAX_DURATION}
+            style={({ pressed }) => [
+              styles.durationStepButton,
+              pressed && styles.pressed,
+              totalMinutes >= MAX_DURATION && styles.durationStepButtonDisabled,
+            ]}
+          >
+            <Ionicons name="add" size={22} color={Theme.colors.secondary} />
+          </Pressable>
         </View>
 
         {/* ── Start Button ───────────────────────────────────────── */}
@@ -422,9 +411,9 @@ const styles = StyleSheet.create({
 
   /* Expected Growth */
   growthAmount: {
-    fontSize: 32,
+    fontSize: 24,
     fontFamily: Theme.fonts.bold,
-    color: Theme.colors.secondary,
+    color: Theme.colors.text,
   },
   growthTransition: {
     fontSize: 14,
@@ -544,36 +533,33 @@ const styles = StyleSheet.create({
 
   /* Duration */
   durationCard: {
-    position: "relative",
-    height: PICKER_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: Theme.colors.white,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: Theme.colors.cardBorder,
-    overflow: "hidden",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
   },
-  selectionLineTop: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: (PICKER_HEIGHT - ITEM_HEIGHT) / 2,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Theme.colors.cardBorder,
-    zIndex: 1,
-  },
-  selectionLineBottom: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: (PICKER_HEIGHT - ITEM_HEIGHT) / 2,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Theme.colors.cardBorder,
-    zIndex: 1,
-  },
-  durationRow: {
-    flexDirection: "row",
-    gap: 8,
+  durationStepButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
     justifyContent: "center",
+    backgroundColor: Theme.colors.background,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+  },
+  durationStepButtonDisabled: {
+    opacity: 0.4,
+  },
+  durationValueText: {
+    fontSize: 22,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.text,
   },
 
   /* Start Button */

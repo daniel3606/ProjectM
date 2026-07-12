@@ -73,6 +73,33 @@ export default function Layout() {
                   />
 
                   <Stack.Screen
+                    name="onboarding-purpose"
+                    options={{
+                      headerShown: false,
+                      presentation: "card",
+                      animation: "default",
+                    }}
+                  />
+
+                  <Stack.Screen
+                    name="onboarding-screentime"
+                    options={{
+                      headerShown: false,
+                      presentation: "card",
+                      animation: "default",
+                    }}
+                  />
+
+                  <Stack.Screen
+                    name="onboarding-premium"
+                    options={{
+                      headerShown: false,
+                      presentation: "card",
+                      animation: "default",
+                    }}
+                  />
+
+                  <Stack.Screen
                     name="(tabs)"
                     options={{
                       headerShown: false,
