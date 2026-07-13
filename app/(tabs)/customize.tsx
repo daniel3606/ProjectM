@@ -79,29 +79,6 @@ export default function CustomizeScreen() {
           </Pressable>
         ))}
       </View>
-
-      <Text style={styles.sectionTitle}>Growth Stages</Text>
-      <Text style={styles.sectionSubtitle}>
-        See what your marshmallow will be compared to as it grows
-      </Text>
-
-      <FlatList
-        data={GROWTH_STAGES}
-        renderItem={renderCard}
-        keyExtractor={(item) => item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.stageListContent}
-        snapToInterval={174} // card width (160) + marginRight (14)
-        decelerationRate="fast"
-      />
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          {GROWTH_STAGES.length} stages from {GROWTH_STAGES[0].sizeCm}cm to{" "}
-          {GROWTH_STAGES[GROWTH_STAGES.length - 1].sizeCm}cm
-        </Text>
-      </View>
     </ScrollView>
   );
 }

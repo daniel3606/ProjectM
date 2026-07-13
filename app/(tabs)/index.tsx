@@ -98,10 +98,8 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   }, [stopSession]);
 
   return (
-    <ScrollView
+    <View
       style={[styles.screen, { paddingTop: insets.top }]}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
     >
       {/* ── Header ──────────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -175,7 +173,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         currentSizeCm={sizeCm}
         onStartSession={handleStartSession}
       />
-    </ScrollView>
+    </View>
   );
 }
 
