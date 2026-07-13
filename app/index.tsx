@@ -9,14 +9,9 @@ import {
 } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Button } from "@/components/ui";
 
 type AuthMode = "login" | "signup";
 
@@ -91,20 +86,12 @@ function SignInForm() {
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          formStyles.submitButton,
-          pressed && formStyles.pressed,
-        ]}
+      <Button
+        label="Log In"
         onPress={onSubmit}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={Theme.colors.white} />
-        ) : (
-          <Text style={formStyles.submitText}>Log In</Text>
-        )}
-      </Pressable>
+        loading={loading}
+        style={formStyles.submitButton}
+      />
     </View>
   );
 }
@@ -213,20 +200,12 @@ function SignUpForm() {
 
         {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
-        <Pressable
-          style={({ pressed }) => [
-            formStyles.submitButton,
-            pressed && formStyles.pressed,
-          ]}
+        <Button
+          label="Verify"
           onPress={onVerify}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={Theme.colors.white} />
-          ) : (
-            <Text style={formStyles.submitText}>Verify</Text>
-          )}
-        </Pressable>
+          loading={loading}
+          style={formStyles.submitButton}
+        />
       </View>
     );
   }
@@ -269,20 +248,12 @@ function SignUpForm() {
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
-      <Pressable
-        style={({ pressed }) => [
-          formStyles.submitButton,
-          pressed && formStyles.pressed,
-        ]}
+      <Button
+        label="Sign Up"
         onPress={onSubmit}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color={Theme.colors.white} />
-        ) : (
-          <Text style={formStyles.submitText}>Sign Up</Text>
-        )}
-      </Pressable>
+        loading={loading}
+        style={formStyles.submitButton}
+      />
     </View>
   );
 }
@@ -344,16 +315,7 @@ export default function WelcomeScreen() {
       </View>
 
       <View style={styles.actions}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            styles.buttonPrimary,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => openSheet("login")}
-        >
-          <Text style={styles.buttonPrimaryText}>Log In</Text>
-        </Pressable>
+        <Button label="Log In" onPress={() => openSheet("login")} />
         <Pressable
           style={({ pressed }) => [
             styles.button,
@@ -445,20 +407,7 @@ const formStyles = StyleSheet.create({
     marginTop: 4,
   },
   submitButton: {
-    backgroundColor: Theme.colors.secondary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    justifyContent: "center",
     marginTop: 16,
-  },
-  pressed: {
-    opacity: 0.8,
-  },
-  submitText: {
-    color: Theme.colors.white,
-    fontFamily: Theme.fonts.semibold,
-    fontSize: 18,
   },
 });
 
@@ -520,21 +469,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  buttonPrimary: {
-    backgroundColor: Theme.colors.secondary,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
   pressed: {
     opacity: 0.8,
-  },
-  buttonPrimaryText: {
-    color: Theme.colors.white,
-    fontFamily: Theme.fonts.semibold,
-    fontSize: 18,
   },
   buttonSignUp: {
     backgroundColor: "#FFF6ED",

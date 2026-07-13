@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useSharedValue, withTiming, Easing } from "react-native-reanimated";
 import Theme from "@/constants/theme";
@@ -16,6 +14,7 @@ import SceneObject from "@/components/SceneObject";
 import FocusSessionSheet, {
   type FocusSessionConfig,
 } from "@/components/FocusSessionSheet";
+import { Screen, Button } from "@/components/ui";
 import { getStageForSize, OBJECT_STAGES } from "@/constants/growthStages";
 import { getCameraPosition, getFocusedStageIndex } from "@/lib/sceneMath";
 import useSelectionHaptic from "@/lib/useSelectionHaptic";
@@ -44,7 +43,6 @@ interface HomeScreenProps {
 
 // ── Main screen ──────────────────────────────────────────────────────────────
 export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
   const profile = useMarshmallowProfile();
 
@@ -98,9 +96,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   }, [stopSession]);
 
   return (
-    <View
-      style={[styles.screen, { paddingTop: insets.top }]}
-    >
+    <Screen style={styles.screen}>
       {/* ── Header ──────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Marshmallow</Text>
@@ -143,29 +139,14 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
 
       {/* ── Start / End Focus button ──────────────────────────────────── */}
-      <Pressable
+      <Button
         onPress={isFocusActive ? handleStopFocus : handleOpenFocusSheet}
-        disabled={isLoading}
-        style={({ pressed }) => [
-          styles.focusButton,
-          isFocusActive && styles.focusButtonActive,
-          pressed && styles.focusButtonPressed,
-          isLoading && styles.focusButtonDisabled,
-        ]}
-      >
-        <Ionicons
-          name={isFocusActive ? "stop-circle-outline" : "timer-outline"}
-          size={22}
-          color={Theme.colors.white}
-        />
-        <Text style={styles.focusButtonText}>
-          {isLoading
-            ? "Loading..."
-            : isFocusActive
-              ? "End Focus Session"
-              : "Start Focus Session"}
-        </Text>
-      </Pressable>
+        loading={isLoading}
+        icon={isFocusActive ? "stop-circle-outline" : "timer-outline"}
+        iconSize={22}
+        label={isFocusActive ? "End Focus Session" : "Start Focus Session"}
+        style={[styles.focusButton, isFocusActive && styles.focusButtonActive]}
+      />
 
       {/* ── Focus session settings sheet ──────────────────────────── */}
       <FocusSessionSheet
@@ -173,18 +154,13 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         currentSizeCm={sizeCm}
         onStartSession={handleStartSession}
       />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    flex: 1,
-    backgroundColor: Theme.colors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 32,
+    paddingHorizontal: Theme.spacing.xxl,
   },
 
   /* Header */
@@ -218,35 +194,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  /* Customize button */
-  customizeRow: {
-    alignItems: "center",
-    marginTop: 2,
-  },
-  customizeButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: Theme.colors.card,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-  },
-  customizePressed: {
-    opacity: 0.7,
-  },
-  customizeText: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.secondary,
-  },
-
   /* Info */
   infoSection: {
     alignItems: "center",
-    marginTop: 12,
+    marginTop: 28,
     gap: 4,
   },
   sizeText: {
@@ -261,54 +212,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /* Dev controls — remove later */
-  devRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 16,
-    marginTop: 16,
-  },
-  devButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: Theme.colors.cardBorder,
-  },
-  devButtonText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.text,
-  },
-
   /* Focus button */
   focusButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: Theme.colors.secondary,
     borderRadius: 16,
     paddingVertical: 18,
-    marginTop: 60,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: 76,
   },
   focusButtonActive: {
     backgroundColor: Theme.colors.danger,
-  },
-  focusButtonDisabled: {
-    opacity: 0.6,
-  },
-  focusButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  focusButtonText: {
-    fontSize: 18,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.white,
   },
 });

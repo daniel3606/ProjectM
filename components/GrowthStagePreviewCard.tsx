@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Theme from "@/constants/theme";
+import Card from "@/components/ui/Card";
 import type { GrowthStage } from "@/constants/growthStages";
 
 interface GrowthStagePreviewCardProps {
@@ -35,7 +36,7 @@ export default function GrowthStagePreviewCard({
   isCurrentStage = false,
 }: GrowthStagePreviewCardProps) {
   return (
-    <View style={[styles.card, isCurrentStage && styles.cardActive]}>
+    <Card active={isCurrentStage} style={styles.card}>
       {/* Placeholder visual — swap for real asset later */}
       <View style={styles.visualContainer}>
         <Text style={styles.emoji}>{getPlaceholderEmoji(stage.id)}</Text>
@@ -52,26 +53,18 @@ export default function GrowthStagePreviewCard({
           <Text style={styles.currentBadgeText}>You are here</Text>
         </View>
       )}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
     width: 160,
-    backgroundColor: Theme.colors.card,
     borderRadius: 20,
     paddingVertical: 18,
     paddingHorizontal: 14,
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: Theme.colors.cardBorder,
     marginRight: 14,
-  },
-  cardActive: {
-    borderColor: Theme.colors.secondary,
-    borderWidth: 2,
-    backgroundColor: "#FFF8F0",
   },
   visualContainer: {
     width: 72,

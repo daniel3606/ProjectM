@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
@@ -16,9 +15,9 @@ import {
   formatTimeRemaining,
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet from "@/components/TimedBlockPlanSheet";
+import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard, Button } from "@/components/ui";
 
 export default function TimedBlockScreen() {
-  const insets = useSafeAreaInsets();
   const { activeSession, stopSession } = useFocusSession();
   const { plans, addPlan, updatePlan, removePlan, setPlanEnabled } = useTimedBlockPlans();
   const planSheetRef = useRef<BottomSheetModal>(null);
@@ -54,15 +53,13 @@ export default function TimedBlockScreen() {
   }, []);
 
   return (
-    <ScrollView
-      style={[styles.screen, { paddingTop: insets.top }]}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
-    >
+    <Screen scroll>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Timed Block</Text>
-          <Text style={styles.subtitle}>Plan blocks ahead, start them when you&apos;re ready</Text>
+          <ScreenTitle style={styles.title}>Timed Block</ScreenTitle>
+          <ScreenSubtitle style={styles.subtitle}>
+            Plan blocks ahead, start them when you&apos;re ready
+          </ScreenSubtitle>
         </View>
         <Pressable
           onPress={handleAddPlan}
@@ -74,28 +71,29 @@ export default function TimedBlockScreen() {
       </View>
 
       {activeSession && (
-        <View style={styles.activeCard}>
+        <Card style={styles.activeCard}>
           <Text style={styles.activeLabel}>Block in progress</Text>
           <Text style={styles.activeTime}>{formatTimeRemaining(remainingMs)}</Text>
           <Text style={styles.activeDesc}>
             {activeSession.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
             {activeSession.expectedGrowthCm}cm
           </Text>
-          <Pressable
+          <Button
+            variant="danger"
             onPress={handleEndBlock}
-            style={({ pressed }) => [styles.endButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="stop-circle-outline" size={18} color={Theme.colors.white} />
-            <Text style={styles.endButtonText}>End Block</Text>
-          </Pressable>
-        </View>
+            icon="stop-circle-outline"
+            iconSize={18}
+            label="End Block"
+            style={styles.endButton}
+          />
+        </Card>
       )}
 
       {plans.length === 0 ? (
         <Text style={styles.emptyText}>No blocks yet. Tap + to create one.</Text>
       ) : (
         plans.map((plan) => (
-          <Pressable
+          <SelectableCard
             key={plan.id}
             onLongPress={() => handleEditPlan(plan)}
             style={styles.planCard}
@@ -114,7 +112,7 @@ export default function TimedBlockScreen() {
               trackColor={{ false: Theme.colors.cardBorder, true: Theme.colors.secondary }}
               thumbColor={Theme.colors.white}
             />
-          </Pressable>
+          </SelectableCard>
         ))
       )}
 
@@ -125,19 +123,11 @@ export default function TimedBlockScreen() {
         onUpdate={updatePlan}
         onDelete={removePlan}
       />
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Theme.colors.background,
-  },
-  scrollContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -147,18 +137,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 26,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
   },
   subtitle: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.textSecondary,
-    marginTop: 4,
     maxWidth: 260,
   },
   activeCard: {
-    backgroundColor: Theme.colors.card,
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: Theme.colors.secondary,
@@ -186,19 +169,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   endButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: Theme.colors.danger,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
     marginTop: 16,
-  },
-  endButtonText: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.white,
   },
   emptyText: {
     fontSize: 14,
@@ -210,10 +181,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: Theme.colors.card,
-    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
     padding: 16,
     marginBottom: 12,
   },

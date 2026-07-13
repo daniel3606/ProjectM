@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
 import OnboardingButton from "@/components/OnboardingButton";
+import { Screen, HeroTitle, HeroSubtitle } from "@/components/ui";
 
 const PREMIUM_FEATURES = [
   { icon: "lock-closed", label: "Deep Focus mode with 1.5x growth" },
@@ -35,7 +36,7 @@ export default function OnboardingPremium() {
         }}
       />
 
-      <View style={[styles.container, { paddingTop: insets.top }]}>
+      <Screen style={styles.container}>
         <Pressable
           onPress={finishOnboarding}
           hitSlop={12}
@@ -45,10 +46,8 @@ export default function OnboardingPremium() {
         </Pressable>
 
         <View style={styles.content}>
-          <Text style={styles.title}>Unlock{"\n"}Marshmallow Premium</Text>
-          <Text style={styles.subtitle}>
-            Grow faster and stay focused with premium
-          </Text>
+          <HeroTitle>Unlock{"\n"}Marshmallow Premium</HeroTitle>
+          <HeroSubtitle>Grow faster and stay focused with premium</HeroSubtitle>
 
           <View style={styles.featureList}>
             {PREMIUM_FEATURES.map((feature) => (
@@ -70,15 +69,13 @@ export default function OnboardingPremium() {
           label="Start Free Trial"
           onPress={finishOnboarding}
         />
-      </View>
+      </Screen>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: Theme.colors.background,
     justifyContent: "space-between",
   },
   closeButton: {
@@ -90,19 +87,6 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 32,
     paddingTop: 48,
-  },
-  title: {
-    textAlign: "center",
-    fontFamily: Theme.fonts.bold,
-    fontSize: 32,
-    padding: 10,
-  },
-  subtitle: {
-    textAlign: "center",
-    fontFamily: Theme.fonts.regular,
-    fontSize: 15,
-    color: Theme.colors.textSecondary,
-    marginBottom: 32,
   },
   featureList: {
     gap: 16,
