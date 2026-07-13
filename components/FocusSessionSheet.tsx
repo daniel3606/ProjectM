@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
+import { Card, SelectableCard, Button, SectionLabel } from "@/components/ui";
 import {
   formatDuration,
   getGrowthForDuration,
@@ -157,16 +158,14 @@ export default function FocusSessionSheet({
 
 
         {/* ── Focus Mode ─────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Focus Mode</Text>
+        <SectionLabel style={styles.sectionTitle}>Focus Mode</SectionLabel>
         <View style={styles.focusModeRow}>
           {/* Flexible Focus */}
-          <Pressable
+          <SelectableCard
+            tone="surface"
+            selected={focusMode === "flexible"}
             onPress={() => setFocusMode("flexible")}
-            style={({ pressed }) => [
-              styles.focusModeCard,
-              focusMode === "flexible" && styles.focusModeCardSelected,
-              pressed && styles.pressed,
-            ]}
+            style={styles.focusModeCard}
           >
             <View style={styles.focusModeHeader}>
               <Ionicons
@@ -198,16 +197,14 @@ export default function FocusSessionSheet({
                 style={styles.checkIcon}
               />
             )}
-          </Pressable>
+          </SelectableCard>
 
           {/* Deep Focus */}
-          <Pressable
+          <SelectableCard
+            tone="surface"
+            selected={focusMode === "deep"}
             onPress={handleDeepFocusPress}
-            style={({ pressed }) => [
-              styles.focusModeCard,
-              focusMode === "deep" && styles.focusModeCardSelected,
-              pressed && styles.pressed,
-            ]}
+            style={styles.focusModeCard}
           >
             <View style={styles.focusModeHeader}>
               <Ionicons
@@ -231,12 +228,12 @@ export default function FocusSessionSheet({
                 style={styles.checkIcon}
               />
             )}
-          </Pressable>
+          </SelectableCard>
         </View>
 
         {/* ── Applications to Block ──────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Applications to Block</Text>
-        <View style={styles.card}>
+        <SectionLabel style={styles.sectionTitle}>Applications to Block</SectionLabel>
+        <Card tone="surface" style={styles.card}>
           {isLoadingApps ? (
             <ActivityIndicator
               color={Theme.colors.secondary}
@@ -285,24 +282,17 @@ export default function FocusSessionSheet({
             <Text style={styles.noAppsText}>No apps selected yet</Text>
           )}
 
-          <Pressable
+          <Button
+            variant="outline"
             onPress={handlePickApps}
-            style={({ pressed }) => [
-              styles.chooseAppsButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Ionicons
-              name="add-circle-outline"
-              size={18}
-              color={Theme.colors.secondary}
-            />
-            <Text style={styles.chooseAppsText}>Choose Apps</Text>
-          </Pressable>
-        </View>
+            icon="add-circle-outline"
+            iconSize={18}
+            label="Choose Apps"
+          />
+        </Card>
 
         {/* ── Block Duration ─────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Block Duration</Text>
+        <SectionLabel style={styles.sectionTitle}>Block Duration</SectionLabel>
         <View style={styles.durationCard}>
           <Pressable
             onPress={handleDecreaseDuration}
@@ -334,21 +324,14 @@ export default function FocusSessionSheet({
         </View>
 
         {/* ── Start Button ───────────────────────────────────────── */}
-        <Pressable
+        <Button
           onPress={handleStart}
           disabled={totalSelected === 0 || totalMinutes === 0}
-          style={({ pressed }) => [
-            styles.startButton,
-            pressed && styles.startButtonPressed,
-            (totalSelected === 0 || totalMinutes === 0) &&
-              styles.startButtonDisabled,
-          ]}
-        >
-          <Ionicons name="timer-outline" size={22} color={Theme.colors.white} />
-          <Text style={styles.startButtonText}>
-            Start {formatDuration(totalMinutes)} Focus
-          </Text>
-        </Pressable>
+          icon="timer-outline"
+          iconSize={22}
+          label={`Start ${formatDuration(totalMinutes)} Focus`}
+          style={styles.startButton}
+        />
       </BottomSheetScrollView>
     </BottomSheetModal>
   );
@@ -390,21 +373,12 @@ const styles = StyleSheet.create({
 
   /* Sections */
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.gray,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
     marginBottom: 10,
     marginTop: 20,
   },
 
   /* Card (shared) */
   card: {
-    backgroundColor: Theme.colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
     padding: 16,
     alignItems: "center",
   },
@@ -435,16 +409,8 @@ const styles = StyleSheet.create({
   },
   focusModeCard: {
     flex: 1,
-    backgroundColor: Theme.colors.white,
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.cardBorder,
     padding: 14,
-  },
-  focusModeCardSelected: {
-    borderColor: Theme.colors.secondary,
-    borderWidth: 2,
-    backgroundColor: "#FFF8F0",
   },
   focusModeHeader: {
     flexDirection: "row",
@@ -514,23 +480,6 @@ const styles = StyleSheet.create({
     color: Theme.colors.gray,
     marginBottom: 12,
   },
-  chooseAppsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: Theme.colors.background,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-  },
-  chooseAppsText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.secondary,
-  },
-
   /* Duration */
   durationCard: {
     flexDirection: "row",
@@ -564,30 +513,8 @@ const styles = StyleSheet.create({
 
   /* Start Button */
   startButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: Theme.colors.secondary,
     borderRadius: 16,
     paddingVertical: 18,
     marginTop: 28,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  startButtonPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  startButtonDisabled: {
-    opacity: 0.5,
-  },
-  startButtonText: {
-    fontSize: 18,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.white,
   },
 });

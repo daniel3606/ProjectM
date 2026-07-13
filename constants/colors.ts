@@ -21,6 +21,7 @@ const Colors = {
 
     card: '#FFF5EA',
     cardBorder: '#CCC2B7',
+    cardActiveTint: '#FFF8F0',
 
     white: '#FFFFFF',
 } as const;

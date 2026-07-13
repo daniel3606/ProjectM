@@ -1,11 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
+import { Screen } from "@/components/ui";
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   return (
@@ -16,7 +15,7 @@ export default function ProfileScreen() {
           presentation: "card",
         }}
       />
-      <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+      <Screen topInset={16} style={styles.container}>
         <Pressable
           onPress={() => router.back()}
           style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
@@ -32,15 +31,13 @@ export default function ProfileScreen() {
           <Text style={styles.title}>Profile Settings</Text>
           <Text style={styles.subtitle}>Coming soon</Text>
         </View>
-      </View>
+      </Screen>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: Theme.colors.background,
     paddingHorizontal: 24,
   },
   backButton: {

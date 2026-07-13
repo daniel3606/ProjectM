@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
+import { Card, SelectableCard, Button, SectionLabel } from "@/components/ui";
 import {
   DAY_LABELS,
   formatDuration,
@@ -243,7 +244,7 @@ export default function TimedBlockPlanSheet({
           </Pressable>
         </View>
 
-        <Text style={styles.sectionTitle}>Label</Text>
+        <SectionLabel style={styles.sectionTitle}>Label</SectionLabel>
         <BottomSheetTextInput
           style={styles.labelInput}
           placeholder="e.g. Study time"
@@ -254,39 +255,38 @@ export default function TimedBlockPlanSheet({
           returnKeyType="done"
         />
 
-        <Text style={styles.sectionTitle}>Expected Growth</Text>
-        <View style={styles.card}>
+        <SectionLabel style={styles.sectionTitle}>Expected Growth</SectionLabel>
+        <Card tone="surface" style={styles.card}>
           <Text style={styles.growthAmount}>+{expectedGrowth}cm</Text>
           <Text style={styles.growthDesc}>{formatDuration(totalMinutes)} block</Text>
-        </View>
+        </Card>
 
-        <Text style={styles.sectionTitle}>Focus Mode</Text>
+        <SectionLabel style={styles.sectionTitle}>Focus Mode</SectionLabel>
         <View style={styles.focusModeRow}>
-          <Pressable
+          <SelectableCard
+            tone="surface"
+            selected={focusMode === "flexible"}
             onPress={() => setFocusMode("flexible")}
-            style={({ pressed }) => [
-              styles.focusModeCard,
-              focusMode === "flexible" && styles.focusModeCardSelected,
-              pressed && styles.pressed,
-            ]}
+            style={styles.focusModeCard}
           >
             <Text style={styles.focusModeTitle}>Flexible</Text>
             <Text style={styles.focusModeDesc}>Allow occasional phone use</Text>
-          </Pressable>
-          <Pressable
+          </SelectableCard>
+          <SelectableCard
+            tone="surface"
             onPress={handleDeepFocusPress}
-            style={({ pressed }) => [styles.focusModeCard, pressed && styles.pressed]}
+            style={styles.focusModeCard}
           >
             <Text style={styles.focusModeTitle}>Deep Focus</Text>
             <Text style={styles.focusModeDesc}>Strict blocking, 1.5x growth</Text>
             <View style={styles.proBadge}>
               <Text style={styles.proBadgeText}>PRO</Text>
             </View>
-          </Pressable>
+          </SelectableCard>
         </View>
 
-        <Text style={styles.sectionTitle}>Applications to Block</Text>
-        <View style={styles.card}>
+        <SectionLabel style={styles.sectionTitle}>Applications to Block</SectionLabel>
+        <Card tone="surface" style={styles.card}>
           {totalSelected > 0 ? (
             <Text style={styles.appSummaryText}>
               {[
@@ -302,26 +302,24 @@ export default function TimedBlockPlanSheet({
             <Text style={styles.noAppsText}>No apps selected (blocks everything)</Text>
           )}
 
-          <Pressable
+          <Button
+            variant="outline"
             onPress={handlePickApps}
-            style={({ pressed }) => [styles.chooseAppsButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="add-circle-outline" size={18} color={Theme.colors.secondary} />
-            <Text style={styles.chooseAppsText}>Choose Apps</Text>
-          </Pressable>
-        </View>
+            icon="add-circle-outline"
+            iconSize={18}
+            label="Choose Apps"
+          />
+        </Card>
 
-        <Text style={styles.sectionTitle}>Day</Text>
+        <SectionLabel style={styles.sectionTitle}>Day</SectionLabel>
         <View style={styles.dayRow}>
           {DAY_LABELS.map((dayLabel, index) => (
-            <Pressable
+            <SelectableCard
               key={dayLabel}
+              tone="surface"
+              selected={dayOfWeek === index}
               onPress={() => setDayOfWeek(index)}
-              style={({ pressed }) => [
-                styles.dayChip,
-                dayOfWeek === index && styles.dayChipSelected,
-                pressed && styles.pressed,
-              ]}
+              style={styles.dayChip}
             >
               <Text
                 style={[
@@ -331,11 +329,11 @@ export default function TimedBlockPlanSheet({
               >
                 {dayLabel}
               </Text>
-            </Pressable>
+            </SelectableCard>
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Start Time</Text>
+        <SectionLabel style={styles.sectionTitle}>Start Time</SectionLabel>
         <View style={styles.durationCard}>
           <View pointerEvents="none" style={styles.selectionLineTop} />
           <View pointerEvents="none" style={styles.selectionLineBottom} />
@@ -355,7 +353,7 @@ export default function TimedBlockPlanSheet({
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>End Time</Text>
+        <SectionLabel style={styles.sectionTitle}>End Time</SectionLabel>
         <View style={styles.durationCard}>
           <View pointerEvents="none" style={styles.selectionLineTop} />
           <View pointerEvents="none" style={styles.selectionLineBottom} />
@@ -375,29 +373,23 @@ export default function TimedBlockPlanSheet({
           </View>
         </View>
 
-        <Pressable
+        <Button
           onPress={handleSave}
           disabled={totalMinutes === 0}
-          style={({ pressed }) => [
-            styles.saveButton,
-            pressed && styles.savePressed,
-            totalMinutes === 0 && styles.saveDisabled,
-          ]}
-        >
-          <Ionicons name="bookmark-outline" size={20} color={Theme.colors.white} />
-          <Text style={styles.saveButtonText}>
-            {editingPlan ? "Save Changes" : "Save Block"}
-          </Text>
-        </Pressable>
+          icon="bookmark-outline"
+          label={editingPlan ? "Save Changes" : "Save Block"}
+          style={styles.saveButton}
+        />
 
         {editingPlan && (
-          <Pressable
+          <Button
+            variant="ghost"
             onPress={handleDelete}
-            style={({ pressed }) => [styles.deleteButton, pressed && styles.pressed]}
-          >
-            <Ionicons name="trash-outline" size={18} color={Theme.colors.danger} />
-            <Text style={styles.deleteButtonText}>Delete Block</Text>
-          </Pressable>
+            icon="trash-outline"
+            iconSize={18}
+            label="Delete Block"
+            style={styles.deleteButton}
+          />
         )}
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -436,11 +428,6 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.gray,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
     marginBottom: 10,
     marginTop: 20,
   },
@@ -456,10 +443,6 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
   },
   card: {
-    backgroundColor: Theme.colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
     padding: 16,
     alignItems: "center",
   },
@@ -480,17 +463,9 @@ const styles = StyleSheet.create({
   },
   focusModeCard: {
     flex: 1,
-    backgroundColor: Theme.colors.white,
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.cardBorder,
     padding: 14,
     position: "relative",
-  },
-  focusModeCardSelected: {
-    borderColor: Theme.colors.secondary,
-    borderWidth: 2,
-    backgroundColor: "#FFF8F0",
   },
   focusModeTitle: {
     fontSize: 15,
@@ -518,9 +493,6 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.white,
   },
-  pressed: {
-    opacity: 0.7,
-  },
   appSummaryText: {
     fontSize: 14,
     fontFamily: Theme.fonts.medium,
@@ -534,22 +506,6 @@ const styles = StyleSheet.create({
     color: Theme.colors.gray,
     marginBottom: 12,
   },
-  chooseAppsButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: Theme.colors.background,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-  },
-  chooseAppsText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.secondary,
-  },
   dayRow: {
     flexDirection: "row",
     gap: 6,
@@ -560,13 +516,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingVertical: 12,
     borderRadius: 12,
-    backgroundColor: Theme.colors.white,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.cardBorder,
-  },
-  dayChipSelected: {
-    borderColor: Theme.colors.secondary,
-    backgroundColor: "#FFF8F0",
   },
   dayChipText: {
     fontSize: 13,
@@ -609,43 +558,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   saveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: Theme.colors.secondary,
     borderRadius: 16,
     paddingVertical: 18,
     marginTop: 28,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  savePressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  saveDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    fontSize: 18,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.white,
   },
   deleteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
     marginTop: 12,
-  },
-  deleteButtonText: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.danger,
   },
 });
