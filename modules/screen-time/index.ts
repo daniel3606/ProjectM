@@ -1,5 +1,4 @@
 import { Platform } from "react-native";
-import ScreenTimeModule from "./src/ScreenTimeModule";
 
 export type AuthorizationStatus =
   | "notDetermined"
@@ -15,40 +14,84 @@ export interface ScreenTimeItem {
   index: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// MOCK MODE
+// The native Swift blocking module (FamilyControls) is disabled while we
+// iterate on UI. Every function below is faked in JS so screens work
+// without a native rebuild or a Screen Time entitlement.
+//
+// To reconnect the real blocking module: set MOCK_MODE to false. The
+// native module is untouched at modules/screen-time/ios/ScreenTimeModule.swift.
+// ─────────────────────────────────────────────────────────────────────────
+const MOCK_MODE = true;
+
+const MOCK_ITEMS: ScreenTimeItem[] = [
+  { id: "app_0", type: "application", label: "Instagram", index: 0 },
+  { id: "app_1", type: "application", label: "TikTok", index: 1 },
+  { id: "cat_0", type: "category", label: "Games", index: 0 },
+];
+
+let mockAuthStatus: AuthorizationStatus = "notDetermined";
+let mockSelection: ScreenTimeItem[] = [];
+
+function getNativeModule() {
+  // Required lazily so importing this file never touches the native
+  // module while MOCK_MODE is on.
+  return require("./src/ScreenTimeModule").default;
+}
+
 export function isAvailable(): boolean {
+  if (MOCK_MODE) return true;
   if (Platform.OS !== "ios") return false;
-  return ScreenTimeModule.isAvailable();
+  return getNativeModule().isAvailable();
 }
 
 export function getAuthorizationStatus(): AuthorizationStatus {
+  if (MOCK_MODE) return mockAuthStatus;
   if (Platform.OS !== "ios") return "unavailable";
-  return ScreenTimeModule.getAuthorizationStatus() as AuthorizationStatus;
+  return getNativeModule().getAuthorizationStatus() as AuthorizationStatus;
 }
 
 export async function requestAuthorization(): Promise<boolean> {
-  return await ScreenTimeModule.requestAuthorization();
+  if (MOCK_MODE) {
+    mockAuthStatus = "approved";
+    return true;
+  }
+  return await getNativeModule().requestAuthorization();
 }
 
 export async function openAppPicker(): Promise<ScreenTimeItem[] | null> {
-  return await ScreenTimeModule.openAppPicker();
+  if (MOCK_MODE) {
+    mockSelection = MOCK_ITEMS;
+    return mockSelection;
+  }
+  return await getNativeModule().openAppPicker();
 }
 
 export async function getSelectedItems(): Promise<ScreenTimeItem[]> {
-  return await ScreenTimeModule.getSelectedItems();
+  if (MOCK_MODE) return mockSelection;
+  return await getNativeModule().getSelectedItems();
 }
 
 export async function blockAll(): Promise<void> {
-  await ScreenTimeModule.blockAll();
+  if (MOCK_MODE) return;
+  await getNativeModule().blockAll();
 }
 
 export async function applyBlocking(itemIds: string[]): Promise<void> {
-  await ScreenTimeModule.applyBlocking(itemIds);
+  if (MOCK_MODE) return;
+  await getNativeModule().applyBlocking(itemIds);
 }
 
 export async function clearBlocking(): Promise<void> {
-  await ScreenTimeModule.clearBlocking();
+  if (MOCK_MODE) return;
+  await getNativeModule().clearBlocking();
 }
 
 export async function clearSelection(): Promise<void> {
-  await ScreenTimeModule.clearSelection();
+  if (MOCK_MODE) {
+    mockSelection = [];
+    return;
+  }
+  await getNativeModule().clearSelection();
 }

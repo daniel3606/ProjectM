@@ -1,5 +1,5 @@
 import React from "react";
-import { FlatList, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { FlatList, Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Pressable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
@@ -32,6 +32,8 @@ export default function CustomizeScreen() {
       style={[styles.screen, { paddingTop: insets.top }]}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
     >
       <Text style={styles.title}>Customize</Text>
       <Text style={styles.subtitle}>Make your marshmallow your own</Text>
@@ -52,6 +54,7 @@ export default function CustomizeScreen() {
         onChangeText={profile.setName}
         maxLength={20}
         returnKeyType="done"
+        onSubmitEditing={Keyboard.dismiss}
       />
 
       <View style={styles.colorGrid}>
@@ -75,29 +78,6 @@ export default function CustomizeScreen() {
             <Text style={styles.colorLabel}>{c.name}</Text>
           </Pressable>
         ))}
-      </View>
-
-      <Text style={styles.sectionTitle}>Growth Stages</Text>
-      <Text style={styles.sectionSubtitle}>
-        See what your marshmallow will be compared to as it grows
-      </Text>
-
-      <FlatList
-        data={GROWTH_STAGES}
-        renderItem={renderCard}
-        keyExtractor={(item) => item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.stageListContent}
-        snapToInterval={174} // card width (160) + marginRight (14)
-        decelerationRate="fast"
-      />
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          {GROWTH_STAGES.length} stages from {GROWTH_STAGES[0].sizeCm}cm to{" "}
-          {GROWTH_STAGES[GROWTH_STAGES.length - 1].sizeCm}cm
-        </Text>
       </View>
     </ScrollView>
   );

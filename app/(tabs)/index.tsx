@@ -4,13 +4,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  Easing,
-  type SharedValue,
-} from "react-native-reanimated";
+import { useSharedValue, withTiming, Easing } from "react-native-reanimated";
 import Theme from "@/constants/theme";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
@@ -18,17 +12,15 @@ import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import * as ScreenTime from "@/modules/screen-time";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
 import ProfileAvatarButton from "@/components/ProfileAvatarButton";
-import ComparisonObjectPlaceholder from "@/components/ComparisonObjectPlaceholder";
+import SceneObject from "@/components/SceneObject";
 import FocusSessionSheet, {
   type FocusSessionConfig,
 } from "@/components/FocusSessionSheet";
-import {
-  getStageForSize,
-  OBJECT_STAGES,
-  type GrowthStage,
-} from "@/constants/growthStages";
+import { getStageForSize, OBJECT_STAGES } from "@/constants/growthStages";
+import { getCameraPosition, getFocusedStageIndex } from "@/lib/sceneMath";
+import useSelectionHaptic from "@/lib/useSelectionHaptic";
 
-const INITIAL_SIZE_CM = 10;
+const INITIAL_SIZE_CM = 3;
 
 const BODY_HEIGHT = 222;
 const TARGET_HEIGHT = 175;
@@ -38,77 +30,20 @@ function marshmallowWrapperScale(sizeCm: number) {
 }
 
 const SCENE_HEIGHT = 300;
-const ANIM_DURATION = 400;
-const ANIM_EASING = Easing.out(Easing.cubic);
-const MIN_SIZE = 3;
+const CAMERA_ANIMATION_DURATION = 400;
+const CAMERA_ANIMATION_EASING = Easing.out(Easing.cubic);
 
-// Gap between each object on the horizontal line (in pixels)
-const GAP = 220;
-
-/**
- * Compute the camera position on the object line based on marshmallow size.
- *
- * Each OBJECT_STAGE[i] sits at position i * GAP on the line.
- * The camera position is interpolated so that when the marshmallow exactly
- * matches a stage's size, the camera is centered on that stage's position.
- * Between stages the camera smoothly slides from one to the next.
- */
-function computeCameraPosition(sizeCm: number): number {
-  // Before the first object stage
-  if (sizeCm <= OBJECT_STAGES[0].sizeCm) {
-    const progress =
-      (sizeCm - MIN_SIZE) / (OBJECT_STAGES[0].sizeCm - MIN_SIZE);
-    return Math.max(0, progress) * 0; // camera at 0 (first object position)
-  }
-
-  // Between two object stages — interpolate
-  for (let i = 0; i < OBJECT_STAGES.length - 1; i++) {
-    if (sizeCm < OBJECT_STAGES[i + 1].sizeCm) {
-      const lo = OBJECT_STAGES[i].sizeCm;
-      const hi = OBJECT_STAGES[i + 1].sizeCm;
-      const progress = (sizeCm - lo) / (hi - lo);
-      return (i + progress) * GAP;
-    }
-  }
-
-  // At or beyond the last stage
-  return (OBJECT_STAGES.length - 1) * GAP;
-}
-
-// ── Per-object component ─────────────────────────────────────────────────────
-interface SceneObjectProps {
-  stage: GrowthStage;
-  index: number;
-  cameraPos: SharedValue<number>;
-  currentSizeCm: number;
-}
-
-function SceneObject({ stage, index, cameraPos, currentSizeCm }: SceneObjectProps) {
-  const scale = stage.sizeCm / currentSizeCm;
-
-  const animStyle = useAnimatedStyle(() => {
-    const screenX = index * GAP - cameraPos.value;
-    const absX = Math.abs(screenX);
-    // Fully visible within GAP range, fade out beyond, gone past 1.5× GAP
-    const FADE_START = 160;
-    const FADE_END = 340;
-    const opacity =
-      absX > FADE_END ? 0 : absX < FADE_START ? 0.85 : 0.85 * (1 - (absX - FADE_START) / (FADE_END - FADE_START));
-    return {
-      transform: [{ translateX: screenX }],
-      opacity: Math.max(0, opacity),
-    };
-  });
-
-  return (
-    <Animated.View style={[styles.objectPosition, animStyle]}>
-      <ComparisonObjectPlaceholder stage={stage} scale={scale} />
-    </Animated.View>
-  );
+interface HomeScreenProps {
+  /**
+   * Whether the centered-stage haptic tick is allowed to fire. Set to false
+   * if `sizeCm` ever comes to be driven by background data instead of direct
+   * user interaction, so growth doesn't buzz the phone unprompted.
+   */
+  hapticsEnabled?: boolean;
 }
 
 // ── Main screen ──────────────────────────────────────────────────────────────
-export default function HomeScreen() {
+export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const profile = useMarshmallowProfile();
@@ -122,13 +57,16 @@ export default function HomeScreen() {
   const stage = getStageForSize(sizeCm);
   const wrapperScale = marshmallowWrapperScale(sizeCm);
 
+  const focusedStageIndex = getFocusedStageIndex(sizeCm, OBJECT_STAGES);
+  useSelectionHaptic(focusedStageIndex, hapticsEnabled);
+
   // Single animated camera position on the object line
-  const cameraPos = useSharedValue(computeCameraPosition(sizeCm));
+  const cameraPosition = useSharedValue(getCameraPosition(sizeCm, OBJECT_STAGES));
 
   useEffect(() => {
-    cameraPos.value = withTiming(computeCameraPosition(sizeCm), {
-      duration: ANIM_DURATION,
-      easing: ANIM_EASING,
+    cameraPosition.value = withTiming(getCameraPosition(sizeCm, OBJECT_STAGES), {
+      duration: CAMERA_ANIMATION_DURATION,
+      easing: CAMERA_ANIMATION_EASING,
     });
   }, [sizeCm]);
 
@@ -160,10 +98,8 @@ export default function HomeScreen() {
   }, [stopSession]);
 
   return (
-    <ScrollView
+    <View
       style={[styles.screen, { paddingTop: insets.top }]}
-      contentContainerStyle={styles.scrollContent}
-      showsVerticalScrollIndicator={false}
     >
       {/* ── Header ──────────────────────────────────────────────────── */}
       <View style={styles.header}>
@@ -179,7 +115,7 @@ export default function HomeScreen() {
             key={obj.id}
             stage={obj}
             index={i}
-            cameraPos={cameraPos}
+            cameraPosition={cameraPosition}
             currentSizeCm={sizeCm}
           />
         ))}
@@ -237,7 +173,7 @@ export default function HomeScreen() {
         currentSizeCm={sizeCm}
         onStartSession={handleStartSession}
       />
-    </ScrollView>
+    </View>
   );
 }
 
@@ -273,19 +209,10 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
-  /* All objects share this base — centered, moved by animated translateX */
-  objectPosition: {
-    position: "absolute",
-    bottom: 110,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-
   /* Marshmallow */
   marshmallowPosition: {
     position: "absolute",
-    bottom: 0,
+    bottom: -20,
     left: 0,
     right: 0,
     alignItems: "center",
@@ -324,12 +251,12 @@ const styles = StyleSheet.create({
   },
   sizeText: {
     fontSize: 50,
-    fontFamily: Theme.fonts.semibold,
+    fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
   },
   messageText: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.regular,
+    fontSize: 18,
+    fontFamily: Theme.fonts.medium,
     color: Theme.colors.textSecondary,
     textAlign: "center",
   },
@@ -362,7 +289,7 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.secondary,
     borderRadius: 16,
     paddingVertical: 18,
-    marginTop: 20,
+    marginTop: 60,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,

@@ -2,7 +2,7 @@ const tintColorLight = '#8B635C';
 
 const Colors = {
     text: '#1C1C1E',
-    textSecondary: '#3C3C43',
+    textSecondary: '#999999',
     background: '#FFF2E5',
     secondary: '#8B635C',
     secondaryLight: '#A87D75',

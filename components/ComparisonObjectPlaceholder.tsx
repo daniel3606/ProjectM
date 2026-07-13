@@ -2,6 +2,12 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Theme from "@/constants/theme";
 import type { GrowthStage } from "@/constants/growthStages";
+import DonutIllustration from "@/components/objects/DonutIllustration";
+
+/** Stage ids that have a real illustration so far — others fall back to the plain box. */
+const ILLUSTRATIONS: Partial<Record<string, React.ComponentType<{ size: number }>>> = {
+  donut: DonutIllustration,
+};
 
 interface ComparisonObjectPlaceholderProps {
   stage: GrowthStage;
@@ -26,12 +32,17 @@ export default function ComparisonObjectPlaceholder({
   const BASE_SIZE = 140;
   const clamped = Math.max(0.25, Math.min(scale, 1.8));
   const boxSize = Math.round(BASE_SIZE * clamped);
+  const Illustration = ILLUSTRATIONS[stage.id];
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{stage.objectName}</Text>
       <Text style={styles.size}>{stage.sizeCm}cm</Text>
-      <View style={[styles.box, { width: boxSize, height: boxSize }]} />
+      {Illustration ? (
+        <Illustration size={boxSize} />
+      ) : (
+        <View style={[styles.box, { width: boxSize, height: boxSize }]} />
+      )}
     </View>
   );
 }

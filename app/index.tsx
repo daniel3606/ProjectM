@@ -300,7 +300,10 @@ export default function WelcomeScreen() {
     }
   }, [isSignedIn, router]);
 
-  const snapPoints = useMemo(() => ["60%"], []);
+  const snapPoints = useMemo(
+    () => [authMode === "login" ? "50%" : "60%"],
+    [authMode]
+  );
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -326,9 +329,8 @@ export default function WelcomeScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
-      <Text style={styles.welcomeTitle}>
-        Welcome to{"\n"}Marshmallow
-      </Text>
+      <Text style={styles.welcomeTitle}>Marshmallow</Text>
+      <Text style={styles.welcomeSubtitle}>The App Blocker You Needed</Text>
 
       <View style={styles.hero}>
         <View style={styles.bigEyes}>
@@ -362,8 +364,11 @@ export default function WelcomeScreen() {
         >
           <Text style={styles.buttonSignUpText}>Sign Up</Text>
         </Pressable>
-        <Pressable onPress={()=> router.replace("/custominit")}>
-          <Text style={styles.buttonSignUpText}>Continue As Guest</Text>
+        <Pressable
+          style={styles.guestButton}
+          onPress={()=> router.replace("/custominit")}
+        >
+          <Text style={styles.guestButtonText}>Continue As Guest</Text>
         </Pressable>
       </View>
 
@@ -475,6 +480,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
   },
+  welcomeSubtitle: {
+    fontSize: 18,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.text,
+    textAlign: "center",
+    marginTop: 6,
+  },
   bigEyes: {
     flexDirection: "row",
     gap: 122,
@@ -538,6 +550,16 @@ const styles = StyleSheet.create({
     color: "#999",
     fontFamily: Theme.fonts.semibold,
     fontSize: 18,
+  },
+  guestButton: {
+    alignSelf: "center",
+    paddingVertical: 8,
+  },
+  guestButtonText: {
+    color: "#999",
+    fontFamily: Theme.fonts.semibold,
+    fontSize: 16,
+    textDecorationLine: "underline",
   },
   sheetBackground: {
     backgroundColor: Theme.colors.card,

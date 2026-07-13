@@ -4,7 +4,7 @@ import MarshmallowCharacter from "@/components/MarshmallowCharacter";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 
-import { View, Text, StyleSheet, Pressable } from "react-native";
+import { View, Text, StyleSheet, Pressable, Keyboard, TouchableWithoutFeedback } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useState } from "react";
@@ -32,59 +32,62 @@ export default function Custominit() {
         }}
       />
 
-      <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
 
-        <Text style={[styles.title]}>Create Your{"\n"}Marshmallow</Text>
-          <MarshmallowCharacter
-            color={selectedColor}
-            name={name.trim()}
-            sizeCm={1}
-          />
-
-            <TextInput
-              style={styles.textInput}
-              placeholder="Name your marshmallow"
-              placeholderTextColor={Theme.colors.gray}
-              value={name}
-              onChangeText={setName}
-              autoFocus
-              maxLength={20}
-              returnKeyType="done"
+          <Text style={[styles.title]}>Create Your{"\n"}Marshmallow</Text>
+            <MarshmallowCharacter
+              color={selectedColor}
+              name={name.trim()}
+              sizeCm={1}
             />
 
-              <View style={[styles.colorGrid, {padding: 20}]}>
-              {MARSHMALLOW_COLORS.map((c) => (
-                <Pressable
-                  key={c.hex}
-                  onPress={() => setSelectedColor(c.hex)}
-                  style={styles.colorOption}
-                >
-                  <View
-                    style={[
-                      styles.colorSwatch,
-                      { backgroundColor: c.hex },
-                      selectedColor === c.hex && styles.colorSelected,
-                    ]}
+              <TextInput
+                style={styles.textInput}
+                placeholder="Name your marshmallow"
+                placeholderTextColor={Theme.colors.gray}
+                value={name}
+                onChangeText={setName}
+                autoFocus
+                maxLength={20}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
+
+                <View style={[styles.colorGrid, {padding: 20}]}>
+                {MARSHMALLOW_COLORS.map((c) => (
+                  <Pressable
+                    key={c.hex}
+                    onPress={() => setSelectedColor(c.hex)}
+                    style={styles.colorOption}
                   >
-                    {selectedColor === c.hex && (
-                      <Text style={styles.checkmark}>✓</Text>
-                    )}
-                  </View>
-                  <Text style={styles.colorLabel}>{c.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-          <Pressable
-            style={styles.button}
-            onPress={() => {
-              profile.setName(name.trim() || "Mochi");
-              profile.setColor(selectedColor);
-              router.replace("/(tabs)");
-            }}
-          >
-            <Text style={styles.buttonText}>Next</Text>
-          </Pressable>
-      </View>
+                    <View
+                      style={[
+                        styles.colorSwatch,
+                        { backgroundColor: c.hex },
+                        selectedColor === c.hex && styles.colorSelected,
+                      ]}
+                    >
+                      {selectedColor === c.hex && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </View>
+                    <Text style={styles.colorLabel}>{c.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            <Pressable
+              style={styles.button}
+              onPress={() => {
+                profile.setName(name.trim() || "Mochi");
+                profile.setColor(selectedColor);
+                router.push("/onboarding-purpose");
+              }}
+            >
+              <Text style={styles.buttonText}>Next</Text>
+            </Pressable>
+        </View>
+      </TouchableWithoutFeedback>
     </>
   );
 }
@@ -106,11 +109,10 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     paddingVertical: 16,
     paddingHorizontal: 20,
-    fontSize: 18,
+    fontSize: 22,
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.text,
     textAlign: "center",
-    
   },
   colorGrid: {
     flexDirection: "row",

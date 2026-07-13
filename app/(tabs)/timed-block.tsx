@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,31 +9,21 @@ import {
   useTimedBlockPlans,
   type TimedBlockPlan,
 } from "@/contexts/TimedBlockPlansContext";
-import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import * as ScreenTime from "@/modules/screen-time";
 import {
-  formatDuration,
+  DAY_LABELS_FULL,
+  formatClockTime,
   formatTimeRemaining,
-  getGrowthForDuration,
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet from "@/components/TimedBlockPlanSheet";
 
-function appsSummaryText(summary: TimedBlockPlan["appsSummary"]): string {
-  const parts = [
-    summary.appCount > 0 && `${summary.appCount} app${summary.appCount !== 1 ? "s" : ""}`,
-    summary.catCount > 0 && `${summary.catCount} categor${summary.catCount !== 1 ? "ies" : "y"}`,
-    summary.webCount > 0 && `${summary.webCount} web domain${summary.webCount !== 1 ? "s" : ""}`,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : "Everything";
-}
-
 export default function TimedBlockScreen() {
   const insets = useSafeAreaInsets();
-  const { activeSession, startSession, stopSession, history } = useFocusSession();
-  const { plans, addPlan, removePlan } = useTimedBlockPlans();
+  const { activeSession, stopSession } = useFocusSession();
+  const { plans, addPlan, updatePlan, removePlan, setPlanEnabled } = useTimedBlockPlans();
   const planSheetRef = useRef<BottomSheetModal>(null);
   const [remainingMs, setRemainingMs] = useState(0);
-  const [isStarting, setIsStarting] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<TimedBlockPlan | null>(null);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -53,31 +43,15 @@ export default function TimedBlockScreen() {
     }
   }, [stopSession]);
 
-  const handleStartPlan = useCallback(
-    async (plan: TimedBlockPlan) => {
-      const authorized = await ensureScreenTimeAuthorized();
-      if (!authorized) return;
+  const handleAddPlan = useCallback(() => {
+    setEditingPlan(null);
+    planSheetRef.current?.present();
+  }, []);
 
-      setIsStarting(true);
-      try {
-        if (plan.appIds.length > 0) {
-          await ScreenTime.applyBlocking(plan.appIds);
-        } else {
-          await ScreenTime.blockAll();
-        }
-        startSession({
-          durationMinutes: plan.durationMinutes,
-          focusMode: plan.focusMode,
-          expectedGrowthCm: getGrowthForDuration(plan.durationMinutes, plan.focusMode),
-        });
-      } catch (error) {
-        Alert.alert("Error", `Failed to start block: ${error}`);
-      } finally {
-        setIsStarting(false);
-      }
-    },
-    [startSession]
-  );
+  const handleEditPlan = useCallback((plan: TimedBlockPlan) => {
+    setEditingPlan(plan);
+    planSheetRef.current?.present();
+  }, []);
 
   return (
     <ScrollView
@@ -85,15 +59,25 @@ export default function TimedBlockScreen() {
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>Timed Block</Text>
-      <Text style={styles.subtitle}>Plan blocks ahead, start them when you&apos;re ready</Text>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Timed Block</Text>
+          <Text style={styles.subtitle}>Plan blocks ahead, start them when you&apos;re ready</Text>
+        </View>
+        <Pressable
+          onPress={handleAddPlan}
+          hitSlop={8}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Ionicons name="add-circle" size={30} color={Theme.colors.secondary} />
+        </Pressable>
+      </View>
 
       {activeSession && (
         <View style={styles.activeCard}>
           <Text style={styles.activeLabel}>Block in progress</Text>
           <Text style={styles.activeTime}>{formatTimeRemaining(remainingMs)}</Text>
           <Text style={styles.activeDesc}>
-            {formatDuration(activeSession.durationMinutes)} ·{" "}
             {activeSession.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
             {activeSession.expectedGrowthCm}cm
           </Text>
@@ -107,70 +91,40 @@ export default function TimedBlockScreen() {
         </View>
       )}
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Saved Blocks</Text>
-        <Pressable
-          onPress={() => planSheetRef.current?.present()}
-          hitSlop={8}
-          style={({ pressed }) => [styles.addButton, pressed && styles.pressed]}
-        >
-          <Ionicons name="add-circle" size={26} color={Theme.colors.secondary} />
-        </Pressable>
-      </View>
-
       {plans.length === 0 ? (
-        <Text style={styles.emptyText}>No saved blocks yet. Tap + to create one.</Text>
+        <Text style={styles.emptyText}>No blocks yet. Tap + to create one.</Text>
       ) : (
         plans.map((plan) => (
-          <View key={plan.id} style={styles.planCard}>
+          <Pressable
+            key={plan.id}
+            onLongPress={() => handleEditPlan(plan)}
+            style={styles.planCard}
+          >
             <View style={styles.planInfo}>
               <Text style={styles.planLabel}>{plan.label}</Text>
               <Text style={styles.planMeta}>
-                {formatDuration(plan.durationMinutes)} ·{" "}
-                {plan.focusMode === "deep" ? "Deep Focus" : "Flexible"} ·{" "}
-                {appsSummaryText(plan.appsSummary)}
+                {DAY_LABELS_FULL[plan.dayOfWeek]} ·{" "}
+                {formatClockTime(plan.startHour, plan.startMinute)} –{" "}
+                {formatClockTime(plan.endHour, plan.endMinute)}
               </Text>
             </View>
-            <View style={styles.planActions}>
-              <Pressable
-                onPress={() => handleStartPlan(plan)}
-                disabled={!!activeSession || isStarting}
-                style={({ pressed }) => [
-                  styles.startButton,
-                  (!!activeSession || isStarting) && styles.startButtonDisabled,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <Ionicons name="play" size={16} color={Theme.colors.white} />
-              </Pressable>
-              <Pressable onPress={() => removePlan(plan.id)} hitSlop={8}>
-                <Ionicons name="trash-outline" size={20} color={Theme.colors.gray} />
-              </Pressable>
-            </View>
-          </View>
+            <Switch
+              value={plan.enabled}
+              onValueChange={(value) => setPlanEnabled(plan.id, value)}
+              trackColor={{ false: Theme.colors.cardBorder, true: Theme.colors.secondary }}
+              thumbColor={Theme.colors.white}
+            />
+          </Pressable>
         ))
       )}
 
-      <Text style={styles.sectionTitle}>History</Text>
-      {history.length === 0 ? (
-        <Text style={styles.emptyText}>No completed blocks yet.</Text>
-      ) : (
-        history.map((entry, i) => (
-          <View key={i} style={styles.historyRow}>
-            <Ionicons name="checkmark-circle" size={18} color={Theme.colors.success} />
-            <Text style={styles.historyText}>
-              {formatDuration(entry.durationMinutes)} ·{" "}
-              {entry.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
-              {entry.expectedGrowthCm}cm
-            </Text>
-            <Text style={styles.historyDate}>
-              {new Date(entry.completedAt).toLocaleDateString()}
-            </Text>
-          </View>
-        ))
-      )}
-
-      <TimedBlockPlanSheet sheetRef={planSheetRef} onSave={addPlan} />
+      <TimedBlockPlanSheet
+        sheetRef={planSheetRef}
+        editingPlan={editingPlan}
+        onSave={addPlan}
+        onUpdate={updatePlan}
+        onDelete={removePlan}
+      />
     </ScrollView>
   );
 }
@@ -184,18 +138,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 32,
   },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    paddingTop: 16,
+    marginBottom: 20,
+  },
   title: {
     fontSize: 26,
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
-    paddingTop: 16,
   },
   subtitle: {
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.textSecondary,
     marginTop: 4,
-    marginBottom: 20,
+    maxWidth: 260,
   },
   activeCard: {
     backgroundColor: Theme.colors.card,
@@ -240,20 +200,6 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.semibold,
     color: Theme.colors.white,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
-    marginTop: 20,
-    marginBottom: 12,
-  },
-  addButton: {},
   emptyText: {
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
@@ -286,42 +232,7 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginTop: 2,
   },
-  planActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  startButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Theme.colors.secondary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  startButtonDisabled: {
-    opacity: 0.4,
-  },
   pressed: {
     opacity: 0.7,
-  },
-  historyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Theme.colors.cardBorder,
-  },
-  historyText: {
-    flex: 1,
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.text,
-  },
-  historyDate: {
-    fontSize: 12,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.gray,
   },
 });
