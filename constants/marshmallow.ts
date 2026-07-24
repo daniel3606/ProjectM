@@ -44,15 +44,14 @@ export function getGrowthForDuration(
 }
 
 export const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-export const DAY_LABELS_FULL = [
-  "Sunday",
-  "Monday",
-  "Tuesday",
-  "Wednesday",
-  "Thursday",
-  "Friday",
-  "Saturday",
-] as const;
+
+export function formatDaysOfWeek(daysOfWeek: number[]): string {
+  if (daysOfWeek.length === 7) return "Every day";
+  return [...daysOfWeek]
+    .sort((a, b) => a - b)
+    .map((d) => DAY_LABELS[d])
+    .join(", ");
+}
 
 export function formatClockTime(hour: number, minute: number): string {
   const period = hour < 12 ? "AM" : "PM";

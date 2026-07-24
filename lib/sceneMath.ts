@@ -15,6 +15,7 @@ const MAX_OBJECT_SCALE = 1.8;
  * than cutting between objects.
  */
 export function getCameraPosition(sizeCm: number, stages: GrowthStage[]): number {
+  "worklet";
   if (stages.length === 0) return 0;
 
   const lastIndex = stages.length - 1;

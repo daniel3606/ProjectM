@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
@@ -8,10 +8,9 @@ import {
   useTimedBlockPlans,
   type TimedBlockPlan,
 } from "@/contexts/TimedBlockPlansContext";
-import * as ScreenTime from "@/modules/screen-time";
 import {
-  DAY_LABELS_FULL,
   formatClockTime,
+  formatDaysOfWeek,
   formatTimeRemaining,
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet from "@/components/TimedBlockPlanSheet";
@@ -33,13 +32,8 @@ export default function TimedBlockScreen() {
     return () => clearInterval(interval);
   }, [activeSession]);
 
-  const handleEndBlock = useCallback(async () => {
-    try {
-      await ScreenTime.clearBlocking();
-      stopSession();
-    } catch (error) {
-      Alert.alert("Error", `Failed to end block: ${error}`);
-    }
+  const handleEndBlock = useCallback(() => {
+    stopSession();
   }, [stopSession]);
 
   const handleAddPlan = useCallback(() => {
@@ -101,7 +95,7 @@ export default function TimedBlockScreen() {
             <View style={styles.planInfo}>
               <Text style={styles.planLabel}>{plan.label}</Text>
               <Text style={styles.planMeta}>
-                {DAY_LABELS_FULL[plan.dayOfWeek]} ·{" "}
+                {formatDaysOfWeek(plan.daysOfWeek)} ·{" "}
                 {formatClockTime(plan.startHour, plan.startMinute)} –{" "}
                 {formatClockTime(plan.endHour, plan.endMinute)}
               </Text>
@@ -115,6 +109,10 @@ export default function TimedBlockScreen() {
           </SelectableCard>
         ))
       )}
+
+      <SelectableCard onPress={handleAddPlan} style={styles.addCard}>
+        <Ionicons name="add" size={20} color={Theme.colors.secondary} />
+      </SelectableCard>
 
       <TimedBlockPlanSheet
         sheetRef={planSheetRef}
@@ -199,6 +197,13 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.textSecondary,
     marginTop: 2,
+  },
+  addCard: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    paddingVertical: 10,
   },
   pressed: {
     opacity: 0.7,
