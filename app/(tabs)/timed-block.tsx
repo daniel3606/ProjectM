@@ -4,6 +4,7 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
   useTimedBlockPlans,
   type TimedBlockPlan,
@@ -14,14 +15,17 @@ import {
   formatTimeRemaining,
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet from "@/components/TimedBlockPlanSheet";
+import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard, Button } from "@/components/ui";
 
 export default function TimedBlockScreen() {
   const { activeSession, stopSession } = useFocusSession();
+  const profile = useMarshmallowProfile();
   const { plans, addPlan, updatePlan, removePlan, setPlanEnabled } = useTimedBlockPlans();
   const planSheetRef = useRef<BottomSheetModal>(null);
   const [remainingMs, setRemainingMs] = useState(0);
   const [editingPlan, setEditingPlan] = useState<TimedBlockPlan | null>(null);
+  const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -33,6 +37,11 @@ export default function TimedBlockScreen() {
   }, [activeSession]);
 
   const handleEndBlock = useCallback(() => {
+    setIsEndConfirmVisible(true);
+  }, []);
+
+  const handleConfirmEndBlock = useCallback(() => {
+    setIsEndConfirmVisible(false);
     stopSession();
   }, [stopSession]);
 
@@ -120,6 +129,13 @@ export default function TimedBlockScreen() {
         onSave={addPlan}
         onUpdate={updatePlan}
         onDelete={removePlan}
+      />
+
+      <EndSessionConfirmModal
+        visible={isEndConfirmVisible}
+        marshmallowName={profile.name}
+        onConfirm={handleConfirmEndBlock}
+        onCancel={() => setIsEndConfirmVisible(false)}
       />
     </Screen>
   );

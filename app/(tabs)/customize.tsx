@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FlatList, Keyboard, StyleSheet, Text, TextInput, View } from "react-native";
 import Theme from "@/constants/theme";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
@@ -17,6 +17,27 @@ const CURRENT_SIZE_CM = 3;
 export default function CustomizeScreen() {
   const profile = useMarshmallowProfile();
   const currentStage = getStageForSize(CURRENT_SIZE_CM);
+
+  // Local draft so the field can be freely cleared while typing — the
+  // marshmallow's real name (in context) only updates, and can never become
+  // empty, once the user commits by leaving the field.
+  const [draftName, setDraftName] = useState(profile.name);
+
+  // Picks up the persisted name once it finishes loading from storage
+  // (context starts from a default before that resolves).
+  useEffect(() => {
+    setDraftName(profile.name);
+  }, [profile.name]);
+
+  const commitDraftName = () => {
+    const trimmed = draftName.trim();
+    if (trimmed.length === 0) {
+      setDraftName(profile.name);
+      return;
+    }
+    profile.setName(trimmed);
+    setDraftName(trimmed);
+  };
 
   const renderStageCard = ({ item }: { item: GrowthStage }) => (
     <GrowthStagePreviewCard stage={item} isCurrentStage={item.id === currentStage.id} />
@@ -39,8 +60,9 @@ export default function CustomizeScreen() {
         style={styles.nameInput}
         placeholder="Name your marshmallow"
         placeholderTextColor={Theme.colors.gray}
-        value={profile.name}
-        onChangeText={profile.setName}
+        value={draftName}
+        onChangeText={setDraftName}
+        onBlur={commitDraftName}
         maxLength={20}
         returnKeyType="done"
         onSubmitEditing={Keyboard.dismiss}

@@ -25,6 +25,7 @@ import SceneObject from "@/components/SceneObject";
 import FocusSessionSheet, {
   type FocusSessionConfig,
 } from "@/components/FocusSessionSheet";
+import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import { Screen, Button } from "@/components/ui";
 import { GROWTH_STAGES, getStageForSize, OBJECT_STAGES } from "@/constants/growthStages";
 import { getCameraPosition, getFocusedStageIndex } from "@/lib/sceneMath";
@@ -261,7 +262,14 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     }
   }, [startSession]);
 
+  const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
+
   const handleStopFocus = useCallback(() => {
+    setIsEndConfirmVisible(true);
+  }, []);
+
+  const handleConfirmStopFocus = useCallback(() => {
+    setIsEndConfirmVisible(false);
     stopSession();
   }, [stopSession]);
 
@@ -327,6 +335,13 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         sheetRef={focusSheetRef}
         currentSizeCm={actualSizeCm}
         onStartSession={handleStartSession}
+      />
+
+      <EndSessionConfirmModal
+        visible={isEndConfirmVisible}
+        marshmallowName={profile.name}
+        onConfirm={handleConfirmStopFocus}
+        onCancel={() => setIsEndConfirmVisible(false)}
       />
     </Screen>
   );
