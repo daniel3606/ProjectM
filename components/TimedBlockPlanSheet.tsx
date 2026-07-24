@@ -73,7 +73,7 @@ export default function TimedBlockPlanSheet({
   const insets = useSafeAreaInsets();
 
   const [label, setLabel] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState(() => new Date().getDay());
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>(() => [new Date().getDay()]);
   const [startHour, setStartHour] = useState(9);
   const [startMinute, setStartMinute] = useState(0);
   const [endHour, setEndHour] = useState(17);
@@ -84,7 +84,7 @@ export default function TimedBlockPlanSheet({
   useEffect(() => {
     if (editingPlan) {
       setLabel(editingPlan.label);
-      setDayOfWeek(editingPlan.dayOfWeek);
+      setDaysOfWeek(editingPlan.daysOfWeek);
       setStartHour(editingPlan.startHour);
       setStartMinute(editingPlan.startMinute);
       setEndHour(editingPlan.endHour);
@@ -126,13 +126,19 @@ export default function TimedBlockPlanSheet({
 
   const resetForm = useCallback(() => {
     setLabel("");
-    setDayOfWeek(new Date().getDay());
+    setDaysOfWeek([new Date().getDay()]);
     setStartHour(9);
     setStartMinute(0);
     setEndHour(17);
     setEndMinute(0);
     setFocusMode("flexible");
     setSelectedApps([]);
+  }, []);
+
+  const handleToggleDay = useCallback((day: number) => {
+    setDaysOfWeek((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
   }, []);
 
   const handlePickApps = useCallback(async () => {
@@ -154,11 +160,11 @@ export default function TimedBlockPlanSheet({
   }, []);
 
   const handleSave = useCallback(() => {
-    if (totalMinutes === 0) return;
+    if (totalMinutes === 0 || daysOfWeek.length === 0) return;
 
     const plan = {
       label: label.trim() || `${formatDuration(totalMinutes)} Block`,
-      dayOfWeek,
+      daysOfWeek,
       startHour,
       startMinute,
       endHour,
@@ -181,7 +187,7 @@ export default function TimedBlockPlanSheet({
   }, [
     totalMinutes,
     label,
-    dayOfWeek,
+    daysOfWeek,
     startHour,
     startMinute,
     endHour,
@@ -317,14 +323,14 @@ export default function TimedBlockPlanSheet({
             <SelectableCard
               key={dayLabel}
               tone="surface"
-              selected={dayOfWeek === index}
-              onPress={() => setDayOfWeek(index)}
+              selected={daysOfWeek.includes(index)}
+              onPress={() => handleToggleDay(index)}
               style={styles.dayChip}
             >
               <Text
                 style={[
                   styles.dayChipText,
-                  dayOfWeek === index && styles.dayChipTextSelected,
+                  daysOfWeek.includes(index) && styles.dayChipTextSelected,
                 ]}
               >
                 {dayLabel}
@@ -375,7 +381,7 @@ export default function TimedBlockPlanSheet({
 
         <Button
           onPress={handleSave}
-          disabled={totalMinutes === 0}
+          disabled={totalMinutes === 0 || daysOfWeek.length === 0}
           icon="bookmark-outline"
           label={editingPlan ? "Save Changes" : "Save Block"}
           style={styles.saveButton}

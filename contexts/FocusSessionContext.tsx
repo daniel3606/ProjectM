@@ -1,11 +1,17 @@
-import React, { createContext, useCallback, useContext, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
 import { usePersistedState } from "@/lib/storage";
 import type { FocusMode } from "@/constants/marshmallow";
+import { notifyBlockEnded } from "@/lib/notifications";
+import * as ScreenTime from "@/modules/screen-time";
 
 export interface FocusSessionConfig {
   durationMinutes: number;
   focusMode: FocusMode;
   expectedGrowthCm: number;
+  /** Set when this session was auto-started by a Timed Block plan rather than manually. */
+  planId?: string;
+  /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
+  label?: string;
 }
 
 export interface ActiveSession extends FocusSessionConfig {
@@ -21,8 +27,11 @@ const MAX_HISTORY = 50;
 interface FocusSessionContextValue {
   activeSession: ActiveSession | null;
   history: CompletedSession[];
-  startSession: (config: FocusSessionConfig) => void;
+  /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
+  startSession: (config: FocusSessionConfig, startedAt?: number) => void;
   stopSession: () => void;
+  /** Patches the running session in place (e.g. duration/growth from an edit) without resetting `startedAt`. No-op if nothing is active. */
+  updateSession: (patch: Partial<Omit<ActiveSession, "startedAt">>) => void;
 }
 
 const FocusSessionContext = createContext<FocusSessionContextValue | null>(null);
@@ -38,13 +47,21 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   );
 
   const startSession = useCallback(
-    (config: FocusSessionConfig) => {
-      setActiveSession({ ...config, startedAt: Date.now() });
+    (config: FocusSessionConfig, startedAt: number = Date.now()) => {
+      setActiveSession({ ...config, startedAt });
+    },
+    [setActiveSession]
+  );
+
+  const updateSession = useCallback(
+    (patch: Partial<Omit<ActiveSession, "startedAt">>) => {
+      setActiveSession((current) => (current ? { ...current, ...patch } : current));
     },
     [setActiveSession]
   );
 
   const stopSession = useCallback(() => {
+    ScreenTime.clearBlocking().catch(() => {});
     setActiveSession((current) => {
       if (current) {
         const { startedAt, ...config } = current;
@@ -56,9 +73,31 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     });
   }, [setActiveSession, setHistory]);
 
+  // Auto-dismisses the active session (and unblocks apps) the moment its
+  // duration elapses, whether it was started manually or by a Timed Block
+  // plan — the user should never have to remember to tap "End Block".
+  useEffect(() => {
+    if (!activeSession) return;
+
+    const endsAt = activeSession.startedAt + activeSession.durationMinutes * 60_000;
+    const remainingMs = endsAt - Date.now();
+
+    const autoEnd = () => {
+      notifyBlockEnded(activeSession.label);
+      stopSession();
+    };
+
+    if (remainingMs <= 0) {
+      autoEnd();
+      return;
+    }
+    const timer = setTimeout(autoEnd, remainingMs);
+    return () => clearTimeout(timer);
+  }, [activeSession, stopSession]);
+
   const value = useMemo(
-    () => ({ activeSession, history, startSession, stopSession }),
-    [activeSession, history, startSession, stopSession]
+    () => ({ activeSession, history, startSession, stopSession, updateSession }),
+    [activeSession, history, startSession, stopSession, updateSession]
   );
 
   return (

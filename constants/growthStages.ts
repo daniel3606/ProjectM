@@ -6,6 +6,7 @@ export interface GrowthStage {
 }
 
 export const GROWTH_STAGES: GrowthStage[] = [
+  { id: "blueberry", sizeCm: 2, objectName: "Blueberry", message: "Small and sweet — your very first step." },
   { id: "start", sizeCm: 3, objectName: "Start", message: "Your marshmallow journey begins." },
   { id: "grape", sizeCm: 4, objectName: "Grape", message: "Tiny but already growing." },
   { id: "egg", sizeCm: 6, objectName: "Egg", message: "Egg-sized focus energy." },

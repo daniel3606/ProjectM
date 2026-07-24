@@ -2,6 +2,7 @@ import Fonts from "@/constants/fonts";
 import { MarshmallowProfileProvider } from "@/contexts/MarshmallowProfileContext";
 import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
 import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
+import { requestNotificationPermissions } from "@/lib/notifications";
 import { ClerkProvider } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -28,6 +29,10 @@ export default function Layout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    requestNotificationPermissions();
+  }, []);
 
   if (!fontsLoaded) {
     return null;
