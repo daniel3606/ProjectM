@@ -30,6 +30,8 @@ interface FocusSessionContextValue {
   /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
   startSession: (config: FocusSessionConfig, startedAt?: number) => void;
   stopSession: () => void;
+  /** Patches the running session in place (e.g. duration/growth from an edit) without resetting `startedAt`. No-op if nothing is active. */
+  updateSession: (patch: Partial<Omit<ActiveSession, "startedAt">>) => void;
 }
 
 const FocusSessionContext = createContext<FocusSessionContextValue | null>(null);
@@ -47,6 +49,13 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   const startSession = useCallback(
     (config: FocusSessionConfig, startedAt: number = Date.now()) => {
       setActiveSession({ ...config, startedAt });
+    },
+    [setActiveSession]
+  );
+
+  const updateSession = useCallback(
+    (patch: Partial<Omit<ActiveSession, "startedAt">>) => {
+      setActiveSession((current) => (current ? { ...current, ...patch } : current));
     },
     [setActiveSession]
   );
@@ -87,8 +96,8 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   }, [activeSession, stopSession]);
 
   const value = useMemo(
-    () => ({ activeSession, history, startSession, stopSession }),
-    [activeSession, history, startSession, stopSession]
+    () => ({ activeSession, history, startSession, stopSession, updateSession }),
+    [activeSession, history, startSession, stopSession, updateSession]
   );
 
   return (

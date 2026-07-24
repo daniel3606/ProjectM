@@ -16,7 +16,10 @@ import {
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet from "@/components/TimedBlockPlanSheet";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
+import NameGateModal from "@/components/NameGateModal";
+import EditBlockSheet from "@/components/EditBlockSheet";
 import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard, Button } from "@/components/ui";
+import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 
 export default function TimedBlockScreen() {
   const { activeSession, stopSession } = useFocusSession();
@@ -26,6 +29,15 @@ export default function TimedBlockScreen() {
   const [remainingMs, setRemainingMs] = useState(0);
   const [editingPlan, setEditingPlan] = useState<TimedBlockPlan | null>(null);
   const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
+
+  const {
+    editBlockSheetRef,
+    isEditGateVisible,
+    openEditGate,
+    cancelEditGate,
+    confirmEditGate,
+    saveEditedBlock,
+  } = useEditBlockFlow();
 
   useEffect(() => {
     if (!activeSession) return;
@@ -73,7 +85,7 @@ export default function TimedBlockScreen() {
         </Pressable>
       </View>
 
-      {activeSession && (
+      {activeSession?.planId && (
         <Card style={styles.activeCard}>
           <Text style={styles.activeLabel}>Block in progress</Text>
           <Text style={styles.activeTime}>{formatTimeRemaining(remainingMs)}</Text>
@@ -81,14 +93,32 @@ export default function TimedBlockScreen() {
             {activeSession.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
             {activeSession.expectedGrowthCm}cm
           </Text>
-          <Button
-            variant="danger"
-            onPress={handleEndBlock}
-            icon="stop-circle-outline"
-            iconSize={18}
-            label="End Block"
-            style={styles.endButton}
-          />
+          <View style={styles.activeCardActions}>
+            <Button
+              variant="outline"
+              onPress={openEditGate}
+              icon="create-outline"
+              iconSize={16}
+              label="Edit Block"
+              style={styles.actionButton}
+            />
+            <Button
+              variant="danger"
+              onPress={handleEndBlock}
+              icon="stop-circle-outline"
+              iconSize={18}
+              label="End Block"
+              style={styles.actionButton}
+            />
+          </View>
+        </Card>
+      )}
+
+      {activeSession && !activeSession.planId && (
+        <Card style={styles.quickBlockNoticeCard}>
+          <Text style={styles.quickBlockNoticeText}>
+            A Quick Block is active — manage it from Home
+          </Text>
         </Card>
       )}
 
@@ -137,6 +167,24 @@ export default function TimedBlockScreen() {
         onConfirm={handleConfirmEndBlock}
         onCancel={() => setIsEndConfirmVisible(false)}
       />
+
+      <NameGateModal
+        visible={isEditGateVisible}
+        marshmallowName={profile.name}
+        title="Edit Block?"
+        subtitle="Type in your marshmallow's name to edit this block"
+        confirmLabel="Edit Block"
+        confirmVariant="primary"
+        onConfirm={confirmEditGate}
+        onCancel={cancelEditGate}
+      />
+
+      <EditBlockSheet
+        sheetRef={editBlockSheetRef}
+        session={activeSession}
+        onSave={saveEditedBlock}
+        onCancelBlock={handleEndBlock}
+      />
     </Screen>
   );
 }
@@ -182,8 +230,25 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginTop: 4,
   },
-  endButton: {
+  activeCardActions: {
+    flexDirection: "row",
+    gap: 10,
     marginTop: 16,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  quickBlockNoticeCard: {
+    borderRadius: 20,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  quickBlockNoticeText: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.textSecondary,
+    textAlign: "center",
   },
   emptyText: {
     fontSize: 14,

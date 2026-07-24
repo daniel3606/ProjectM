@@ -14,6 +14,7 @@ import {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import * as Haptics from "expo-haptics";
+import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
@@ -26,10 +27,14 @@ import FocusSessionSheet, {
   type FocusSessionConfig,
 } from "@/components/FocusSessionSheet";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
-import { Screen, Button } from "@/components/ui";
+import NameGateModal from "@/components/NameGateModal";
+import EditBlockSheet from "@/components/EditBlockSheet";
+import { Screen, Button, Card } from "@/components/ui";
 import { GROWTH_STAGES, getStageForSize, OBJECT_STAGES } from "@/constants/growthStages";
+import { formatTimeRemaining } from "@/constants/marshmallow";
 import { getCameraPosition, getFocusedStageIndex } from "@/lib/sceneMath";
 import useSelectionHaptic from "@/lib/useSelectionHaptic";
+import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 
 const INITIAL_SIZE_CM = 3;
 
@@ -102,8 +107,32 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const [previewMirrorCm, setPreviewMirrorCm] = useState(INITIAL_SIZE_CM);
   const { activeSession, startSession, stopSession } = useFocusSession();
   const isFocusActive = !!activeSession;
+  // A session started by a Timed Block plan carries `planId`; one started
+  // manually from this screen ("Quick Block") never does. The two get
+  // distinct UI here — see the Start/End Focus button section below.
+  const isQuickBlockActive = isFocusActive && !activeSession?.planId;
+  const isTimedBlockActive = isFocusActive && !!activeSession?.planId;
   const [isLoading, setIsLoading] = useState(false);
   const focusSheetRef = useRef<BottomSheetModal>(null);
+
+  const {
+    editBlockSheetRef,
+    isEditGateVisible,
+    openEditGate,
+    cancelEditGate,
+    confirmEditGate,
+    saveEditedBlock,
+  } = useEditBlockFlow();
+
+  const [remainingMs, setRemainingMs] = useState(0);
+  useEffect(() => {
+    if (!activeSession) return;
+    const endsAt = activeSession.startedAt + activeSession.durationMinutes * 60_000;
+    const tick = () => setRemainingMs(Math.max(0, endsAt - Date.now()));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [activeSession]);
 
   const isPreviewing = isPreviewingSize(previewMirrorCm, actualSizeCm);
   // Normal mode: the scene is scaled relative to the real size. Preview
@@ -320,6 +349,59 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
       </View>
 
 
+      {/* ── Quick Block timer ───────────────────────────────────────── */}
+      {isQuickBlockActive && (
+        <Card style={styles.quickBlockCard}>
+          <Text style={styles.quickBlockLabel}>Quick Block Active</Text>
+          <Text style={styles.quickBlockTime}>{formatTimeRemaining(remainingMs)}</Text>
+          <Text style={styles.quickBlockDesc}>
+            {activeSession?.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
+            {activeSession?.expectedGrowthCm}cm
+          </Text>
+          <Button
+            variant="outline"
+            onPress={openEditGate}
+            icon="create-outline"
+            iconSize={16}
+            label="Edit Block"
+            style={styles.quickBlockEditButton}
+          />
+        </Card>
+      )}
+
+      {/* ── Timed Block indicator ───────────────────────────────────── */}
+      {isTimedBlockActive && (
+        <Card style={styles.timedBlockCard}>
+          <Ionicons
+            name="hourglass-outline"
+            size={24}
+            color={Theme.colors.secondary}
+          />
+          <Text style={styles.timedBlockTitle}>Timed Block Active</Text>
+          <Text style={styles.timedBlockDesc}>
+            {activeSession?.label ?? "A scheduled block"} is blocking your apps
+          </Text>
+          <View style={styles.timedBlockActions}>
+            <Button
+              variant="outline"
+              onPress={openEditGate}
+              icon="create-outline"
+              iconSize={16}
+              label="Edit Block"
+              style={styles.timedBlockButton}
+            />
+            <Button
+              variant="outline"
+              onPress={() => router.push("/timed-block")}
+              icon="time-outline"
+              iconSize={16}
+              label="View Time Left"
+              style={styles.timedBlockButton}
+            />
+          </View>
+        </Card>
+      )}
+
       {/* ── Start / End Focus button ──────────────────────────────────── */}
       <Button
         onPress={isFocusActive ? handleStopFocus : handleOpenFocusSheet}
@@ -327,7 +409,11 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         icon={isFocusActive ? "stop-circle-outline" : "timer-outline"}
         iconSize={22}
         label={isFocusActive ? "End Focus Session" : "Start Focus Session"}
-        style={[styles.focusButton, isFocusActive && styles.focusButtonActive]}
+        style={[
+          styles.focusButton,
+          isFocusActive && styles.focusButtonActiveSpacing,
+          isFocusActive && styles.focusButtonActive,
+        ]}
       />
 
       {/* ── Focus session settings sheet ──────────────────────────── */}
@@ -342,6 +428,24 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         marshmallowName={profile.name}
         onConfirm={handleConfirmStopFocus}
         onCancel={() => setIsEndConfirmVisible(false)}
+      />
+
+      <NameGateModal
+        visible={isEditGateVisible}
+        marshmallowName={profile.name}
+        title="Edit Block?"
+        subtitle="Type in your marshmallow's name to edit this block"
+        confirmLabel="Edit Block"
+        confirmVariant="primary"
+        onConfirm={confirmEditGate}
+        onCancel={cancelEditGate}
+      />
+
+      <EditBlockSheet
+        sheetRef={editBlockSheetRef}
+        session={activeSession}
+        onSave={saveEditedBlock}
+        onCancelBlock={handleStopFocus}
       />
     </Screen>
   );
@@ -411,5 +515,69 @@ const styles = StyleSheet.create({
   },
   focusButtonActive: {
     backgroundColor: Theme.colors.danger,
+  },
+  focusButtonActiveSpacing: {
+    marginTop: 20,
+  },
+
+  /* Quick Block timer */
+  quickBlockCard: {
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.secondary,
+    padding: 20,
+    alignItems: "center",
+    marginTop: 28,
+  },
+  quickBlockLabel: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.secondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  quickBlockTime: {
+    fontSize: 36,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.text,
+    marginTop: 6,
+  },
+  quickBlockDesc: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.textSecondary,
+    marginTop: 4,
+  },
+  quickBlockEditButton: {
+    marginTop: 14,
+  },
+
+  /* Timed Block indicator */
+  timedBlockCard: {
+    borderRadius: 20,
+    padding: 20,
+    alignItems: "center",
+    marginTop: 28,
+  },
+  timedBlockTitle: {
+    fontSize: 17,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.text,
+    marginTop: 8,
+  },
+  timedBlockDesc: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.textSecondary,
+    marginTop: 4,
+    textAlign: "center",
+  },
+  timedBlockActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  timedBlockButton: {
+    flex: 1,
   },
 });
