@@ -16,14 +16,11 @@ export interface ScreenTimeItem {
 
 // ─────────────────────────────────────────────────────────────────────────
 // MOCK MODE
-// The native Swift blocking module (FamilyControls) is disabled while we
-// iterate on UI. Every function below is faked in JS so screens work
-// without a native rebuild or a Screen Time entitlement.
-//
-// To reconnect the real blocking module: set MOCK_MODE to false. The
-// native module is untouched at modules/screen-time/ios/ScreenTimeModule.swift.
+// When true, every function below is faked in JS so screens work without a
+// native rebuild or a Screen Time entitlement. Native blocking (FamilyControls
+// + ManagedSettings) lives at modules/screen-time/ios/ScreenTimeModule.swift.
 // ─────────────────────────────────────────────────────────────────────────
-const MOCK_MODE = true;
+const MOCK_MODE = false;
 
 const MOCK_ITEMS: ScreenTimeItem[] = [
   { id: "app_0", type: "application", label: "Instagram", index: 0 },
