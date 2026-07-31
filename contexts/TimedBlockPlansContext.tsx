@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import { AppState } from "react-native";
 import { usePersistedState } from "@/lib/storage";
 import { getGrowthForDuration, type FocusMode } from "@/constants/marshmallow";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
@@ -82,6 +83,64 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
   // Block" — kept out of the next tick's restart until the window passes.
   const dismissedOccurrencesRef = useRef<Set<string>>(new Set());
   const prevSessionRef = useRef(activeSession);
+
+  // Registers OS-level monitoring (TimedBlockMonitor extension) for every
+  // enabled plan, so a scheduled block still starts/ends even if the app is
+  // never opened at the scheduled time — the tick() loop below only runs
+  // while this JS is alive. Re-registers wholesale on every plan change.
+  useEffect(() => {
+    const schedulable = plans
+      .filter((plan) => plan.enabled && plan.daysOfWeek.length > 0)
+      .map((plan) => ({
+        id: plan.id,
+        label: plan.label,
+        daysOfWeek: plan.daysOfWeek,
+        startHour: plan.startHour,
+        startMinute: plan.startMinute,
+        endHour: plan.endHour,
+        endMinute: plan.endMinute,
+        appIds: plan.appIds,
+      }));
+    ScreenTime.scheduleTimedBlocks(schedulable).catch(() => {});
+  }, [plans]);
+
+  // Adopts a block the TimedBlockMonitor extension already started while the
+  // app wasn't running, so the UI (timer, growth preview) reflects reality
+  // instead of showing nothing blocked. Only ever fills in a *missing*
+  // session — never overrides one the app already knows about.
+  useEffect(() => {
+    if (activeSession) return;
+    let cancelled = false;
+
+    const adoptNativeBlockIfAny = () => {
+      ScreenTime.getActiveNativeBlock().then((native) => {
+        if (cancelled || !native) return;
+        const plan = plans.find((p) => p.id === native.planId);
+        if (!plan) return;
+
+        startSession(
+          {
+            durationMinutes: plan.durationMinutes,
+            focusMode: plan.focusMode,
+            expectedGrowthCm: getGrowthForDuration(plan.durationMinutes, plan.focusMode),
+            planId: plan.id,
+            label: plan.label,
+          },
+          native.startedAt
+        );
+      }).catch(() => {});
+    };
+
+    adoptNativeBlockIfAny();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") adoptNativeBlockIfAny();
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.remove();
+    };
+  }, [activeSession, plans, startSession]);
 
   useEffect(() => {
     const prev = prevSessionRef.current;
