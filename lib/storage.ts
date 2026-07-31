@@ -7,9 +7,14 @@ const KEY_PREFIX = "marshmallow.";
  * Like useState, but persisted to AsyncStorage under `marshmallow.<key>`.
  * Skips writing until the initial load finishes, so the default value
  * doesn't clobber whatever was already stored.
+ *
+ * The returned `isLoaded` flag lets callers that gate navigation on the
+ * persisted value (e.g. "has onboarding finished?") avoid acting on the
+ * in-memory default before the AsyncStorage read resolves.
  */
 export function usePersistedState<T>(key: string, initialValue: T) {
   const [value, setValue] = useState(initialValue);
+  const [isLoaded, setIsLoaded] = useState(false);
   const loaded = useRef(false);
 
   useEffect(() => {
@@ -24,6 +29,7 @@ export function usePersistedState<T>(key: string, initialValue: T) {
         }
       }
       loaded.current = true;
+      setIsLoaded(true);
     });
     return () => {
       cancelled = true;
@@ -36,5 +42,5 @@ export function usePersistedState<T>(key: string, initialValue: T) {
     AsyncStorage.setItem(KEY_PREFIX + key, JSON.stringify(value));
   }, [key, value]);
 
-  return [value, setValue] as const;
+  return [value, setValue, isLoaded] as const;
 }

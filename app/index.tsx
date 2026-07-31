@@ -1,4 +1,5 @@
 import Theme from "@/constants/theme";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useAuth, useSignIn, useSignUp } from "@clerk/expo";
 import {
   BottomSheetBackdrop,
@@ -264,12 +265,19 @@ export default function WelcomeScreen() {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const router = useRouter();
   const { isSignedIn } = useAuth();
+  const { hasCompletedOnboarding, onboardingStatusLoaded } = useMarshmallowProfile();
 
   useEffect(() => {
-    if (isSignedIn) {
+    // Wait for the persisted flag to load — acting on the in-memory default
+    // would flash the welcome/onboarding screens before snapping to tabs.
+    if (!onboardingStatusLoaded) return;
+
+    if (hasCompletedOnboarding) {
+      router.replace("/(tabs)");
+    } else if (isSignedIn) {
       router.replace("/custominit");
     }
-  }, [isSignedIn, router]);
+  }, [isSignedIn, hasCompletedOnboarding, onboardingStatusLoaded, router]);
 
   const snapPoints = useMemo(
     () => [authMode === "login" ? "50%" : "60%"],
