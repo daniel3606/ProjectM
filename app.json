@@ -44,7 +44,8 @@
         }
       ],
       "expo-image",
-      "./plugins/withFamilyControls"
+      "./plugins/withFamilyControls",
+      "./plugins/withTimedBlockMonitor"
     ],
     "experiments": {
       "typedRoutes": true,
