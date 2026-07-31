@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
 import OnboardingButton from "@/components/OnboardingButton";
 import { Screen, HeroTitle, HeroSubtitle } from "@/components/ui";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 const PREMIUM_FEATURES = [
   { icon: "lock-closed", label: "Deep Focus mode with 1.5x growth" },
@@ -17,8 +18,12 @@ const PREMIUM_FEATURES = [
 export default function OnboardingPremium() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { completeOnboarding } = useMarshmallowProfile();
 
   const finishOnboarding = () => {
+    // Persist so index.tsx never routes back into onboarding on a future
+    // app launch/reload.
+    completeOnboarding();
     // custominit is presented as a fullScreenModal, and purpose/screentime/
     // premium are pushed inside that same modal stack. Dismiss the whole
     // modal before replacing, otherwise (tabs) just gets pushed on top of it.
