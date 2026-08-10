@@ -1,8 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { usePersistedState } from "@/lib/storage";
 import type { FocusMode } from "@/constants/marshmallow";
 import { notifyBlockEnded } from "@/lib/notifications";
+import { syncCompletedSession } from "@/lib/sync";
+import { supabase } from "@/lib/supabase";
 import * as ScreenTime from "@/modules/screen-time";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export interface FocusSessionConfig {
   durationMinutes: number;
@@ -45,6 +48,46 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     "focusSession.history",
     []
   );
+  const presenceRef = useRef<RealtimeChannel | null>(null);
+
+  // Broadcast focus presence when session starts/stops
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user || cancelled) return;
+
+      // Clean up previous channel
+      if (presenceRef.current) {
+        await presenceRef.current.untrack();
+        supabase.removeChannel(presenceRef.current);
+        presenceRef.current = null;
+      }
+
+      if (activeSession) {
+        const channel = supabase.channel("focus-presence", {
+          config: { presence: { key: session.user.id } },
+        });
+
+        channel.subscribe(async (status) => {
+          if (status === "SUBSCRIBED" && !cancelled) {
+            await channel.track({
+              isFocusing: true,
+              focusMode: activeSession.focusMode,
+              startedAt: activeSession.startedAt,
+            });
+          }
+        });
+
+        presenceRef.current = channel;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession]);
 
   const startSession = useCallback(
     (config: FocusSessionConfig, startedAt: number = Date.now()) => {
@@ -62,12 +105,23 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
 
   const stopSession = useCallback(() => {
     ScreenTime.clearBlocking().catch(() => {});
+
+    // Untrack presence
+    if (presenceRef.current) {
+      presenceRef.current.untrack().catch(() => {});
+      supabase.removeChannel(presenceRef.current);
+      presenceRef.current = null;
+    }
+
     setActiveSession((current) => {
       if (current) {
         const { startedAt, ...config } = current;
+        const completed: CompletedSession = { ...config, completedAt: Date.now() };
         setHistory((prev) =>
-          [{ ...config, completedAt: Date.now() }, ...prev].slice(0, MAX_HISTORY)
+          [completed, ...prev].slice(0, MAX_HISTORY)
         );
+        // Fire-and-forget sync to Supabase
+        syncCompletedSession(completed).catch(() => {});
       }
       return null;
     });

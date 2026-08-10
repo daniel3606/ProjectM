@@ -1,6 +1,8 @@
-import React, { createContext, useCallback, useContext, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
 import { usePersistedState } from "@/lib/storage";
+import { syncProfile, fetchRemoteProfile } from "@/lib/sync";
+import { supabase } from "@/lib/supabase";
 
 type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
 
@@ -18,25 +20,51 @@ const MarshmallowProfileContext = createContext<MarshmallowProfileContextValue |
 
 export function MarshmallowProfileProvider({ children }: { children: React.ReactNode }) {
   const [name, setRawName] = usePersistedState("profile.name", DEFAULT_NAME);
-  const [color, setColor] = usePersistedState<MarshmallowColorHex>(
+  const [color, setRawColor] = usePersistedState<MarshmallowColorHex>(
     "profile.color",
     DEFAULT_COLOR
   );
 
-  // A marshmallow must always have a name — silently ignore attempts to
-  // clear it rather than letting an empty string get persisted.
+  // Hydrate local state from Supabase profile on login
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN" && session?.user) {
+          const remote = await fetchRemoteProfile(session.user.id);
+          if (remote) {
+            if (remote.display_name) setRawName(remote.display_name);
+            if (remote.marshmallow_color) {
+              setRawColor(remote.marshmallow_color as MarshmallowColorHex);
+            }
+          }
+        }
+      }
+    );
+    return () => subscription.unsubscribe();
+  }, [setRawName, setRawColor]);
+
   const setName = useCallback(
     (next: string) => {
       const trimmed = next.trim();
       if (trimmed.length === 0) return;
       setRawName(trimmed);
+      // Fire-and-forget sync — we'll read the current color from the closure
+      syncProfile(trimmed, color).catch(() => {});
     },
-    [setRawName]
+    [setRawName, color]
+  );
+
+  const setColor = useCallback(
+    (next: MarshmallowColorHex) => {
+      setRawColor(next);
+      syncProfile(name, next).catch(() => {});
+    },
+    [setRawColor, name]
   );
 
   const value = useMemo(
     () => ({ name, color, setName, setColor }),
-    [name, color, setName]
+    [name, color, setName, setColor]
   );
 
   return (
