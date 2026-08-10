@@ -1,141 +1,96 @@
-import React, { useEffect, useState } from "react";
-import { FlatList, Keyboard, StyleSheet, Text, TextInput, View } from "react-native";
+import React from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Theme from "@/constants/theme";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
+import { ITEM_SLOTS, getItemsForSlot } from "@/constants/items";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
-import GrowthStagePreviewCard from "@/components/GrowthStagePreviewCard";
-import { GROWTH_STAGES, getStageForSize, type GrowthStage } from "@/constants/growthStages";
-import { Screen, ScreenTitle, ScreenSubtitle, ColorPicker } from "@/components/ui";
+import { Screen, ScreenTitle, ColorPicker, ItemPicker } from "@/components/ui";
 
-const PREVIEW_SIZE_CM = 10;
-
-// ── Hardcoded — keep in sync with Home for now, later share via context ──
-const CURRENT_SIZE_CM = 3;
-// ─────────────────────────────────────────────────────────────────────────
+const PREVIEW_SIZE_CM = 4;
 
 export default function CustomizeScreen() {
   const profile = useMarshmallowProfile();
-  const currentStage = getStageForSize(CURRENT_SIZE_CM);
-
-  // Local draft so the field can be freely cleared while typing — the
-  // marshmallow's real name (in context) only updates, and can never become
-  // empty, once the user commits by leaving the field.
-  const [draftName, setDraftName] = useState(profile.name);
-
-  // Picks up the persisted name once it finishes loading from storage
-  // (context starts from a default before that resolves).
-  useEffect(() => {
-    setDraftName(profile.name);
-  }, [profile.name]);
-
-  const commitDraftName = () => {
-    const trimmed = draftName.trim();
-    if (trimmed.length === 0) {
-      setDraftName(profile.name);
-      return;
-    }
-    profile.setName(trimmed);
-    setDraftName(trimmed);
-  };
-
-  const renderStageCard = ({ item }: { item: GrowthStage }) => (
-    <GrowthStagePreviewCard stage={item} isCurrentStage={item.id === currentStage.id} />
-  );
 
   return (
-    <Screen scroll keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-      <ScreenTitle style={styles.title}>Customize</ScreenTitle>
-      <ScreenSubtitle style={styles.subtitle}>Make your marshmallow your own</ScreenSubtitle>
+    <Screen style={styles.screen}>
+      <View style={styles.previewSection}>
+        <ScreenTitle style={styles.title}>Customize</ScreenTitle>
 
-      <View style={styles.previewWrap}>
-        <MarshmallowCharacter
-          color={profile.color}
-          name={profile.name}
-          sizeCm={PREVIEW_SIZE_CM}
-        />
+        <View style={styles.previewWrap}>
+          <MarshmallowCharacter
+            color={profile.color}
+            name={profile.name}
+            sizeCm={PREVIEW_SIZE_CM}
+            items={profile.items}
+          />
+        </View>
       </View>
 
-      <TextInput
-        style={styles.nameInput}
-        placeholder="Name your marshmallow"
-        placeholderTextColor={Theme.colors.gray}
-        value={draftName}
-        onChangeText={setDraftName}
-        onBlur={commitDraftName}
-        maxLength={20}
-        returnKeyType="done"
-        onSubmitEditing={Keyboard.dismiss}
-      />
+      <ScrollView
+        style={styles.optionsScroll}
+        contentContainerStyle={styles.optionsContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Color</Text>
+          <ColorPicker
+            colors={MARSHMALLOW_COLORS}
+            selected={profile.color}
+            onSelect={profile.setColor}
+            style={styles.colorGrid}
+          />
+        </View>
 
-      <ColorPicker
-        colors={MARSHMALLOW_COLORS}
-        selected={profile.color}
-        onSelect={profile.setColor}
-        style={styles.colorGrid}
-      />
-
-      <Text style={styles.sectionTitle}>Growth Journey</Text>
-      <Text style={styles.sectionSubtitle}>
-        Scroll through every stage your marshmallow will reach
-      </Text>
-      <FlatList
-        data={GROWTH_STAGES}
-        renderItem={renderStageCard}
-        keyExtractor={(item) => item.id}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.stageList}
-        contentContainerStyle={styles.stageListContent}
-      />
+        {ITEM_SLOTS.map((slot) => (
+          <View key={slot.id} style={styles.section}>
+            <Text style={styles.sectionTitle}>{slot.label}</Text>
+            <ItemPicker
+              items={getItemsForSlot(slot.id)}
+              selectedId={profile.items[slot.id]}
+              onSelect={(itemId) => profile.toggleItem(slot.id, itemId)}
+            />
+          </View>
+        ))}
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  previewSection: {
+    paddingHorizontal: Theme.spacing.xxl,
+  },
   title: {
     fontSize: 26,
     paddingTop: 16,
   },
-  subtitle: {
-    marginBottom: 16,
-  },
   previewWrap: {
     alignItems: "center",
-    marginBottom: 8,
+    marginTop: 32,
+    marginBottom: 32,
   },
-  nameInput: {
-    marginBottom: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    fontSize: 17,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.text,
-    textAlign: "center",
-    backgroundColor: Theme.colors.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
+  optionsScroll: {
+    flex: 1,
   },
-  colorGrid: {
-    marginBottom: 24,
+  optionsContent: {
+    paddingHorizontal: Theme.spacing.xxl,
+    paddingTop: Theme.spacing.lg,
+    paddingBottom: Theme.spacing.xxxl,
+  },
+  section: {
+    marginBottom: Theme.spacing.xxl,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
+    marginBottom: Theme.spacing.md,
   },
-  sectionSubtitle: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.textSecondary,
-    marginTop: 4,
-    marginBottom: 16,
-  },
-  stageList: {
-    marginHorizontal: -24,
-  },
-  stageListContent: {
-    paddingHorizontal: 24,
+  colorGrid: {
+    justifyContent: "flex-start",
   },
 });

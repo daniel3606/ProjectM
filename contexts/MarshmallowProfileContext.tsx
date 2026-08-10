@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo } from "react";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
+import type { EquippedItems, ItemSlot } from "@/constants/items";
 import { usePersistedState } from "@/lib/storage";
 import { syncProfile, fetchRemoteProfile } from "@/lib/sync";
 import { supabase } from "@/lib/supabase";
@@ -9,12 +10,16 @@ type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
 interface MarshmallowProfileContextValue {
   name: string;
   color: MarshmallowColorHex;
+  items: EquippedItems;
   setName: (name: string) => void;
   setColor: (color: MarshmallowColorHex) => void;
+  /** Equips `itemId` in its slot, or clears the slot if it's already equipped there. */
+  toggleItem: (slot: ItemSlot, itemId: string) => void;
 }
 
 const DEFAULT_NAME = "Mochi";
 const DEFAULT_COLOR: MarshmallowColorHex = MARSHMALLOW_COLORS[0].hex;
+const DEFAULT_ITEMS: EquippedItems = {};
 
 const MarshmallowProfileContext = createContext<MarshmallowProfileContextValue | null>(null);
 
@@ -24,6 +29,7 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     "profile.color",
     DEFAULT_COLOR
   );
+  const [items, setItems] = usePersistedState<EquippedItems>("profile.items", DEFAULT_ITEMS);
 
   // Hydrate local state from Supabase profile on login
   useEffect(() => {
@@ -62,9 +68,23 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     [setRawColor, name]
   );
 
+  const toggleItem = useCallback(
+    (slot: ItemSlot, itemId: string) => {
+      setItems((prev) => {
+        if (prev[slot] === itemId) {
+          const next = { ...prev };
+          delete next[slot];
+          return next;
+        }
+        return { ...prev, [slot]: itemId };
+      });
+    },
+    [setItems]
+  );
+
   const value = useMemo(
-    () => ({ name, color, setName, setColor }),
-    [name, color, setName, setColor]
+    () => ({ name, color, items, setName, setColor, toggleItem }),
+    [name, color, items, setName, setColor, toggleItem]
   );
 
   return (
