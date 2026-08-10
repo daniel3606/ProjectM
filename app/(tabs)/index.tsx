@@ -326,7 +326,12 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
           {/* Marshmallow (rendered last = foreground) */}
           <View style={styles.marshmallowPosition}>
-            <View style={{ transform: [{ scale: marshmallowVisualScale }] }}>
+            <View
+              style={[
+                styles.marshmallowScale,
+                { transform: [{ scale: marshmallowVisualScale }] },
+              ]}
+            >
               <MarshmallowCharacter
                 color={profile.color}
                 name={profile.name}
@@ -487,6 +492,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
+  },
+  marshmallowScale: {
+    // Scale from the feet, not the center — otherwise shrinking (comparing
+    // against huge future objects) lifts the marshmallow's feet off the
+    // ground line so it looks like it's floating in front of the object,
+    // and growing (comparing against tiny early objects) pushes it down
+    // through the floor instead of up and out of frame.
+    transformOrigin: "50% 100%",
   },
 
   /* Info */
