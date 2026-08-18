@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import * as Linking from "expo-linking";
 import { supabase } from "@/lib/supabase";
+import { AUTH_REDIRECT_URL, createSessionFromUrl, isAuthCallbackUrl } from "@/lib/authRedirect";
 import type { Session, User } from "@supabase/supabase-js";
 
 interface SignUpResult {
@@ -14,6 +16,8 @@ interface AuthContextValue {
   signUp: (email: string, password: string) => Promise<SignUpResult>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  resendConfirmation: (email: string) => Promise<{ error: string | null }>;
+  confirmSignup: (email: string, token: string) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -35,8 +39,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleUrl = (url: string | null) => {
+      if (!url || !isAuthCallbackUrl(url)) return;
+      createSessionFromUrl(url).catch(() => {});
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+    const linking = Linking.addEventListener("url", ({ url }) => handleUrl(url));
+    return () => linking.remove();
+  }, []);
+
   const signUp = useCallback(async (email: string, password: string): Promise<SignUpResult> => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: AUTH_REDIRECT_URL },
+    });
     if (error) return { error: error.message, needsConfirmation: false };
     // Supabase returns 200 with no error but also no session when:
     // - Email confirmation is required (new user)
@@ -64,6 +83,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  const resendConfirmation = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: AUTH_REDIRECT_URL },
+    });
+    return { error: error?.message ?? null };
+  }, []);
+
+  const confirmSignup = useCallback(async (email: string, token: string) => {
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: "signup",
+    });
+    return { error: error?.message ?? null };
+  }, []);
+
   const value = useMemo(
     () => ({
       session,
@@ -72,8 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signIn,
       signOut,
+      resendConfirmation,
+      confirmSignup,
     }),
-    [session, isLoading, signUp, signIn, signOut]
+    [session, isLoading, signUp, signIn, signOut, resendConfirmation, confirmSignup]
   );
 
   return (

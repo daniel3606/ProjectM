@@ -81,10 +81,12 @@ function SignInForm() {
 }
 
 function SignUpForm() {
-  const { signUp } = useAuth();
+  const { signUp, resendConfirmation, confirmSignup } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [awaitingCode, setAwaitingCode] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
@@ -106,7 +108,8 @@ function SignUpForm() {
       if (signUpError) {
         setError(signUpError);
       } else if (needsConfirmation) {
-        setInfo("Check your email to confirm your account. If you already have an account, try logging in instead.");
+        setAwaitingCode(true);
+        setInfo("Enter the 6-digit code from your email.");
       }
     } catch (err: any) {
       setError(err.message ?? "Sign up failed");
@@ -114,6 +117,81 @@ function SignUpForm() {
       setLoading(false);
     }
   };
+
+  const onConfirmCode = async () => {
+    if (code.trim().length < 6) {
+      setError("Enter the 6-digit code from your email");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const { error: confirmError } = await confirmSignup(email, code.trim());
+      if (confirmError) {
+        setError(confirmError);
+      }
+    } catch (err: any) {
+      setError(err.message ?? "Confirmation failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onResend = async () => {
+    if (!email) {
+      setError("Enter your email to resend the confirmation code");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      const { error: resendError } = await resendConfirmation(email);
+      if (resendError) {
+        setError(resendError);
+      } else {
+        setInfo("A new confirmation email is on the way.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (awaitingCode) {
+    return (
+      <View style={formStyles.form}>
+        <Text style={formStyles.title}>Check Your Email</Text>
+        <Text style={formStyles.info}>
+          We sent a 6-digit code to {email}.
+        </Text>
+
+        <Text style={formStyles.label}>Confirmation code</Text>
+        <BottomSheetTextInput
+          style={formStyles.input}
+          value={code}
+          onChangeText={setCode}
+          placeholder="123456"
+          placeholderTextColor={Theme.colors.gray}
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete="one-time-code"
+          maxLength={8}
+        />
+
+        {error ? <Text style={formStyles.error}>{error}</Text> : null}
+        {info ? <Text style={formStyles.info}>{info}</Text> : null}
+
+        <Button
+          label="Confirm"
+          onPress={onConfirmCode}
+          loading={loading}
+          style={formStyles.submitButton}
+        />
+        <Pressable onPress={onResend} style={formStyles.resendLink}>
+          <Text style={formStyles.resendText}>Resend code</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={formStyles.form}>
@@ -152,7 +230,6 @@ function SignUpForm() {
       />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
-      {info ? <Text style={formStyles.info}>{info}</Text> : null}
 
       <Button
         label="Sign Up"
@@ -326,6 +403,16 @@ const formStyles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
     marginTop: 4,
+  },
+  resendLink: {
+    marginTop: 8,
+    alignSelf: "flex-start",
+  },
+  resendText: {
+    color: Theme.colors.secondary,
+    fontFamily: Theme.fonts.medium,
+    fontSize: 14,
+    textDecorationLine: "underline",
   },
   submitButton: {
     marginTop: 16,
