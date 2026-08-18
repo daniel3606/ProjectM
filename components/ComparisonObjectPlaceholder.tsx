@@ -1,13 +1,7 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import Theme from "@/constants/theme";
 import type { GrowthStage } from "@/constants/growthStages";
-import DonutIllustration from "@/components/objects/DonutIllustration";
-
-/** Stage ids that have a real illustration so far — others fall back to the plain box. */
-const ILLUSTRATIONS: Partial<Record<string, React.ComponentType<{ size: number }>>> = {
-  donut: DonutIllustration,
-};
 
 interface ComparisonObjectPlaceholderProps {
   stage: GrowthStage;
@@ -19,63 +13,64 @@ interface ComparisonObjectPlaceholderProps {
   scale?: number;
 }
 
+const OBJECT_IMAGES: Record<string, ReturnType<typeof require>> = {
+  blueberry:    require("@/assets/images/objects/blueberry.png"),
+  grape:        require("@/assets/images/objects/grape.png"),
+  strawberry:   require("@/assets/images/objects/strawberry.png"),
+  egg:          require("@/assets/images/objects/egg.png"),
+  tangerine:    require("@/assets/images/objects/tangerine.png"),
+  apple:        require("@/assets/images/objects/apple.png"),
+  cupcake:      require("@/assets/images/objects/cupcake.png"),
+  donut:        require("@/assets/images/objects/donut.png"),
+  hot_beverage: require("@/assets/images/objects/hot_beverage.png"),
+  banana:       require("@/assets/images/objects/banana.png"),
+  birthday_cake:require("@/assets/images/objects/birthday_cake.png"),
+  teddy_bear:   require("@/assets/images/objects/teddy_bear.png"),
+  basketball:   require("@/assets/images/objects/basketball.png"),
+  sneaker:      require("@/assets/images/objects/sneaker.png"),
+  laptop:       require("@/assets/images/objects/laptop.png"),
+  cat:          require("@/assets/images/objects/cat.png"),
+  dog:          require("@/assets/images/objects/dog.png"),
+  skateboard:   require("@/assets/images/objects/skateboard.png"),
+  chair:        require("@/assets/images/objects/chair.png"),
+  bicycle:      require("@/assets/images/objects/bicycle.png"),
+  person:       require("@/assets/images/objects/person.png"),
+};
+
 /**
- * Renders a comparison object as a simple emoji + label.
- * Designed to sit in the scene background behind the marshmallow.
- * Replace the emoji with an <Image /> or SVG asset later.
+ * Renders a comparison object using an OpenMoji PNG illustration.
+ * Sits in the scene background behind the marshmallow.
  */
 export default function ComparisonObjectPlaceholder({
   stage,
   scale = 1,
 }: ComparisonObjectPlaceholderProps) {
-  // Must match TARGET_HEIGHT in HomeScreen so scale 1.0 = same height as marshmallow
   const BASE_SIZE = 140;
   const clamped = Math.max(0.25, Math.min(scale, 1.8));
   const boxSize = Math.round(BASE_SIZE * clamped);
-  const Illustration = ILLUSTRATIONS[stage.id];
+
+  const imageSource = OBJECT_IMAGES[stage.id];
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{stage.objectName}</Text>
       <Text style={styles.size}>{stage.sizeCm}cm</Text>
-      {Illustration ? (
-        <Illustration size={boxSize} />
+      {imageSource ? (
+        <Image
+          source={imageSource}
+          style={{ width: boxSize, height: boxSize }}
+          resizeMode="contain"
+        />
       ) : (
-        <View style={[styles.box, { width: boxSize, height: boxSize }]} />
+        <View style={[styles.fallback, { width: boxSize, height: boxSize }]} />
       )}
     </View>
   );
 }
 
-/** Temporary emoji map — will be replaced by real image assets. */
-function getPlaceholderEmoji(stageId: string): string {
-  const map: Record<string, string> = {
-    start: "\uD83C\uDF31",
-    grape: "\uD83C\uDF47",
-    egg: "\uD83E\uDD5A",
-    apple: "\uD83C\uDF4E",
-    donut: "\uD83C\uDF69",
-    mug: "\u2615",
-    banana: "\uD83C\uDF4C",
-    teddy_bear: "\uD83E\uDDF8",
-    basketball: "\uD83C\uDFC0",
-    pillow: "\uD83D\uDECF\uFE0F",
-    cat: "\uD83D\uDC31",
-    small_dog: "\uD83D\uDC36",
-    skateboard: "\uD83D\uDEF9",
-    chair: "\uD83E\uDE91",
-    human: "\uD83E\uDDCD",
-  };
-  return map[stageId] ?? "?";
-}
-
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-  },
-  box: {
-    backgroundColor: "#123456",
-    borderRadius: 4,
   },
   label: {
     marginTop: 4,
@@ -87,5 +82,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.gray,
+  },
+  fallback: {
+    backgroundColor: Theme.colors.card,
+    borderRadius: 4,
   },
 });
