@@ -5,12 +5,6 @@ import type { GrowthStage } from "@/constants/growthStages";
 
 interface ComparisonObjectPlaceholderProps {
   stage: GrowthStage;
-  /**
-   * Visual scale relative to the marshmallow.
-   * 1.0 = same visual height as the marshmallow on screen.
-   * Values > 1 make the object larger, < 1 smaller.
-   */
-  scale?: number;
 }
 
 const OBJECT_IMAGES: Record<string, ReturnType<typeof require>> = {
@@ -43,11 +37,11 @@ const OBJECT_IMAGES: Record<string, ReturnType<typeof require>> = {
  */
 export default function ComparisonObjectPlaceholder({
   stage,
-  scale = 1,
 }: ComparisonObjectPlaceholderProps) {
-  const BASE_SIZE = 140;
-  const clamped = Math.max(0.25, Math.min(scale, 1.8));
-  const boxSize = Math.round(BASE_SIZE * clamped);
+  // Height is always fixed so every object fills the same vertical space in the scene.
+  // Width is unconstrained (same as height since OpenMoji images are square) and the
+  // parent scene allows horizontal overflow, so wide objects bleed out to the sides.
+  const HEIGHT = 140;
 
   const imageSource = OBJECT_IMAGES[stage.id];
 
@@ -58,11 +52,11 @@ export default function ComparisonObjectPlaceholder({
       {imageSource ? (
         <Image
           source={imageSource}
-          style={{ width: boxSize, height: boxSize }}
+          style={{ width: HEIGHT, height: HEIGHT }}
           resizeMode="contain"
         />
       ) : (
-        <View style={[styles.fallback, { width: boxSize, height: boxSize }]} />
+        <View style={[styles.fallback, { width: HEIGHT, height: HEIGHT }]} />
       )}
     </View>
   );

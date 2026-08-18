@@ -7,7 +7,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import type { GrowthStage } from "@/constants/growthStages";
-import { OBJECT_GAP, OBJECT_GROUND_Y, getObjectScale } from "@/lib/sceneMath";
+import { OBJECT_GAP, OBJECT_GROUND_Y } from "@/lib/sceneMath";
 import ComparisonObjectPlaceholder from "@/components/ComparisonObjectPlaceholder";
 
 // Objects are fully visible near the center, then fade out with distance.
@@ -18,18 +18,14 @@ const FOCUSED_OPACITY = 0.85;
 interface SceneObjectProps {
   stage: GrowthStage;
   index: number;
-  currentSizeCm: number;
   cameraPosition: SharedValue<number>;
 }
 
 export default function SceneObject({
   stage,
   index,
-  currentSizeCm,
   cameraPosition,
 }: SceneObjectProps) {
-  const scale = getObjectScale(stage.sizeCm, currentSizeCm);
-
   const animatedStyle = useAnimatedStyle(() => {
     const slotPosition = index * OBJECT_GAP;
     const screenX = slotPosition - cameraPosition.value;
@@ -49,7 +45,7 @@ export default function SceneObject({
 
   return (
     <Animated.View style={[styles.objectPosition, animatedStyle]}>
-      <ComparisonObjectPlaceholder stage={stage} scale={scale} />
+      <ComparisonObjectPlaceholder stage={stage} />
     </Animated.View>
   );
 }

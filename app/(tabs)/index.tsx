@@ -346,7 +346,6 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
               stage={obj}
               index={i}
               cameraPosition={cameraPosition}
-              currentSizeCm={comparisonReferenceSizeCm}
             />
           ))}
 
