@@ -41,3 +41,10 @@ app-example
 # generated native folders
 /ios
 /android
+
+# AI/editor tool configs
+.agents/
+.codex/
+.cursor/
+.claude/
+.mcp.json

@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import OnboardingButton from "@/components/OnboardingButton";
 import { Screen, HeroTitle, HeroSubtitle, SelectableOption } from "@/components/ui";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 const PURPOSE_OPTIONS = [
   "Cut down on social media",
@@ -13,6 +14,7 @@ const PURPOSE_OPTIONS = [
 
 export default function OnboardingPurpose() {
   const router = useRouter();
+  const { setOnboardingPurpose } = useMarshmallowProfile();
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
@@ -45,7 +47,11 @@ export default function OnboardingPurpose() {
         <OnboardingButton
           label="Next"
           disabled={!selected}
-          onPress={() => router.push("/onboarding-screentime")}
+          onPress={() => {
+            if (!selected) return;
+            setOnboardingPurpose(selected);
+            router.push("/onboarding-screentime");
+          }}
         />
       </Screen>
     </>

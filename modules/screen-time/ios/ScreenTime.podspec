@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.license        = 'MIT'
   s.author         = 'marshmallow'
   s.homepage       = 'https://github.com/placeholder'
-  s.platforms      = { :ios => '17.0' }
+  s.platforms      = { :ios => '15.1' }
   s.swift_version  = '5.9'
   s.source         = { git: '' }
   s.static_framework = true
@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
 
   s.source_files = "**/*.{h,m,swift}"
-  s.frameworks = 'FamilyControls', 'ManagedSettings'
+  s.frameworks = 'FamilyControls', 'ManagedSettings', 'DeviceActivity'
 
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',

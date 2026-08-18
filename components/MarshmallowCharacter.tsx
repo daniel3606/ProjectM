@@ -11,6 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MARSHMALLOW_ITEMS, type EquippedItems } from "@/constants/items";
 
 
 
@@ -30,6 +31,7 @@ interface MarshmallowCharacterProps {
   name: string;
   sizeCm: number;
   isBlocking?: boolean;
+  items?: EquippedItems;
 }
 
 export default function MarshmallowCharacter({
@@ -37,7 +39,17 @@ export default function MarshmallowCharacter({
   name,
   sizeCm,
   isBlocking,
+  items,
 }: MarshmallowCharacterProps) {
+  const headwearEmoji = items?.headwear
+    ? MARSHMALLOW_ITEMS.find((i) => i.id === items.headwear)?.emoji
+    : undefined;
+  const wingsEmoji = items?.wings
+    ? MARSHMALLOW_ITEMS.find((i) => i.id === items.wings)?.emoji
+    : undefined;
+  const faceEmoji = items?.face
+    ? MARSHMALLOW_ITEMS.find((i) => i.id === items.face)?.emoji
+    : undefined;
   const scale = 0.9 + Math.min(sizeCm / 60, 0.4);
 
   const blinkScaleY = useSharedValue(1);
@@ -82,10 +94,19 @@ export default function MarshmallowCharacter({
         {/* Ground shadow */}
         <View style={styles.groundShadow} />
 
+        {wingsEmoji && (
+          <>
+            <Text style={[styles.wingEmoji, styles.wingLeft]}>{wingsEmoji}</Text>
+            <Text style={[styles.wingEmoji, styles.wingRight]}>{wingsEmoji}</Text>
+          </>
+        )}
+
         {/* Body */}
         <View style={[styles.body, { backgroundColor: color }]}>
           {/* Shine highlight */}
           <View style={styles.shine} />
+
+          {headwearEmoji && <Text style={styles.headwearEmoji}>{headwearEmoji}</Text>}
 
           <View style={styles.face}>
             <View style={styles.faceShift}>
@@ -107,6 +128,8 @@ export default function MarshmallowCharacter({
                   <View style={styles.mouthSmileLine} />
                 </Animated.View>
               )}
+
+              {faceEmoji && <Text style={styles.faceEmoji}>{faceEmoji}</Text>}
             </View>
           </View>
 
@@ -226,6 +249,30 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
     backgroundColor: "#2C2C2E",
+  },
+  headwearEmoji: {
+    position: "absolute",
+    top: -34,
+    fontSize: 44,
+  },
+  wingEmoji: {
+    position: "absolute",
+    top: 70,
+    fontSize: 56,
+    opacity: 0.95,
+  },
+  wingLeft: {
+    left: -38,
+    transform: [{ scaleX: -1 }],
+  },
+  wingRight: {
+    right: -38,
+  },
+  faceEmoji: {
+    position: "absolute",
+    top: -6,
+    right: -18,
+    fontSize: 22,
   },
   shieldBadge: {
     position: "absolute",

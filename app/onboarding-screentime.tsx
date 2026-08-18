@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import OnboardingButton from "@/components/OnboardingButton";
 import { Screen, HeroTitle, HeroSubtitle, SelectableOption } from "@/components/ui";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 const SCREEN_TIME_OPTIONS = [
   "Less than 2 hrs/day",
@@ -14,6 +15,7 @@ const SCREEN_TIME_OPTIONS = [
 
 export default function OnboardingScreenTime() {
   const router = useRouter();
+  const { setOnboardingScreenTime } = useMarshmallowProfile();
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
@@ -46,7 +48,11 @@ export default function OnboardingScreenTime() {
         <OnboardingButton
           label="Next"
           disabled={!selected}
-          onPress={() => router.push("/onboarding-premium")}
+          onPress={() => {
+            if (!selected) return;
+            setOnboardingScreenTime(selected);
+            router.push("/onboarding-premium");
+          }}
         />
       </Screen>
     </>

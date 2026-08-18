@@ -2,11 +2,11 @@ import ExpoModulesCore
 import SwiftUI
 import FamilyControls
 import ManagedSettings
+import DeviceActivity
 
 public class ScreenTimeModule: Module {
     private let store = ManagedSettingsStore()
     private var currentSelection = FamilyActivitySelection()
-    private let persistenceKey = "marshmallow_screen_time_selection"
 
     public func definition() -> ModuleDefinition {
         Name("ScreenTimeModule")
@@ -49,6 +49,11 @@ public class ScreenTimeModule: Module {
         // Async: presents the native FamilyActivityPicker sheet.
         // Resolves with serialized selection items, or nil on cancel.
         AsyncFunction("openAppPicker") { (promise: Promise) in
+            guard #available(iOS 16.0, *) else {
+                promise.reject("UNAVAILABLE", "App picker requires iOS 16.0+")
+                return
+            }
+
             self.loadSelection()
 
             DispatchQueue.main.async {
@@ -147,7 +152,9 @@ public class ScreenTimeModule: Module {
 
         // Async: removes all shields from ManagedSettingsStore
         AsyncFunction("clearBlocking") { (promise: Promise) in
-            self.store.clearAllSettings()
+            if #available(iOS 16.0, *) {
+                self.store.clearAllSettings()
+            }
             promise.resolve(nil)
         }
 
@@ -155,20 +162,112 @@ public class ScreenTimeModule: Module {
         AsyncFunction("clearSelection") { (promise: Promise) in
             self.currentSelection = FamilyActivitySelection()
             self.saveSelection()
-            self.store.clearAllSettings()
+            if #available(iOS 16.0, *) {
+                self.store.clearAllSettings()
+            }
+            promise.resolve(nil)
+        }
+
+        // Async: registers OS-level monitoring (DeviceActivityCenter) for every
+        // enabled plan, so the TimedBlockMonitor extension can start/end the
+        // shield even when this app isn't running. Replaces any previously
+        // registered schedule wholesale — callers pass the full current plan
+        // list every time (add/edit/remove/toggle all funnel through here).
+        AsyncFunction("scheduleTimedBlocks") { (plans: [[String: Any]], promise: Promise) in
+            guard #available(iOS 16.0, *) else {
+                promise.reject("UNAVAILABLE", "Screen Time API requires iOS 16.0+")
+                return
+            }
+
+            let center = DeviceActivityCenter()
+            center.stopMonitoring(center.activities)
+
+            var stored: [StoredPlan] = []
+            for raw in plans {
+                guard
+                    let id = raw["id"] as? String,
+                    let label = raw["label"] as? String,
+                    let daysOfWeek = raw["daysOfWeek"] as? [Int],
+                    let appIds = raw["appIds"] as? [String],
+                    let startHour = raw["startHour"] as? Int,
+                    let startMinute = raw["startMinute"] as? Int,
+                    let endHour = raw["endHour"] as? Int,
+                    let endMinute = raw["endMinute"] as? Int,
+                    !daysOfWeek.isEmpty
+                else { continue }
+
+                stored.append(StoredPlan(id: id, label: label, daysOfWeek: daysOfWeek, appIds: appIds))
+
+                let schedule = DeviceActivitySchedule(
+                    intervalStart: DateComponents(hour: startHour, minute: startMinute),
+                    intervalEnd: DateComponents(hour: endHour, minute: endMinute),
+                    repeats: true
+                )
+                // DeviceActivitySchedule has no day-of-week filter, so every plan
+                // is registered daily — the extension checks daysOfWeek itself
+                // before applying the shield.
+                try? center.startMonitoring(DeviceActivityName(id), during: schedule)
+            }
+
+            if let data = try? JSONEncoder().encode(stored) {
+                SharedBlockState.defaults.set(data, forKey: SharedBlockState.planMetadataKey)
+                SharedBlockState.defaults.synchronize()
+            }
+            promise.resolve(nil)
+        }
+
+        // Async: unregisters all OS-level monitoring.
+        AsyncFunction("clearScheduledBlocks") { (promise: Promise) in
+            if #available(iOS 16.0, *) {
+                let center = DeviceActivityCenter()
+                center.stopMonitoring(center.activities)
+            }
+            SharedBlockState.defaults.removeObject(forKey: SharedBlockState.planMetadataKey)
+            SharedBlockState.defaults.synchronize()
+            promise.resolve(nil)
+        }
+
+        // Async: returns the plan (if any) the TimedBlockMonitor extension
+        // started while this app wasn't running, so JS can reconcile
+        // FocusSessionContext after a cold launch. Resolves nil if none.
+        AsyncFunction("getActiveNativeBlock") { (promise: Promise) in
+            let defaults = SharedBlockState.defaults
+            guard let planId = defaults.string(forKey: SharedBlockState.activePlanIdKey) else {
+                promise.resolve(nil)
+                return
+            }
+            promise.resolve([
+                "planId": planId,
+                "startedAt": defaults.double(forKey: SharedBlockState.activeStartedAtKey),
+                "label": defaults.string(forKey: SharedBlockState.activeLabelKey) ?? "",
+            ])
+        }
+
+        // Async: clears the active native block state written by the extension,
+        // so stale shared state doesn't cause phantom re-adoption on next app open.
+        AsyncFunction("clearActiveNativeBlock") { (promise: Promise) in
+            let defaults = SharedBlockState.defaults
+            defaults.removeObject(forKey: SharedBlockState.activePlanIdKey)
+            defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
+            defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
+            defaults.synchronize()
             promise.resolve(nil)
         }
     }
 
-    // MARK: - Persistence (UserDefaults with PropertyList encoding)
+    // MARK: - Persistence (App Group UserDefaults with PropertyList encoding)
+    //
+    // Shared via SharedBlockState.appGroupId so the TimedBlockMonitor
+    // extension can read the same selection when it applies a shield.
 
     private func saveSelection() {
         guard let data = try? PropertyListEncoder().encode(currentSelection) else { return }
-        UserDefaults.standard.set(data, forKey: persistenceKey)
+        SharedBlockState.defaults.set(data, forKey: SharedBlockState.selectionKey)
+        SharedBlockState.defaults.synchronize()
     }
 
     private func loadSelection() {
-        guard let data = UserDefaults.standard.data(forKey: persistenceKey),
+        guard let data = SharedBlockState.defaults.data(forKey: SharedBlockState.selectionKey),
               let saved = try? PropertyListDecoder().decode(FamilyActivitySelection.self, from: data)
         else { return }
         currentSelection = saved

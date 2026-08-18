@@ -1,42 +1,197 @@
-import React, { createContext, useCallback, useContext, useMemo } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
+import type { EquippedItems, ItemSlot } from "@/constants/items";
+import { useAuth } from "@/contexts/AuthContext";
 import { usePersistedState } from "@/lib/storage";
+import { syncProfile, syncEquippedItems, fetchRemoteProfile, syncOnboarding } from "@/lib/sync";
 
 type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
 
 interface MarshmallowProfileContextValue {
   name: string;
   color: MarshmallowColorHex;
+  items: EquippedItems;
+  onboardingCompleted: boolean;
+  /** True once local storage has loaded and, if logged in, the remote profile has been fetched. */
+  isProfileReady: boolean;
   setName: (name: string) => void;
   setColor: (color: MarshmallowColorHex) => void;
+  /** Equips `itemId` in its slot, or clears the slot if it's already equipped there. */
+  toggleItem: (slot: ItemSlot, itemId: string) => void;
+  setOnboardingPurpose: (purpose: string) => void;
+  setOnboardingScreenTime: (screenTime: string) => void;
+  completeOnboarding: () => Promise<void>;
 }
 
 const DEFAULT_NAME = "Mochi";
 const DEFAULT_COLOR: MarshmallowColorHex = MARSHMALLOW_COLORS[0].hex;
+const DEFAULT_ITEMS: EquippedItems = {};
 
 const MarshmallowProfileContext = createContext<MarshmallowProfileContextValue | null>(null);
 
 export function MarshmallowProfileProvider({ children }: { children: React.ReactNode }) {
+  const { user, isLoading: authLoading } = useAuth();
   const [name, setRawName] = usePersistedState("profile.name", DEFAULT_NAME);
-  const [color, setColor] = usePersistedState<MarshmallowColorHex>(
+  const [color, setRawColor] = usePersistedState<MarshmallowColorHex>(
     "profile.color",
     DEFAULT_COLOR
   );
+  const [items, setItems] = usePersistedState<EquippedItems>("profile.items", DEFAULT_ITEMS);
+  const [onboardingCompleted, setOnboardingCompleted, onboardingLoaded] = usePersistedState(
+    "onboarding.completed",
+    false
+  );
+  const [onboardingPurpose, setRawPurpose] = usePersistedState<string | null>(
+    "onboarding.purpose",
+    null
+  );
+  const [onboardingScreenTime, setRawScreenTime] = usePersistedState<string | null>(
+    "onboarding.screenTime",
+    null
+  );
+  const userId = user?.id ?? null;
+  const [hydratedUserId, setHydratedUserId] = useState<string | "guest" | null>(null);
 
-  // A marshmallow must always have a name — silently ignore attempts to
-  // clear it rather than letting an empty string get persisted.
+  // Hydrate from Supabase whenever the signed-in user changes (including session restore).
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!userId) {
+      setHydratedUserId("guest");
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchRemoteProfile(userId)
+      .then((remote) => {
+        if (cancelled) return;
+
+        if (remote) {
+          if (remote.display_name) setRawName(remote.display_name);
+          if (remote.marshmallow_color) {
+            setRawColor(remote.marshmallow_color as MarshmallowColorHex);
+          }
+          if (remote.equipped_items && typeof remote.equipped_items === "object") {
+            setItems(remote.equipped_items as EquippedItems);
+          }
+          if (remote.onboarding_purpose) setRawPurpose(remote.onboarding_purpose);
+          if (remote.onboarding_screen_time) setRawScreenTime(remote.onboarding_screen_time);
+          setOnboardingCompleted(!!remote.onboarding_completed);
+        }
+
+        setHydratedUserId(userId);
+      })
+      .catch(() => {
+        if (!cancelled) setHydratedUserId(userId);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authLoading,
+    userId,
+    setRawName,
+    setRawColor,
+    setItems,
+    setRawPurpose,
+    setRawScreenTime,
+    setOnboardingCompleted,
+  ]);
+
+  const isProfileReady =
+    !authLoading &&
+    onboardingLoaded &&
+    (userId ? hydratedUserId === userId : hydratedUserId === "guest");
+
   const setName = useCallback(
     (next: string) => {
       const trimmed = next.trim();
       if (trimmed.length === 0) return;
       setRawName(trimmed);
+      syncProfile(trimmed, color, items).catch(() => {});
     },
-    [setRawName]
+    [setRawName, color, items]
   );
 
+  const setColor = useCallback(
+    (next: MarshmallowColorHex) => {
+      setRawColor(next);
+      syncProfile(name, next, items).catch(() => {});
+    },
+    [setRawColor, name, items]
+  );
+
+  const toggleItem = useCallback(
+    (slot: ItemSlot, itemId: string) => {
+      setItems((prev) => {
+        let next: EquippedItems;
+        if (prev[slot] === itemId) {
+          next = { ...prev };
+          delete next[slot];
+        } else {
+          next = { ...prev, [slot]: itemId };
+        }
+        syncEquippedItems(next).catch(() => {});
+        return next;
+      });
+    },
+    [setItems]
+  );
+
+  const setOnboardingPurpose = useCallback(
+    (purpose: string) => {
+      setRawPurpose(purpose);
+      syncOnboarding({ purpose }).catch(() => {});
+    },
+    [setRawPurpose]
+  );
+
+  const setOnboardingScreenTime = useCallback(
+    (screenTime: string) => {
+      setRawScreenTime(screenTime);
+      syncOnboarding({ screenTime }).catch(() => {});
+    },
+    [setRawScreenTime]
+  );
+
+  const completeOnboarding = useCallback(async () => {
+    setOnboardingCompleted(true);
+    await syncOnboarding({
+      purpose: onboardingPurpose,
+      screenTime: onboardingScreenTime,
+      completed: true,
+    });
+  }, [onboardingPurpose, onboardingScreenTime, setOnboardingCompleted]);
+
   const value = useMemo(
-    () => ({ name, color, setName, setColor }),
-    [name, color, setName]
+    () => ({
+      name,
+      color,
+      items,
+      onboardingCompleted,
+      isProfileReady,
+      setName,
+      setColor,
+      toggleItem,
+      setOnboardingPurpose,
+      setOnboardingScreenTime,
+      completeOnboarding,
+    }),
+    [
+      name,
+      color,
+      items,
+      onboardingCompleted,
+      isProfileReady,
+      setName,
+      setColor,
+      toggleItem,
+      setOnboardingPurpose,
+      setOnboardingScreenTime,
+      completeOnboarding,
+    ]
   );
 
   return (

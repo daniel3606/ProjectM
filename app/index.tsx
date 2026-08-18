@@ -1,5 +1,6 @@
 import Theme from "@/constants/theme";
-import { useAuth, useSignIn, useSignUp } from "@clerk/expo";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -16,17 +17,13 @@ import { Button } from "@/components/ui";
 type AuthMode = "login" | "signup";
 
 function SignInForm() {
-  const { signIn } = useSignIn();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!signIn) {
-      setError("Authentication is still loading. Please wait.");
-      return;
-    }
     if (!email || !password) {
       setError("Please enter both email and password");
       return;
@@ -34,25 +31,12 @@ function SignInForm() {
     setError("");
     setLoading(true);
     try {
-      const { error: pwError } = await signIn.password({
-        identifier: email,
-        password,
-      });
-      if (pwError) {
-        setError(pwError.longMessage ?? pwError.message ?? "Sign in failed");
-        return;
-      }
-      if (signIn.status === "complete") {
-        const { error: finalizeError } = await signIn.finalize();
-        if (finalizeError) {
-          setError(finalizeError.longMessage ?? finalizeError.message ?? "Failed to complete sign in");
-          return;
-        }
-      } else {
-        setError("Sign in incomplete. Please try again.");
+      const { error: signInError } = await signIn(email, password);
+      if (signInError) {
+        setError(signInError);
       }
     } catch (err: any) {
-      setError(err.longMessage ?? err.message ?? "Sign in failed");
+      setError(err.message ?? "Sign in failed");
     } finally {
       setLoading(false);
     }
@@ -97,20 +81,15 @@ function SignInForm() {
 }
 
 function SignUpForm() {
-  const { signUp } = useSignUp();
+  const { signUp } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [pendingVerification, setPendingVerification] = useState(false);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!signUp) {
-      setError("Authentication is still loading. Please wait.");
-      return;
-    }
     if (!email || !password) {
       setError("Please enter both email and password");
       return;
@@ -120,95 +99,21 @@ function SignUpForm() {
       return;
     }
     setError("");
+    setInfo("");
     setLoading(true);
     try {
-      const { error: createError } = await signUp.create({
-        emailAddress: email,
-        password,
-      });
-      if (createError) {
-        setError(createError.longMessage ?? createError.message ?? "Sign up failed");
-        return;
-      }
-      if (signUp.status === "complete") {
-        const { error: finalizeError } = await signUp.finalize();
-        if (finalizeError) {
-          setError(finalizeError.longMessage ?? finalizeError.message ?? "Failed to complete sign up");
-          return;
-        }
-      } else {
-        const { error: codeError } = await signUp.verifications.sendEmailCode();
-        if (codeError) {
-          setError(codeError.longMessage ?? codeError.message ?? "Failed to send verification email");
-          return;
-        }
-        setPendingVerification(true);
+      const { error: signUpError, needsConfirmation } = await signUp(email, password);
+      if (signUpError) {
+        setError(signUpError);
+      } else if (needsConfirmation) {
+        setInfo("Check your email to confirm your account. If you already have an account, try logging in instead.");
       }
     } catch (err: any) {
-      setError(err.longMessage ?? err.message ?? "Sign up failed");
+      setError(err.message ?? "Sign up failed");
     } finally {
       setLoading(false);
     }
   };
-
-  const onVerify = async () => {
-    if (!signUp) {
-      setError("Authentication is still loading. Please wait.");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    try {
-      const { error: verifyError } = await signUp.verifications.verifyEmailCode({
-        code,
-      });
-      if (verifyError) {
-        setError(verifyError.longMessage ?? verifyError.message ?? "Verification failed");
-        return;
-      }
-      if (signUp.status === "complete") {
-        const { error: finalizeError } = await signUp.finalize();
-        if (finalizeError) {
-          setError(finalizeError.longMessage ?? finalizeError.message ?? "Failed to complete sign up");
-          return;
-        }
-      }
-    } catch (err: any) {
-      setError(err.longMessage ?? err.message ?? "Verification failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (pendingVerification) {
-    return (
-      <View style={formStyles.form}>
-        <Text style={formStyles.title}>Verify Email</Text>
-        <Text style={formStyles.subtitle}>
-          Enter the code sent to {email}
-        </Text>
-
-        <Text style={formStyles.label}>Verification Code</Text>
-        <BottomSheetTextInput
-          style={formStyles.input}
-          value={code}
-          onChangeText={setCode}
-          placeholder="123456"
-          placeholderTextColor={Theme.colors.gray}
-          keyboardType="number-pad"
-        />
-
-        {error ? <Text style={formStyles.error}>{error}</Text> : null}
-
-        <Button
-          label="Verify"
-          onPress={onVerify}
-          loading={loading}
-          style={formStyles.submitButton}
-        />
-      </View>
-    );
-  }
 
   return (
     <View style={formStyles.form}>
@@ -247,6 +152,7 @@ function SignUpForm() {
       />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
+      {info ? <Text style={formStyles.info}>{info}</Text> : null}
 
       <Button
         label="Sign Up"
@@ -263,13 +169,13 @@ export default function WelcomeScreen() {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const router = useRouter();
-  const { isSignedIn } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
+  const { onboardingCompleted, isProfileReady } = useMarshmallowProfile();
 
   useEffect(() => {
-    if (isSignedIn) {
-      router.replace("/custominit");
-    }
-  }, [isSignedIn, router]);
+    if (authLoading || !isProfileReady || !session) return;
+    router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
+  }, [authLoading, isProfileReady, session, onboardingCompleted, router]);
 
   const snapPoints = useMemo(
     () => [authMode === "login" ? "50%" : "60%"],
@@ -297,6 +203,12 @@ export default function WelcomeScreen() {
   const toggleMode = useCallback(() => {
     setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
   }, []);
+
+  // Logged-in users are routed away once profile status is known; keep this
+  // screen hidden so onboarding/home don't flash the welcome UI on refresh.
+  if (authLoading || session) {
+    return null;
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
@@ -328,7 +240,10 @@ export default function WelcomeScreen() {
         </Pressable>
         <Pressable
           style={styles.guestButton}
-          onPress={()=> router.replace("/custominit")}
+          onPress={() => {
+            if (!isProfileReady) return;
+            router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
+          }}
         >
           <Text style={styles.guestButtonText}>Continue As Guest</Text>
         </Pressable>
@@ -402,6 +317,12 @@ const formStyles = StyleSheet.create({
   },
   error: {
     color: Theme.colors.danger,
+    fontSize: 14,
+    fontFamily: Theme.fonts.regular,
+    marginTop: 4,
+  },
+  info: {
+    color: Theme.colors.secondary,
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
     marginTop: 4,

@@ -14,6 +14,24 @@ export interface ScreenTimeItem {
   index: number;
 }
 
+/** Minimal, JSON-serializable shape of a Timed Block plan for the native side. */
+export interface NativeSchedulablePlan {
+  id: string;
+  label: string;
+  daysOfWeek: number[];
+  startHour: number;
+  startMinute: number;
+  endHour: number;
+  endMinute: number;
+  appIds: string[];
+}
+
+export interface ActiveNativeBlock {
+  planId: string;
+  startedAt: number;
+  label: string;
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // MOCK MODE
 // When true, every function below is faked in JS so screens work without a
@@ -91,4 +109,40 @@ export async function clearSelection(): Promise<void> {
     return;
   }
   await getNativeModule().clearSelection();
+}
+
+/**
+ * Registers OS-level monitoring (DeviceActivityCenter) for every enabled
+ * plan, via the TimedBlockMonitor extension — this is what lets a Timed
+ * Block start/end even when the app isn't running. Replaces any previously
+ * registered schedule; call with the full current plan list every time.
+ */
+export async function scheduleTimedBlocks(plans: NativeSchedulablePlan[]): Promise<void> {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  await getNativeModule().scheduleTimedBlocks(plans);
+}
+
+export async function clearScheduledBlocks(): Promise<void> {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  await getNativeModule().clearScheduledBlocks();
+}
+
+/**
+ * Returns the plan the TimedBlockMonitor extension started while the app
+ * wasn't running, if any — used to reconcile FocusSessionContext after a
+ * cold launch. Resolves null if no native-triggered block is active.
+ */
+export async function getActiveNativeBlock(): Promise<ActiveNativeBlock | null> {
+  if (MOCK_MODE || Platform.OS !== "ios") return null;
+  const result = await getNativeModule().getActiveNativeBlock();
+  return result ?? null;
+}
+
+/**
+ * Clears the active native block state written by the extension, so stale
+ * shared state doesn't cause phantom re-adoption on next app open.
+ */
+export async function clearActiveNativeBlock(): Promise<void> {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  await getNativeModule().clearActiveNativeBlock();
 }

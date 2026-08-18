@@ -1,6 +1,7 @@
 import SwiftUI
 import FamilyControls
 
+@available(iOS 16.0, *)
 struct ScreenTimePickerView: View {
     @State var selection: FamilyActivitySelection
     let onComplete: (FamilyActivitySelection) -> Void
