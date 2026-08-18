@@ -3,6 +3,9 @@ import type { GrowthStage } from "@/constants/growthStages";
 /** Horizontal distance in pixels between two neighboring object slots. */
 export const OBJECT_GAP = 220;
 
+/** Bottom offset (px) shared by objects and the marshmallow ground line. */
+export const OBJECT_GROUND_Y = 100;
+
 const MIN_OBJECT_SCALE = 0.25;
 const MAX_OBJECT_SCALE = 1.8;
 

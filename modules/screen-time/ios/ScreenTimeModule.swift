@@ -49,6 +49,11 @@ public class ScreenTimeModule: Module {
         // Async: presents the native FamilyActivityPicker sheet.
         // Resolves with serialized selection items, or nil on cancel.
         AsyncFunction("openAppPicker") { (promise: Promise) in
+            guard #available(iOS 16.0, *) else {
+                promise.reject("UNAVAILABLE", "App picker requires iOS 16.0+")
+                return
+            }
+
             self.loadSelection()
 
             DispatchQueue.main.async {
@@ -147,7 +152,9 @@ public class ScreenTimeModule: Module {
 
         // Async: removes all shields from ManagedSettingsStore
         AsyncFunction("clearBlocking") { (promise: Promise) in
-            self.store.clearAllSettings()
+            if #available(iOS 16.0, *) {
+                self.store.clearAllSettings()
+            }
             promise.resolve(nil)
         }
 
@@ -155,7 +162,9 @@ public class ScreenTimeModule: Module {
         AsyncFunction("clearSelection") { (promise: Promise) in
             self.currentSelection = FamilyActivitySelection()
             self.saveSelection()
-            self.store.clearAllSettings()
+            if #available(iOS 16.0, *) {
+                self.store.clearAllSettings()
+            }
             promise.resolve(nil)
         }
 
@@ -202,6 +211,7 @@ public class ScreenTimeModule: Module {
 
             if let data = try? JSONEncoder().encode(stored) {
                 SharedBlockState.defaults.set(data, forKey: SharedBlockState.planMetadataKey)
+                SharedBlockState.defaults.synchronize()
             }
             promise.resolve(nil)
         }
@@ -213,6 +223,7 @@ public class ScreenTimeModule: Module {
                 center.stopMonitoring(center.activities)
             }
             SharedBlockState.defaults.removeObject(forKey: SharedBlockState.planMetadataKey)
+            SharedBlockState.defaults.synchronize()
             promise.resolve(nil)
         }
 
@@ -231,6 +242,17 @@ public class ScreenTimeModule: Module {
                 "label": defaults.string(forKey: SharedBlockState.activeLabelKey) ?? "",
             ])
         }
+
+        // Async: clears the active native block state written by the extension,
+        // so stale shared state doesn't cause phantom re-adoption on next app open.
+        AsyncFunction("clearActiveNativeBlock") { (promise: Promise) in
+            let defaults = SharedBlockState.defaults
+            defaults.removeObject(forKey: SharedBlockState.activePlanIdKey)
+            defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
+            defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
+            defaults.synchronize()
+            promise.resolve(nil)
+        }
     }
 
     // MARK: - Persistence (App Group UserDefaults with PropertyList encoding)
@@ -241,6 +263,7 @@ public class ScreenTimeModule: Module {
     private func saveSelection() {
         guard let data = try? PropertyListEncoder().encode(currentSelection) else { return }
         SharedBlockState.defaults.set(data, forKey: SharedBlockState.selectionKey)
+        SharedBlockState.defaults.synchronize()
     }
 
     private func loadSelection() {

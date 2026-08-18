@@ -14,6 +14,7 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
     override func intervalDidStart(for activity: DeviceActivityName) {
         super.intervalDidStart(for: activity)
 
+        SharedBlockState.defaults.synchronize()
         guard let plan = loadPlan(id: activity.rawValue) else { return }
 
         // DeviceActivitySchedule has no day-of-week filter, so every plan is
@@ -28,6 +29,7 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
         defaults.set(plan.id, forKey: SharedBlockState.activePlanIdKey)
         defaults.set(Date().timeIntervalSince1970 * 1000, forKey: SharedBlockState.activeStartedAtKey)
         defaults.set(plan.label, forKey: SharedBlockState.activeLabelKey)
+        defaults.synchronize()
 
         notify(title: "Timed Block Started", body: "\"\(plan.label)\" is now blocking your apps.")
     }
@@ -35,6 +37,7 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
     override func intervalDidEnd(for activity: DeviceActivityName) {
         super.intervalDidEnd(for: activity)
 
+        SharedBlockState.defaults.synchronize()
         guard let plan = loadPlan(id: activity.rawValue) else { return }
         let defaults = SharedBlockState.defaults
 
@@ -46,6 +49,7 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
             defaults.removeObject(forKey: SharedBlockState.activePlanIdKey)
             defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
             defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
+            defaults.synchronize()
         }
 
         notify(title: "Block Ended", body: "\"\(plan.label)\" has ended. Apps are unblocked.")

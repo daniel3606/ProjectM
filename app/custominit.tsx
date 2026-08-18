@@ -8,7 +8,7 @@ import { Screen, HeroTitle, ColorPicker, Button } from "@/components/ui";
 
 import { StyleSheet, Keyboard, Text, TouchableWithoutFeedback } from "react-native";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TextInput } from "react-native-gesture-handler";
 
 type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
@@ -24,6 +24,12 @@ export default function Custominit() {
   const [selectedColor, setSelectedColor] = useState<MarshmallowColorHex>(
     MARSHMALLOW_COLORS[0].hex
   );
+
+  useEffect(() => {
+    if (profile.isProfileReady && profile.onboardingCompleted) {
+      router.replace("/(tabs)");
+    }
+  }, [profile.isProfileReady, profile.onboardingCompleted, router]);
 
   const onNext = async () => {
     profile.setName(name.trim() || "Mochi");

@@ -137,3 +137,12 @@ export async function getActiveNativeBlock(): Promise<ActiveNativeBlock | null> 
   const result = await getNativeModule().getActiveNativeBlock();
   return result ?? null;
 }
+
+/**
+ * Clears the active native block state written by the extension, so stale
+ * shared state doesn't cause phantom re-adoption on next app open.
+ */
+export async function clearActiveNativeBlock(): Promise<void> {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  await getNativeModule().clearActiveNativeBlock();
+}

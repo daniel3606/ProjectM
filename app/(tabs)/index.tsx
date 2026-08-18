@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import {
+import Animated, {
   useSharedValue,
   useDerivedValue,
   useAnimatedReaction,
+  useAnimatedStyle,
   withTiming,
   withDecay,
   cancelAnimation,
@@ -28,11 +29,12 @@ import FocusSessionSheet, {
 } from "@/components/FocusSessionSheet";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import NameGateModal from "@/components/NameGateModal";
+import GrowthResultModal from "@/components/GrowthResultModal";
 import EditBlockSheet from "@/components/EditBlockSheet";
 import { Screen, Button, Card } from "@/components/ui";
 import { GROWTH_STAGES, getStageForSize, OBJECT_STAGES } from "@/constants/growthStages";
 import { formatTimeRemaining } from "@/constants/marshmallow";
-import { getCameraPosition, getFocusedStageIndex } from "@/lib/sceneMath";
+import { getCameraPosition, getFocusedStageIndex, OBJECT_GROUND_Y } from "@/lib/sceneMath";
 import useSelectionHaptic from "@/lib/useSelectionHaptic";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 
@@ -55,6 +57,8 @@ function isPreviewingSize(previewCm: number, actualCm: number) {
 }
 
 const SCENE_HEIGHT = 300;
+/** Must match MarshmallowCharacter body style height. */
+const MARSHMALLOW_BODY_HEIGHT = 222;
 const CAMERA_ANIMATION_DURATION = 400;
 const CAMERA_ANIMATION_EASING = Easing.out(Easing.cubic);
 
@@ -98,14 +102,24 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const router = useRouter();
   const profile = useMarshmallowProfile();
 
-  // `actualSizeCm` is the marshmallow's real, persisted size — the only
-  // thing the size label ever shows. `previewMirrorCm` is a JS-thread mirror
-  // of the drag-scrubbed reference size (in 0.1cm steps); it starts equal to
-  // `actualSizeCm` and only diverges while scrubbing away from it. It is
-  // never written back into `actualSizeCm`.
-  const [actualSizeCm, setActualSizeCm] = useState(INITIAL_SIZE_CM);
+  const {
+    activeSession,
+    history,
+    pendingGrowthResult,
+    startSession,
+    stopSession,
+    clearPendingGrowthResult,
+  } = useFocusSession();
+
+  // `actualSizeCm` is the marshmallow's real size derived from completed
+  // session history. `previewMirrorCm` is a JS-thread mirror of the
+  // drag-scrubbed reference size (in 0.1cm steps); it starts equal to
+  // `actualSizeCm` and only diverges while scrubbing away from it.
+  const actualSizeCm = useMemo(() => {
+    const totalGrowth = history.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
+    return Math.round((INITIAL_SIZE_CM + totalGrowth) * 10) / 10;
+  }, [history]);
   const [previewMirrorCm, setPreviewMirrorCm] = useState(INITIAL_SIZE_CM);
-  const { activeSession, startSession, stopSession } = useFocusSession();
   const isFocusActive = !!activeSession;
   // A session started by a Timed Block plan carries `planId`; one started
   // manually from this screen ("Quick Block") never does. The two get
@@ -138,13 +152,6 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   // Normal mode: the scene is scaled relative to the real size. Preview
   // mode: it's scaled relative to whatever size is being scrubbed to.
   const comparisonReferenceSizeCm = isPreviewing ? previewMirrorCm : actualSizeCm;
-  // Marshmallow is the fixed visual reference in normal mode (scale 1). In
-  // preview mode it's rendered relative to the previewed reference size, so
-  // scrubbing to a much larger size makes the real marshmallow look small.
-  const marshmallowVisualScale = isPreviewing
-    ? actualSizeCm / previewMirrorCm
-    : 1;
-
   const referenceStage = getStageForSize(comparisonReferenceSizeCm);
   const isDiscovered = referenceStage.sizeCm <= actualSizeCm;
 
@@ -155,6 +162,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   // by the (possibly-scrubbed) preview size for smooth panning while dragging.
   const previewSizeCm = useSharedValue(INITIAL_SIZE_CM);
   const actualSizeCmShared = useSharedValue(INITIAL_SIZE_CM);
+  const restCameraPosition = useSharedValue(getCameraPosition(INITIAL_SIZE_CM, OBJECT_STAGES));
   const cameraPosition = useDerivedValue(() =>
     getCameraPosition(previewSizeCm.value, OBJECT_STAGES)
   );
@@ -172,6 +180,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
   useEffect(() => {
     actualSizeCmShared.value = actualSizeCm;
+    restCameraPosition.value = getCameraPosition(actualSizeCm, OBJECT_STAGES);
     // Only follow real (non-drag) size changes — e.g. growth landing while
     // the user isn't touching the scene. Releasing a drag never snaps back.
     if (isDragging.value === 0 && isMomentumActive.value === 0) {
@@ -221,6 +230,23 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
       }
     }
   );
+
+  const marshmallowAnimatedStyle = useAnimatedStyle(() => {
+    const diff = Math.abs(previewSizeCm.value - actualSizeCmShared.value);
+    const previewing = diff > HAPTIC_STEP_CM / 2;
+    const scale = previewing ? actualSizeCmShared.value / previewSizeCm.value : 1;
+
+    // Translate rightward only during right drag (viewing smaller objects).
+    // Left drag (viewing bigger objects): marshmallow stays fixed.
+    const isRightDrag = previewSizeCm.value < actualSizeCmShared.value - HAPTIC_STEP_CM / 2;
+    const translateX = isRightDrag
+      ? restCameraPosition.value - cameraPosition.value
+      : 0;
+
+    return {
+      transform: [{ translateX }, { scale }],
+    };
+  });
 
   const panGesture = Gesture.Pan()
     .onBegin(() => {
@@ -326,18 +352,15 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
           {/* Marshmallow (rendered last = foreground) */}
           <View style={styles.marshmallowPosition}>
-            <View
-              style={[
-                styles.marshmallowScale,
-                { transform: [{ scale: marshmallowVisualScale }] },
-              ]}
+            <Animated.View
+              style={[styles.marshmallowScale, marshmallowAnimatedStyle]}
             >
               <MarshmallowCharacter
                 color={profile.color}
                 name={profile.name}
                 sizeCm={MARSHMALLOW_BASE_SIZE_CM}
               />
-            </View>
+            </Animated.View>
           </View>
         </View>
       </GestureDetector>
@@ -452,6 +475,17 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         onSave={saveEditedBlock}
         onCancelBlock={handleStopFocus}
       />
+
+      {pendingGrowthResult && (
+        <GrowthResultModal
+          visible
+          growthCm={pendingGrowthResult.growthCm}
+          durationMinutes={pendingGrowthResult.durationMinutes}
+          focusMode={pendingGrowthResult.focusMode}
+          label={pendingGrowthResult.label}
+          onDismiss={clearPendingGrowthResult}
+        />
+      )}
     </Screen>
   );
 }
@@ -486,9 +520,8 @@ const styles = StyleSheet.create({
   /* Marshmallow */
   marshmallowPosition: {
     position: "absolute",
-    // Tuned for the marshmallow's natural (unscaled) render height now that
-    // it's no longer shrunk to a fixed constant — see `marshmallowVisualScale`.
-    bottom: 0,
+    // Align the marshmallow's vertical center with the objects' ground line.
+    bottom: OBJECT_GROUND_Y - MARSHMALLOW_BODY_HEIGHT / 2,
     left: 0,
     right: 0,
     alignItems: "center",

@@ -7,7 +7,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import type { GrowthStage } from "@/constants/growthStages";
-import { OBJECT_GAP, getObjectScale } from "@/lib/sceneMath";
+import { OBJECT_GAP, OBJECT_GROUND_Y, getObjectScale } from "@/lib/sceneMath";
 import ComparisonObjectPlaceholder from "@/components/ComparisonObjectPlaceholder";
 
 // Objects are fully visible near the center, then fade out with distance.
@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   // Shared by every object — centered horizontally, moved by animated translateX.
   objectPosition: {
     position: "absolute",
-    bottom: 100,
+    bottom: OBJECT_GROUND_Y,
     left: 0,
     right: 0,
     alignItems: "center",

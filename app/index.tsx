@@ -1,5 +1,6 @@
 import Theme from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -85,6 +86,7 @@ function SignUpForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
@@ -97,11 +99,14 @@ function SignUpForm() {
       return;
     }
     setError("");
+    setInfo("");
     setLoading(true);
     try {
-      const { error: signUpError } = await signUp(email, password);
+      const { error: signUpError, needsConfirmation } = await signUp(email, password);
       if (signUpError) {
         setError(signUpError);
+      } else if (needsConfirmation) {
+        setInfo("Check your email to confirm your account. If you already have an account, try logging in instead.");
       }
     } catch (err: any) {
       setError(err.message ?? "Sign up failed");
@@ -147,6 +152,7 @@ function SignUpForm() {
       />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
+      {info ? <Text style={formStyles.info}>{info}</Text> : null}
 
       <Button
         label="Sign Up"
@@ -163,13 +169,13 @@ export default function WelcomeScreen() {
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
+  const { onboardingCompleted, isProfileReady } = useMarshmallowProfile();
 
   useEffect(() => {
-    if (session) {
-      router.replace("/custominit");
-    }
-  }, [session, router]);
+    if (authLoading || !isProfileReady || !session) return;
+    router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
+  }, [authLoading, isProfileReady, session, onboardingCompleted, router]);
 
   const snapPoints = useMemo(
     () => [authMode === "login" ? "50%" : "60%"],
@@ -197,6 +203,12 @@ export default function WelcomeScreen() {
   const toggleMode = useCallback(() => {
     setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
   }, []);
+
+  // Logged-in users are routed away once profile status is known; keep this
+  // screen hidden so onboarding/home don't flash the welcome UI on refresh.
+  if (authLoading || session) {
+    return null;
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
@@ -228,7 +240,10 @@ export default function WelcomeScreen() {
         </Pressable>
         <Pressable
           style={styles.guestButton}
-          onPress={()=> router.replace("/custominit")}
+          onPress={() => {
+            if (!isProfileReady) return;
+            router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
+          }}
         >
           <Text style={styles.guestButtonText}>Continue As Guest</Text>
         </Pressable>
@@ -302,6 +317,12 @@ const formStyles = StyleSheet.create({
   },
   error: {
     color: Theme.colors.danger,
+    fontSize: 14,
+    fontFamily: Theme.fonts.regular,
+    marginTop: 4,
+  },
+  info: {
+    color: Theme.colors.secondary,
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
     marginTop: 4,

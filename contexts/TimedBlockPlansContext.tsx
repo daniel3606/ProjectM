@@ -118,6 +118,14 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         const plan = plans.find((p) => p.id === native.planId);
         if (!plan) return;
 
+        // Re-apply blocking from the main app process — the extension's
+        // ManagedSettingsStore may not have persisted across cold launch.
+        const applyBlock =
+          plan.appIds.length > 0
+            ? ScreenTime.applyBlocking(plan.appIds)
+            : ScreenTime.blockAll();
+        applyBlock.catch(() => {});
+
         startSession(
           {
             durationMinutes: plan.durationMinutes,

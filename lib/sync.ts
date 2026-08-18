@@ -1,5 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import type { CompletedSession } from "@/contexts/FocusSessionContext";
+import type { EquippedItems } from "@/constants/items";
+import type { Database } from "@/types/supabase";
+
+type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 
 /** Returns the current auth user id, or null if not logged in. */
 async function getAuthUserId(): Promise<string | null> {
@@ -7,14 +11,34 @@ async function getAuthUserId(): Promise<string | null> {
   return session?.user?.id ?? null;
 }
 
-/** Push display_name and marshmallow_color to the profiles table. */
-export async function syncProfile(name: string, color: string): Promise<void> {
+/** Push display_name, marshmallow_color, and equipped_items to profiles. */
+export async function syncProfile(
+  name: string,
+  color: string,
+  items?: EquippedItems,
+): Promise<void> {
+  const userId = await getAuthUserId();
+  if (!userId) return;
+
+  const update: ProfileUpdate = {
+    display_name: name,
+    marshmallow_color: color,
+  };
+  if (items !== undefined) {
+    update.equipped_items = items;
+  }
+
+  await supabase.from("profiles").update(update).eq("id", userId);
+}
+
+/** Push only equipped_items to profiles. */
+export async function syncEquippedItems(items: EquippedItems): Promise<void> {
   const userId = await getAuthUserId();
   if (!userId) return;
 
   await supabase
     .from("profiles")
-    .update({ display_name: name, marshmallow_color: color })
+    .update({ equipped_items: items })
     .eq("id", userId);
 }
 
@@ -55,7 +79,7 @@ async function updateProfileStats(userId: string): Promise<void> {
     .eq("id", userId);
 }
 
-/** Fetch the remote profile and return it (for hydrating local state on login). */
+/** Fetch the remote profile (for hydrating local state on login). */
 export async function fetchRemoteProfile(userId: string) {
   const { data } = await supabase
     .from("profiles")
@@ -63,4 +87,41 @@ export async function fetchRemoteProfile(userId: string) {
     .eq("id", userId)
     .single();
   return data;
+}
+
+/** Persist onboarding answers and/or completion onto the profile. */
+export async function syncOnboarding(update: {
+  purpose?: string | null;
+  screenTime?: string | null;
+  completed?: boolean;
+}): Promise<void> {
+  const userId = await getAuthUserId();
+  if (!userId) return;
+
+  const payload: ProfileUpdate = {};
+  if (update.purpose !== undefined) payload.onboarding_purpose = update.purpose;
+  if (update.screenTime !== undefined) payload.onboarding_screen_time = update.screenTime;
+  if (update.completed !== undefined) payload.onboarding_completed = update.completed;
+  if (Object.keys(payload).length === 0) return;
+
+  await supabase.from("profiles").update(payload).eq("id", userId);
+}
+
+/** Fetch completed sessions from Supabase (for hydrating local history on login). */
+export async function fetchRemoteSessions(userId: string): Promise<CompletedSession[]> {
+  const { data } = await supabase
+    .from("focus_sessions")
+    .select("duration_minutes, focus_mode, growth_cm, completed_at")
+    .eq("user_id", userId)
+    .order("completed_at", { ascending: false })
+    .limit(50);
+
+  if (!data || data.length === 0) return [];
+
+  return data.map((row) => ({
+    durationMinutes: row.duration_minutes,
+    focusMode: row.focus_mode as CompletedSession["focusMode"],
+    expectedGrowthCm: Number(row.growth_cm),
+    completedAt: new Date(row.completed_at).getTime(),
+  }));
 }
