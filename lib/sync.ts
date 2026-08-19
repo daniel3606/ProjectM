@@ -113,8 +113,7 @@ export async function fetchRemoteSessions(userId: string): Promise<CompletedSess
     .from("focus_sessions")
     .select("duration_minutes, focus_mode, growth_cm, completed_at")
     .eq("user_id", userId)
-    .order("completed_at", { ascending: false })
-    .limit(50);
+    .order("completed_at", { ascending: false });
 
   if (!data || data.length === 0) return [];
 
@@ -124,4 +123,22 @@ export async function fetchRemoteSessions(userId: string): Promise<CompletedSess
     expectedGrowthCm: Number(row.growth_cm),
     completedAt: new Date(row.completed_at).getTime(),
   }));
+}
+
+/** Account growth stats — this is the source of truth for marshmallow size. */
+export async function fetchAccountGrowth(userId: string): Promise<{
+  totalGrowthCm: number;
+  totalFocusMinutes: number;
+  sessions: CompletedSession[];
+}> {
+  const [profile, sessions] = await Promise.all([
+    fetchRemoteProfile(userId),
+    fetchRemoteSessions(userId),
+  ]);
+
+  return {
+    totalGrowthCm: Math.round((Number(profile?.total_growth_cm) || 0) * 10) / 10,
+    totalFocusMinutes: profile?.total_focus_minutes ?? 0,
+    sessions,
+  };
 }

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import { AppState } from "react-native";
 import { usePersistedState } from "@/lib/storage";
 import type { FocusMode } from "@/constants/marshmallow";
 import {
@@ -6,8 +7,9 @@ import {
   scheduleBlockEndNotification,
   cancelBlockEndNotification,
 } from "@/lib/notifications";
-import { syncCompletedSession, fetchRemoteSessions } from "@/lib/sync";
+import { syncCompletedSession, fetchAccountGrowth } from "@/lib/sync";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import * as ScreenTime from "@/modules/screen-time";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -38,9 +40,19 @@ export interface PendingGrowthResult {
 
 const MAX_HISTORY = 50;
 
+function sumGrowth(sessions: CompletedSession[]) {
+  return sessions.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
+}
+
 interface FocusSessionContextValue {
   activeSession: ActiveSession | null;
   history: CompletedSession[];
+  /**
+   * Account-wide growth from completed sessions. Marshmallow size is
+   * `3cm + totalGrowthCm`. When signed in this is hydrated from the profile
+   * so every device shows the same size.
+   */
+  totalGrowthCm: number;
   pendingGrowthResult: PendingGrowthResult | null;
   /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
   startSession: (config: FocusSessionConfig, startedAt?: number) => void;
@@ -53,6 +65,9 @@ interface FocusSessionContextValue {
 const FocusSessionContext = createContext<FocusSessionContextValue | null>(null);
 
 export function FocusSessionProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
   const [activeSession, setActiveSession] = usePersistedState<ActiveSession | null>(
     "focusSession.active",
     null
@@ -61,10 +76,22 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     "focusSession.history",
     []
   );
+  const [totalGrowthCm, setTotalGrowthCm] = usePersistedState(
+    "focusSession.totalGrowthCm",
+    0
+  );
+  const [pendingSync, setPendingSync] = usePersistedState<CompletedSession[]>(
+    "focusSession.pendingSync",
+    []
+  );
   const [pendingGrowthResult, setPendingGrowthResult] =
     usePersistedState<PendingGrowthResult | null>("focusSession.pendingGrowthResult", null);
   const presenceRef = useRef<RealtimeChannel | null>(null);
   const endNotificationIdRef = useRef<string | null>(null);
+  const hydratingRef = useRef(false);
+  const hydrateAgainRef = useRef(false);
+  const pendingSyncRef = useRef(pendingSync);
+  pendingSyncRef.current = pendingSync;
 
   // Broadcast focus presence when session starts/stops
   useEffect(() => {
@@ -105,20 +132,65 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     };
   }, [activeSession]);
 
-  // Hydrate session history from Supabase on login
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          const remoteSessions = await fetchRemoteSessions(session.user.id);
-          if (remoteSessions.length > 0) {
-            setHistory(remoteSessions);
-          }
-        }
+  const flushPendingSync = useCallback(async () => {
+    const queue = pendingSyncRef.current;
+    if (queue.length === 0) return;
+    const remaining: CompletedSession[] = [];
+    for (const session of queue) {
+      try {
+        await syncCompletedSession(session);
+      } catch {
+        remaining.push(session);
       }
-    );
-    return () => subscription.unsubscribe();
-  }, [setHistory]);
+    }
+    pendingSyncRef.current = remaining;
+    setPendingSync(remaining);
+  }, [setPendingSync]);
+
+  const hydrateFromAccount = useCallback(async (id: string) => {
+    if (hydratingRef.current) {
+      hydrateAgainRef.current = true;
+      return;
+    }
+    hydratingRef.current = true;
+    try {
+      do {
+        hydrateAgainRef.current = false;
+        await flushPendingSync();
+        const remote = await fetchAccountGrowth(id);
+        setTotalGrowthCm(remote.totalGrowthCm);
+        setHistory(remote.sessions.slice(0, MAX_HISTORY));
+      } while (hydrateAgainRef.current);
+    } catch {
+      // Keep local totals if the network is down.
+    } finally {
+      hydratingRef.current = false;
+    }
+  }, [flushPendingSync, setHistory, setTotalGrowthCm]);
+
+  // Seed stored growth from local history once, so existing installs don't
+  // jump back to 3cm before the first remote hydrate lands.
+  useEffect(() => {
+    if (totalGrowthCm > 0 || history.length === 0) return;
+    setTotalGrowthCm(Math.round(sumGrowth(history) * 10) / 10);
+  }, [history, totalGrowthCm, setTotalGrowthCm]);
+
+  // Hydrate growth from the account whenever the signed-in user changes
+  // (including restoring an existing session) and again when the app
+  // comes to the foreground, so two devices stay in lockstep.
+  useEffect(() => {
+    if (!userId) return;
+
+    hydrateFromAccount(userId);
+
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active") hydrateFromAccount(userId);
+    });
+
+    return () => {
+      appState.remove();
+    };
+  }, [userId, hydrateFromAccount]);
 
   const startSession = useCallback(
     (config: FocusSessionConfig, startedAt: number = Date.now()) => {
@@ -157,21 +229,23 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       if (current) {
         const { startedAt, ...config } = current;
         const completed: CompletedSession = { ...config, completedAt: Date.now() };
-        setHistory((prev) =>
-          [completed, ...prev].slice(0, MAX_HISTORY)
-        );
+        setHistory((prev) => [completed, ...prev].slice(0, MAX_HISTORY));
+        setTotalGrowthCm((prev) => Math.round((prev + current.expectedGrowthCm) * 10) / 10);
+        pendingSyncRef.current = [...pendingSyncRef.current, completed];
+        setPendingSync(pendingSyncRef.current);
         setPendingGrowthResult({
           growthCm: current.expectedGrowthCm,
           durationMinutes: current.durationMinutes,
           focusMode: current.focusMode,
           label: current.label,
         });
-        // Fire-and-forget sync to Supabase
-        syncCompletedSession(completed).catch(() => {});
+        if (userId) {
+          void hydrateFromAccount(userId);
+        }
       }
       return null;
     });
-  }, [setActiveSession, setHistory, setPendingGrowthResult]);
+  }, [setActiveSession, setHistory, setPendingGrowthResult, setPendingSync, setTotalGrowthCm, userId, hydrateFromAccount]);
 
   // Auto-dismisses the active session (and unblocks apps) the moment its
   // duration elapses, whether it was started manually or by a Timed Block
@@ -208,13 +282,14 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     () => ({
       activeSession,
       history,
+      totalGrowthCm,
       pendingGrowthResult,
       startSession,
       stopSession,
       updateSession,
       clearPendingGrowthResult,
     }),
-    [activeSession, history, pendingGrowthResult, startSession, stopSession, updateSession, clearPendingGrowthResult]
+    [activeSession, history, totalGrowthCm, pendingGrowthResult, startSession, stopSession, updateSession, clearPendingGrowthResult]
   );
 
   return (

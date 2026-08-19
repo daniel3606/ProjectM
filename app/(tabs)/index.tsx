@@ -39,18 +39,17 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
   const {
     activeSession,
-    history,
+    totalGrowthCm,
     pendingGrowthResult,
     startSession,
     stopSession,
     clearPendingGrowthResult,
   } = useFocusSession();
 
-  /** The marshmallow's real size, derived from completed session history. */
+  /** The marshmallow's real size, from account growth so every device matches. */
   const actualSizeCm = useMemo(() => {
-    const totalGrowth = history.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
-    return Math.round((INITIAL_SIZE_CM + totalGrowth) * 10) / 10;
-  }, [history]);
+    return Math.round((INITIAL_SIZE_CM + totalGrowthCm) * 10) / 10;
+  }, [totalGrowthCm]);
   const isFocusActive = !!activeSession;
   // A session started by a Timed Block plan carries `planId`; one started
   // manually from this screen ("Quick Block") never does. The two get
