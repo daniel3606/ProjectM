@@ -6,9 +6,10 @@ import WorldObject from "@/components/growth/WorldObject";
 
 interface ComparisonWorldProps {
   cameraX: SharedValue<number>;
-  marshmallowWorldX: SharedValue<number>;
   /** Camera position at mount, used to pick the first batch of objects to mount. */
   initialCameraX: number;
+  /** Real marshmallow size — objects larger than this render as placeholders. */
+  actualSizeCm: number;
 }
 
 /**
@@ -20,8 +21,8 @@ interface ComparisonWorldProps {
  */
 export default function ComparisonWorld({
   cameraX,
-  marshmallowWorldX,
   initialCameraX,
+  actualSizeCm,
 }: ComparisonWorldProps) {
   const [cullBucket, setCullBucket] = useState(() =>
     Math.round(initialCameraX / CULL_BUCKET_PX),
@@ -49,7 +50,7 @@ export default function ComparisonWorld({
           stage={stage}
           depthIndex={stage.index}
           cameraX={cameraX}
-          marshmallowWorldX={marshmallowWorldX}
+          discovered={stage.sizeCm <= actualSizeCm}
         />
       ))}
     </>

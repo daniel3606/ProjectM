@@ -1,25 +1,25 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { Ionicons } from "@expo/vector-icons";
-import Theme from "@/constants/theme";
-import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
-import { useFocusSession } from "@/contexts/FocusSessionContext";
-import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
-import * as ScreenTime from "@/modules/screen-time";
-import ProfileAvatarButton from "@/components/ProfileAvatarButton";
-import { GrowthScene } from "@/components/growth";
+import EditBlockSheet from "@/components/EditBlockSheet";
+import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import FocusSessionSheet, {
   type FocusSessionConfig,
 } from "@/components/FocusSessionSheet";
-import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
-import NameGateModal from "@/components/NameGateModal";
 import GrowthResultModal from "@/components/GrowthResultModal";
-import EditBlockSheet from "@/components/EditBlockSheet";
-import { Screen, Button, Card } from "@/components/ui";
+import NameGateModal from "@/components/NameGateModal";
+import ProfileAvatarButton from "@/components/ProfileAvatarButton";
+import { GrowthScene } from "@/components/growth";
+import { Button, Card, Screen } from "@/components/ui";
 import { formatTimeRemaining } from "@/constants/marshmallow";
+import Theme from "@/constants/theme";
+import { useFocusSession } from "@/contexts/FocusSessionContext";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
+import * as ScreenTime from "@/modules/screen-time";
+import { Ionicons } from "@expo/vector-icons";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, StyleSheet, Text, View } from "react-native";
 
 const INITIAL_SIZE_CM = 3;
 
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 0,
   },
   headerTitle: {
     fontSize: 22,
@@ -268,8 +268,7 @@ const styles = StyleSheet.create({
   focusButton: {
     borderRadius: 16,
     paddingVertical: 18,
-    // Sits against the bottom of the screen whatever height the scene takes.
-    marginTop: "auto",
+    marginTop: Theme.spacing.xxxl,
     marginBottom: Theme.spacing.sm,
   },
   focusButtonActive: {

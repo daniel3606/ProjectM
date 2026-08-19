@@ -11,7 +11,7 @@ import MarshmallowCharacter, {
 import type { EquippedItems } from "@/constants/items";
 import {
   FOCUS_HEIGHT_PX,
-  GROUND_Y,
+  MARSHMALLOW_GROUND_Y,
   MARSHMALLOW_PINNED_SIZE_CM,
   screenOffsetToScale,
 } from "@/lib/growthWorld";
@@ -98,7 +98,7 @@ export default function MarshmallowActor({
 const styles = StyleSheet.create({
   actor: {
     position: "absolute",
-    bottom: GROUND_Y,
+    bottom: MARSHMALLOW_GROUND_Y,
     left: 0,
     right: 0,
     alignItems: "center",

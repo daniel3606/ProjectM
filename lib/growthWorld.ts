@@ -28,7 +28,7 @@ import { OBJECT_STAGES, type GrowthStage } from "@/constants/growthStages";
  * drag distance always changes size by a fixed *ratio*, so scrubbing feels
  * identical whether the marshmallow is a grape or a chair.
  */
-export const WORLD_PX_PER_DECADE = 2000;
+export const WORLD_PX_PER_DECADE = 2500;
 
 /** World position of an object of the given real height. */
 export function sizeToWorldX(heightCm: number): number {
@@ -73,10 +73,16 @@ export function screenOffsetToScale(offsetPx: number): number {
 
 // ── Scene geometry ───────────────────────────────────────────────────────────
 
-export const SCENE_HEIGHT = 320;
+export const SCENE_HEIGHT = 272;
 
 /** Distance from the bottom of the scene to the ground line everything stands on. */
 export const GROUND_Y = 56;
+
+/**
+ * Marshmallow stands a little lower than the comparison objects so its feet
+ * read as in front of them on the same ground plane.
+ */
+export const MARSHMALLOW_GROUND_Y = GROUND_Y - 50;
 
 /**
  * On-screen height of something exactly the size the camera is centred on.
@@ -85,8 +91,8 @@ export const GROUND_Y = 56;
  */
 export const FOCUS_HEIGHT_PX = 162;
 
-/** Baseline of the floor caption under each object. */
-export const OBJECT_LABEL_Y = 20;
+/** Gap between an object's crown and the caption sitting above it. */
+export const OBJECT_LABEL_GAP = 8;
 
 /**
  * The character's own size-driven scale is pinned to a constant, so the only

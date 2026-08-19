@@ -1,19 +1,16 @@
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   type SharedValue,
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
-import { getObjectAspectRatio, getObjectImage } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
   GROUND_Y,
-  OBJECT_LABEL_Y,
+  OBJECT_LABEL_GAP,
   getDepthOpacity,
   getLabelOpacity,
-  getObjectLiftPx,
-  getOverlapFactor,
   screenOffsetToScale,
   type WorldStage,
 } from "@/lib/growthWorld";
@@ -23,8 +20,8 @@ interface WorldObjectProps {
   /** Draw order: larger objects sit in front of smaller neighbours. */
   depthIndex: number;
   cameraX: SharedValue<number>;
-  /** World position of the marshmallow, which is what this object may be hidden behind. */
-  marshmallowWorldX: SharedValue<number>;
+  /** False until the marshmallow has grown at least as tall as this object. */
+  discovered: boolean;
 }
 
 /**
@@ -37,10 +34,7 @@ function WorldObject({
   stage,
   depthIndex,
   cameraX,
-  marshmallowWorldX,
 }: WorldObjectProps) {
-  const image = getObjectImage(stage.id);
-  const aspectRatio = getObjectAspectRatio(stage.id);
 
   const columnStyle = useAnimatedStyle(() => {
     const offset = stage.worldX - cameraX.value;
@@ -53,33 +47,26 @@ function WorldObject({
   const spriteStyle = useAnimatedStyle(() => {
     const offset = stage.worldX - cameraX.value;
     const scale = screenOffsetToScale(offset);
-
-    const marshmallowOffset = marshmallowWorldX.value - cameraX.value;
-    const marshmallowHeight =
-      FOCUS_HEIGHT_PX * screenOffsetToScale(marshmallowOffset);
-
-    const overlap = getOverlapFactor(offset - marshmallowOffset);
-    const lift = getObjectLiftPx(
-      FOCUS_HEIGHT_PX * scale,
-      marshmallowHeight,
-      overlap,
-    );
-
-    // translateY is listed first so it stays in unscaled pixels: the sprite is
-    // scaled about its base (transformOrigin below) and then raised by `lift`.
     return {
-      transform: [{ translateY: -lift }, { scale }],
+      transform: [{ scale }],
     };
   });
 
-  const labelStyle = useAnimatedStyle(() => ({
-    opacity: getLabelOpacity(
-      cameraX.value,
-      stage.claimFromX,
-      stage.claimToX,
-      stage.claimCrossfadePx,
-    ),
-  }));
+  const labelStyle = useAnimatedStyle(() => {
+    const offset = stage.worldX - cameraX.value;
+    const scale = screenOffsetToScale(offset);
+    return {
+      opacity: getLabelOpacity(
+        cameraX.value,
+        stage.claimFromX,
+        stage.claimToX,
+        stage.claimCrossfadePx,
+      ),
+      transform: [
+        { translateY: -(FOCUS_HEIGHT_PX * scale + OBJECT_LABEL_GAP) },
+      ],
+    };
+  });
 
   return (
     <Animated.View
@@ -87,15 +74,9 @@ function WorldObject({
       pointerEvents="none"
     >
       <Animated.View style={[styles.sprite, spriteStyle]}>
-        {image ? (
-          <Image
-            source={image}
-            style={{ height: FOCUS_HEIGHT_PX, width: FOCUS_HEIGHT_PX * aspectRatio }}
-            resizeMode="contain"
-          />
-        ) : (
-          <View style={[styles.fallback, { height: FOCUS_HEIGHT_PX, width: FOCUS_HEIGHT_PX }]} />
-        )}
+        <View style={styles.placeholder}>
+          <Text style={styles.placeholderMark}>?</Text>
+        </View>
       </Animated.View>
 
       <Animated.View style={[styles.label, labelStyle]}>
@@ -124,7 +105,7 @@ const styles = StyleSheet.create({
   },
   label: {
     position: "absolute",
-    bottom: OBJECT_LABEL_Y,
+    bottom: GROUND_Y,
     left: 0,
     right: 0,
     alignItems: "center",
@@ -139,8 +120,19 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.gray,
   },
-  fallback: {
+  placeholder: {
+    height: FOCUS_HEIGHT_PX,
+    width: FOCUS_HEIGHT_PX,
+    borderRadius: Theme.radius.xl,
     backgroundColor: Theme.colors.card,
-    borderRadius: Theme.radius.sm,
+    borderWidth: 2,
+    borderColor: Theme.colors.cardBorder,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placeholderMark: {
+    fontSize: 64,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.cardBorder,
   },
 });

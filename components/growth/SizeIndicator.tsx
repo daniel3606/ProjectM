@@ -19,16 +19,13 @@ import { worldXToSize } from "@/lib/growthWorld";
  */
 const UPDATE_EVERY_N_FRAMES = 3;
 
-/** Below this, tenths are meaningful; above it they are noise. */
-const DECIMAL_LIMIT_CM = 20;
-
 function quantizeCm(cm: number) {
   "worklet";
-  return cm < DECIMAL_LIMIT_CM ? Math.round(cm * 10) / 10 : Math.round(cm);
+  return Math.round(cm * 10) / 10;
 }
 
 function formatCm(cm: number) {
-  return cm < DECIMAL_LIMIT_CM ? cm.toFixed(1) : String(Math.round(cm));
+  return cm.toFixed(1);
 }
 
 interface SizeIndicatorProps {

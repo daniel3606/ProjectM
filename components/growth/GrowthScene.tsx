@@ -307,8 +307,8 @@ export default function GrowthScene({
 
             <ComparisonWorld
               cameraX={cameraX}
-              marshmallowWorldX={marshmallowWorldX}
               initialCameraX={initialWorldX}
+              actualSizeCm={sizeCm}
             />
 
             <MarshmallowActor
