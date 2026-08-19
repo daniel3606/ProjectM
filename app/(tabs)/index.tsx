@@ -24,9 +24,8 @@ import * as ScreenTime from "@/modules/screen-time";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
 import ProfileAvatarButton from "@/components/ProfileAvatarButton";
 import SceneObject from "@/components/SceneObject";
-import FocusSessionSheet, {
-  type FocusSessionConfig,
-} from "@/components/FocusSessionSheet";
+import FocusSessionSheet from "@/components/FocusSessionSheet";
+import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import NameGateModal from "@/components/NameGateModal";
 import GrowthResultModal from "@/components/GrowthResultModal";
@@ -308,7 +307,12 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const handleStartSession = useCallback(async (config: FocusSessionConfig) => {
     setIsLoading(true);
     try {
-      await ScreenTime.blockAll();
+      const appIds = config.appIds ?? [];
+      if (appIds.length > 0) {
+        await ScreenTime.applyBlocking(appIds);
+      } else {
+        await ScreenTime.blockAll();
+      }
       startSession(config);
     } catch (error) {
       Alert.alert("Error", `Failed to start focus session: ${error}`);

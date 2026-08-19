@@ -51,7 +51,7 @@ export default function OnboardingScreenTime() {
           onPress={() => {
             if (!selected) return;
             setOnboardingScreenTime(selected);
-            router.push("/onboarding-premium");
+            router.push("/onboarding-screentime-access");
           }}
         />
       </Screen>

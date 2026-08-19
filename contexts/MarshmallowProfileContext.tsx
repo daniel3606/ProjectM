@@ -4,6 +4,7 @@ import type { EquippedItems, ItemSlot } from "@/constants/items";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePersistedState } from "@/lib/storage";
 import { syncProfile, syncEquippedItems, fetchRemoteProfile, syncOnboarding } from "@/lib/sync";
+import type { ScreenTimeItem } from "@/modules/screen-time";
 
 type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
 
@@ -20,6 +21,9 @@ interface MarshmallowProfileContextValue {
   toggleItem: (slot: ItemSlot, itemId: string) => void;
   setOnboardingPurpose: (purpose: string) => void;
   setOnboardingScreenTime: (screenTime: string) => void;
+  /** Apps chosen during onboarding for quick-add on focus blocks. */
+  distractingApps: ScreenTimeItem[];
+  setDistractingApps: (apps: ScreenTimeItem[]) => void;
   completeOnboarding: () => Promise<void>;
 }
 
@@ -48,6 +52,10 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
   const [onboardingScreenTime, setRawScreenTime] = usePersistedState<string | null>(
     "onboarding.screenTime",
     null
+  );
+  const [distractingApps, setRawDistractingApps] = usePersistedState<ScreenTimeItem[]>(
+    "onboarding.distractingApps",
+    []
   );
   const userId = user?.id ?? null;
   const [hydratedUserId, setHydratedUserId] = useState<string | "guest" | null>(null);
@@ -156,6 +164,13 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     [setRawScreenTime]
   );
 
+  const setDistractingApps = useCallback(
+    (apps: ScreenTimeItem[]) => {
+      setRawDistractingApps(apps);
+    },
+    [setRawDistractingApps]
+  );
+
   const completeOnboarding = useCallback(async () => {
     setOnboardingCompleted(true);
     await syncOnboarding({
@@ -177,6 +192,8 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       toggleItem,
       setOnboardingPurpose,
       setOnboardingScreenTime,
+      distractingApps,
+      setDistractingApps,
       completeOnboarding,
     }),
     [
@@ -190,6 +207,8 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       toggleItem,
       setOnboardingPurpose,
       setOnboardingScreenTime,
+      distractingApps,
+      setDistractingApps,
       completeOnboarding,
     ]
   );

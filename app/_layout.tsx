@@ -95,6 +95,24 @@ export default function Layout() {
                     />
 
                     <Stack.Screen
+                      name="onboarding-screentime-access"
+                      options={{
+                        headerShown: false,
+                        presentation: "card",
+                        animation: "default",
+                      }}
+                    />
+
+                    <Stack.Screen
+                      name="onboarding-distracting-apps"
+                      options={{
+                        headerShown: false,
+                        presentation: "card",
+                        animation: "default",
+                      }}
+                    />
+
+                    <Stack.Screen
                       name="onboarding-premium"
                       options={{
                         headerShown: false,

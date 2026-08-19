@@ -15,6 +15,8 @@ export interface FocusSessionConfig {
   durationMinutes: number;
   focusMode: FocusMode;
   expectedGrowthCm: number;
+  /** App/category/web IDs to block; empty means block everything. */
+  appIds?: string[];
   /** Set when this session was auto-started by a Timed Block plan rather than manually. */
   planId?: string;
   /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
