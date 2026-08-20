@@ -1,5 +1,6 @@
 import Theme from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPostAuthRoute, validateSignInInput, validateSignUpInput } from "@/lib/auth";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
   BottomSheetBackdrop,
@@ -13,30 +14,36 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/ui";
+import SocialAuthButtons from "@/components/SocialAuthButtons";
 
 type AuthMode = "login" | "signup";
 
-function SignInForm() {
-  const { signIn } = useAuth();
+function SignInForm({ onNeedsVerification }: { onNeedsVerification: (email: string) => void }) {
+  const { signIn, isAuthBusy } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !password) {
-      setError("Please enter both email and password");
+    if (loading || isAuthBusy) return;
+    const validationError = validateSignInInput(email.trim(), password);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
     setLoading(true);
     try {
-      const { error: signInError } = await signIn(email, password);
+      const { error: signInError, needsVerification } = await signIn(email, password);
       if (signInError) {
         setError(signInError);
       }
-    } catch (err: any) {
-      setError(err.message ?? "Sign in failed");
+      if (needsVerification) {
+        onNeedsVerification(email.trim());
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
       setLoading(false);
     }
@@ -74,42 +81,39 @@ function SignInForm() {
         label="Log In"
         onPress={onSubmit}
         loading={loading}
+        disabled={isAuthBusy && !loading}
         style={formStyles.submitButton}
       />
     </View>
   );
 }
 
-function SignUpForm() {
-  const { signUp } = useAuth();
+function SignUpForm({ onNeedsVerification }: { onNeedsVerification: (email: string) => void }) {
+  const { signUp, isAuthBusy } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !password) {
-      setError("Please enter both email and password");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    if (loading || isAuthBusy) return;
+    const validationError = validateSignUpInput(email.trim(), password, confirmPassword);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
-    setInfo("");
     setLoading(true);
     try {
       const { error: signUpError, needsConfirmation } = await signUp(email, password);
       if (signUpError) {
         setError(signUpError);
       } else if (needsConfirmation) {
-        setInfo("Check your email to confirm your account. If you already have an account, try logging in instead.");
+        onNeedsVerification(email.trim());
       }
-    } catch (err: any) {
-      setError(err.message ?? "Sign up failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setLoading(false);
     }
@@ -152,12 +156,12 @@ function SignUpForm() {
       />
 
       {error ? <Text style={formStyles.error}>{error}</Text> : null}
-      {info ? <Text style={formStyles.info}>{info}</Text> : null}
 
       <Button
         label="Sign Up"
         onPress={onSubmit}
         loading={loading}
+        disabled={isAuthBusy && !loading}
         style={formStyles.submitButton}
       />
     </View>
@@ -168,17 +172,35 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [socialError, setSocialError] = useState("");
   const router = useRouter();
-  const { session, isLoading: authLoading } = useAuth();
+  const { status, user, isLoading: authLoading } = useAuth();
   const { onboardingCompleted, isProfileReady } = useMarshmallowProfile();
 
   useEffect(() => {
-    if (authLoading || !isProfileReady || !session) return;
-    router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
-  }, [authLoading, isProfileReady, session, onboardingCompleted, router]);
+    if (authLoading || !isProfileReady) return;
+    if (status === "needs_verification") {
+      router.replace({
+        pathname: "/auth/verify",
+        params: { email: user?.email ?? "" },
+      });
+      return;
+    }
+    if (status === "authenticated") {
+      router.replace(getPostAuthRoute(onboardingCompleted));
+    }
+  }, [authLoading, isProfileReady, status, user?.email, onboardingCompleted, router]);
+
+  const goToVerification = useCallback(
+    (email: string) => {
+      bottomSheetRef.current?.dismiss();
+      router.push({ pathname: "/auth/verify", params: { email } });
+    },
+    [router]
+  );
 
   const snapPoints = useMemo(
-    () => [authMode === "login" ? "50%" : "60%"],
+    () => [authMode === "login" ? "72%" : "84%"],
     [authMode]
   );
 
@@ -197,17 +219,20 @@ export default function WelcomeScreen() {
 
   const openSheet = useCallback((mode: AuthMode) => {
     setAuthMode(mode);
+    setSocialError("");
     bottomSheetRef.current?.present();
   }, []);
 
   const toggleMode = useCallback(() => {
     setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
+    setSocialError("");
   }, []);
 
-  // Logged-in users are routed away once profile status is known; keep this
-  // screen hidden so onboarding/home don't flash the welcome UI on refresh.
-  if (authLoading || session) {
-    return null;
+  // Keep a visible root while session restore/navigation happens. Returning
+  // null here blanks the navigator and can crash Release builds on device.
+  // Also skip the welcome UI for signed-in users so they never flash login.
+  if (authLoading || status === "authenticated" || status === "needs_verification") {
+    return <View style={[styles.container, { paddingTop: insets.top + 40 }]} />;
   }
 
   return (
@@ -242,7 +267,7 @@ export default function WelcomeScreen() {
           style={styles.guestButton}
           onPress={() => {
             if (!isProfileReady) return;
-            router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
+            router.replace(getPostAuthRoute(onboardingCompleted));
           }}
         >
           <Text style={styles.guestButtonText}>Continue As Guest</Text>
@@ -265,7 +290,14 @@ export default function WelcomeScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.sheetScrollContent}
         >
-          {authMode === "login" ? <SignInForm /> : <SignUpForm />}
+          {authMode === "login" ? (
+            <SignInForm onNeedsVerification={goToVerification} />
+          ) : (
+            <SignUpForm onNeedsVerification={goToVerification} />
+          )}
+
+          {socialError ? <Text style={formStyles.error}>{socialError}</Text> : null}
+          <SocialAuthButtons onError={setSocialError} />
 
           <Pressable onPress={toggleMode} style={styles.toggleLink}>
             <Text style={styles.toggleText}>
@@ -317,12 +349,6 @@ const formStyles = StyleSheet.create({
   },
   error: {
     color: Theme.colors.danger,
-    fontSize: 14,
-    fontFamily: Theme.fonts.regular,
-    marginTop: 4,
-  },
-  info: {
-    color: Theme.colors.secondary,
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
     marginTop: 4,

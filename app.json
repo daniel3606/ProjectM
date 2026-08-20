@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "marshmallow",
+    "name": "Marshmallow",
     "slug": "marshmallow",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.dllim.marshmallow"
+      "bundleIdentifier": "com.dllim.marshmallow",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -30,6 +31,7 @@
     "plugins": [
       "expo-secure-store",
       "expo-router",
+      "expo-apple-authentication",
       [
         "expo-splash-screen",
         {

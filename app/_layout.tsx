@@ -1,18 +1,43 @@
 import Fonts from "@/constants/fonts";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { MarshmallowProfileProvider } from "@/contexts/MarshmallowProfileContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { MarshmallowProfileProvider, useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
 import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
 import { FriendsProvider } from "@/contexts/FriendsContext";
 import { requestNotificationPermissions } from "@/lib/notifications";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
+
+function AuthNavigationGuard() {
+  const { status, user, isLoading } = useAuth();
+  const { isProfileReady } = useMarshmallowProfile();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && isProfileReady) {
+      SplashScreen.hideAsync();
+    }
+  }, [isLoading, isProfileReady]);
+
+  useEffect(() => {
+    if (isLoading || !isProfileReady) return;
+    if (status === "needs_verification" && !pathname.startsWith("/auth/")) {
+      router.replace({
+        pathname: "/auth/verify",
+        params: { email: user?.email ?? "" },
+      });
+    }
+  }, [isLoading, isProfileReady, status, pathname, user?.email, router]);
+
+  return null;
+}
 
 export default function Layout() {
   const [fontsLoaded] = useFonts({
@@ -21,12 +46,6 @@ export default function Layout() {
     [Fonts.semibold]: require("../assets/fonts/SF-Compact-Rounded-Semibold.ttf"),
     [Fonts.bold]: require("../assets/fonts/SF-Compact-Rounded-Bold.ttf"),
   });
-
-  useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
 
   useEffect(() => {
     requestNotificationPermissions();
@@ -44,26 +63,23 @@ export default function Layout() {
             <FocusSessionProvider>
               <TimedBlockPlansProvider>
                 <FriendsProvider>
+                  <AuthNavigationGuard />
                   <Stack>
                     <Stack.Screen name="index" options={{ headerShown: false }} />
 
                     <Stack.Screen
-                      name="login"
+                      name="auth/verify"
                       options={{
-                        presentation: "formSheet",
                         headerShown: false,
-                        sheetGrabberVisible: true,
-                        sheetCornerRadius: 30,
-                        sheetAllowedDetents: [0.5],
+                        presentation: "card",
                       }}
                     />
 
                     <Stack.Screen
-                      name="signin"
+                      name="auth/callback"
                       options={{
-                        presentation: "formSheet",
-                        animation: "slide_from_bottom",
                         headerShown: false,
+                        presentation: "card",
                       }}
                     />
 
