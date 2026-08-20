@@ -1,97 +1,34 @@
+import EditBlockSheet from "@/components/EditBlockSheet";
+import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
+import FocusSessionSheet from "@/components/FocusSessionSheet";
+import GrowthResultModal from "@/components/GrowthResultModal";
+import NameGateModal from "@/components/NameGateModal";
+import ProfileAvatarButton from "@/components/ProfileAvatarButton";
+import { GrowthScene } from "@/components/growth";
+import { Button, Card, Screen } from "@/components/ui";
+import { formatTimeRemaining } from "@/constants/marshmallow";
+import Theme from "@/constants/theme";
+import {
+  useFocusSession,
+  type FocusSessionConfig,
+} from "@/contexts/FocusSessionContext";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
+import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
+import * as ScreenTime from "@/modules/screen-time";
+import { Ionicons } from "@expo/vector-icons";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
-import { useRouter } from "expo-router";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useDerivedValue,
-  useAnimatedReaction,
-  useAnimatedStyle,
-  withTiming,
-  withDecay,
-  cancelAnimation,
-  Easing,
-} from "react-native-reanimated";
-import { scheduleOnRN } from "react-native-worklets";
-import * as Haptics from "expo-haptics";
-import { Ionicons } from "@expo/vector-icons";
-import Theme from "@/constants/theme";
-import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
-import { useFocusSession } from "@/contexts/FocusSessionContext";
-import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
-import * as ScreenTime from "@/modules/screen-time";
-import MarshmallowCharacter from "@/components/MarshmallowCharacter";
-import ProfileAvatarButton from "@/components/ProfileAvatarButton";
-import SceneObject from "@/components/SceneObject";
-import FocusSessionSheet from "@/components/FocusSessionSheet";
-import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
-import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
-import NameGateModal from "@/components/NameGateModal";
-import GrowthResultModal from "@/components/GrowthResultModal";
-import EditBlockSheet from "@/components/EditBlockSheet";
-import { Screen, Button, Card } from "@/components/ui";
-import { GROWTH_STAGES, getStageForSize, OBJECT_STAGES } from "@/constants/growthStages";
-import { formatTimeRemaining } from "@/constants/marshmallow";
-import { getCameraPosition, getFocusedStageIndex, OBJECT_GROUND_Y } from "@/lib/sceneMath";
-import useSelectionHaptic from "@/lib/useSelectionHaptic";
-import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 
 const INITIAL_SIZE_CM = 3;
 
-// `MarshmallowCharacter` has its own internal size-driven micro-scale (used
-// for minor face proportions). It's pinned to this constant so the real
-// growth signal comes entirely from the wrapper scale below — otherwise the
-// marshmallow would visibly grow with `actualSizeCm` even in normal mode.
-const MARSHMALLOW_BASE_SIZE_CM = INITIAL_SIZE_CM;
-
-function clamp(value: number, min: number, max: number) {
-  "worklet";
-  return Math.min(Math.max(value, min), max);
-}
-
-/** How far the currently-previewed reference size has drifted from the real one. */
-function isPreviewingSize(previewCm: number, actualCm: number) {
-  return Math.abs(previewCm - actualCm) > HAPTIC_STEP_CM / 2;
-}
-
-const SCENE_HEIGHT = 300;
-/** Must match MarshmallowCharacter body style height. */
-const MARSHMALLOW_BODY_HEIGHT = 222;
-const CAMERA_ANIMATION_DURATION = 400;
-const CAMERA_ANIMATION_EASING = Easing.out(Easing.cubic);
-
-// ── Scrub gesture tuning ─────────────────────────────────────────────────────
-/** Pixels of horizontal drag per centimeter of preview size. Drag left to grow, right to shrink. */
-const PX_PER_CM = 14;
-/** Preview updates (and fires a tick haptic) every this many centimeters of scroll. */
-const HAPTIC_STEP_CM = 0.1;
-const MIN_PREVIEW_CM = GROWTH_STAGES[0].sizeCm;
-const MAX_PREVIEW_CM = GROWTH_STAGES[GROWTH_STAGES.length - 1].sizeCm;
-
-function roundToStep(value: number) {
-  "worklet";
-  return Math.round(value / HAPTIC_STEP_CM) * HAPTIC_STEP_CM;
-}
-
-function crossesPoint(from: number, to: number, point: number) {
-  "worklet";
-  return (from < point && to >= point) || (from > point && to <= point);
-}
-
-function fireTickHaptic() {
-  Haptics.selectionAsync().catch(() => {});
-}
-
-function fireLockHaptic() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-}
-
 interface HomeScreenProps {
   /**
-   * Whether the centered-stage haptic tick is allowed to fire. Set to false
-   * if `sizeCm` ever comes to be driven by background data instead of direct
-   * user interaction, so growth doesn't buzz the phone unprompted.
+   * Whether the scene's scrub haptics are allowed to fire. Set to false if the
+   * scene ever comes to be driven by background data instead of direct user
+   * interaction, so growth doesn't buzz the phone unprompted.
    */
   hapticsEnabled?: boolean;
 }
@@ -110,15 +47,11 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     clearPendingGrowthResult,
   } = useFocusSession();
 
-  // `actualSizeCm` is the marshmallow's real size derived from completed
-  // session history. `previewMirrorCm` is a JS-thread mirror of the
-  // drag-scrubbed reference size (in 0.1cm steps); it starts equal to
-  // `actualSizeCm` and only diverges while scrubbing away from it.
+  /** The marshmallow's real size, derived from completed session history. */
   const actualSizeCm = useMemo(() => {
     const totalGrowth = history.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
     return Math.round((INITIAL_SIZE_CM + totalGrowth) * 10) / 10;
   }, [history]);
-  const [previewMirrorCm, setPreviewMirrorCm] = useState(INITIAL_SIZE_CM);
   const isFocusActive = !!activeSession;
   // A session started by a Timed Block plan carries `planId`; one started
   // manually from this screen ("Quick Block") never does. The two get
@@ -146,157 +79,6 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [activeSession]);
-
-  const isPreviewing = isPreviewingSize(previewMirrorCm, actualSizeCm);
-  // Normal mode: the scene is scaled relative to the real size. Preview
-  // mode: it's scaled relative to whatever size is being scrubbed to.
-  const comparisonReferenceSizeCm = isPreviewing ? previewMirrorCm : actualSizeCm;
-  const referenceStage = getStageForSize(comparisonReferenceSizeCm);
-  const isDiscovered = referenceStage.sizeCm <= actualSizeCm;
-
-  const focusedStageIndex = getFocusedStageIndex(actualSizeCm, OBJECT_STAGES);
-  useSelectionHaptic(focusedStageIndex, hapticsEnabled);
-
-  // Single animated camera position on the object line, driven every frame
-  // by the (possibly-scrubbed) preview size for smooth panning while dragging.
-  const previewSizeCm = useSharedValue(INITIAL_SIZE_CM);
-  const actualSizeCmShared = useSharedValue(INITIAL_SIZE_CM);
-  const restCameraPosition = useSharedValue(getCameraPosition(INITIAL_SIZE_CM, OBJECT_STAGES));
-  const cameraPosition = useDerivedValue(() =>
-    getCameraPosition(previewSizeCm.value, OBJECT_STAGES)
-  );
-
-  // Gesture-local bookkeeping (persists across drag frames, reset per gesture).
-  const previousTranslationX = useSharedValue(0);
-  const isDragging = useSharedValue(0);
-  // True while a post-release fling is still coasting under `withDecay`.
-  const isMomentumActive = useSharedValue(0);
-  // True until the scrub passes through the "original size" once — then it
-  // freezes there for the rest of this gesture (dragging AND any momentum
-  // that follows it). Lifting and starting a new drag (onBegin) re-arms it.
-  const lockArmed = useSharedValue(1);
-  const lastTickCm = useSharedValue(INITIAL_SIZE_CM);
-
-  useEffect(() => {
-    actualSizeCmShared.value = actualSizeCm;
-    restCameraPosition.value = getCameraPosition(actualSizeCm, OBJECT_STAGES);
-    // Only follow real (non-drag) size changes — e.g. growth landing while
-    // the user isn't touching the scene. Releasing a drag never snaps back.
-    if (isDragging.value === 0 && isMomentumActive.value === 0) {
-      previewSizeCm.value = withTiming(actualSizeCm, {
-        duration: CAMERA_ANIMATION_DURATION,
-        easing: CAMERA_ANIMATION_EASING,
-      });
-    }
-  }, [actualSizeCm]);
-
-  // Single source of truth for what happens whenever the (possibly-animated)
-  // reference size changes, whether from direct dragging, momentum coasting
-  // after release, or the real-growth sync above. Mirrors it into React
-  // state in 0.1cm steps (size text, marshmallow scale, tick haptics), and —
-  // only for user-driven motion — freezes it the moment it crosses the
-  // "original size" lock point, cancelling any in-flight momentum.
-  useAnimatedReaction(
-    () => previewSizeCm.value,
-    (current, previous) => {
-      if (previous === null) {
-        return;
-      }
-
-      const isUserMotion = isDragging.value === 1 || isMomentumActive.value === 1;
-
-      if (isUserMotion && lockArmed.value === 1) {
-        const lockPoint = actualSizeCmShared.value;
-        if (crossesPoint(previous, current, lockPoint)) {
-          cancelAnimation(previewSizeCm);
-          previewSizeCm.value = lockPoint;
-          lockArmed.value = 0;
-          isMomentumActive.value = 0;
-          lastTickCm.value = roundToStep(lockPoint);
-          scheduleOnRN(setPreviewMirrorCm, lastTickCm.value);
-          scheduleOnRN(fireLockHaptic);
-          return;
-        }
-      }
-
-      const tick = roundToStep(current);
-      if (tick !== lastTickCm.value) {
-        lastTickCm.value = tick;
-        scheduleOnRN(setPreviewMirrorCm, tick);
-        if (isUserMotion) {
-          scheduleOnRN(fireTickHaptic);
-        }
-      }
-    }
-  );
-
-  const marshmallowAnimatedStyle = useAnimatedStyle(() => {
-    const diff = Math.abs(previewSizeCm.value - actualSizeCmShared.value);
-    const previewing = diff > HAPTIC_STEP_CM / 2;
-    const scale = previewing ? actualSizeCmShared.value / previewSizeCm.value : 1;
-
-    // Translate rightward only during right drag (viewing smaller objects).
-    // Left drag (viewing bigger objects): marshmallow stays fixed.
-    const isRightDrag = previewSizeCm.value < actualSizeCmShared.value - HAPTIC_STEP_CM / 2;
-    const translateX = isRightDrag
-      ? restCameraPosition.value - cameraPosition.value
-      : 0;
-
-    return {
-      transform: [{ translateX }, { scale }],
-    };
-  });
-
-  const panGesture = Gesture.Pan()
-    .onBegin(() => {
-      "worklet";
-      cancelAnimation(previewSizeCm);
-      isDragging.value = 1;
-      isMomentumActive.value = 0;
-      previousTranslationX.value = 0;
-      lockArmed.value = 1;
-    })
-    .onUpdate((event) => {
-      "worklet";
-      if (lockArmed.value === 0) {
-        // Locked at the original size for the rest of this gesture — the
-        // scroll simply stops until the finger lifts and a new drag begins.
-        return;
-      }
-
-      // Inverted so the scene follows the finger's intended direction — see
-      // `.onEnd` below, which inverts `velocityX` the same way so momentum
-      // continues in this same corrected direction after release.
-      const translation = -event.translationX;
-      const deltaCm = (translation - previousTranslationX.value) / PX_PER_CM;
-      previousTranslationX.value = translation;
-
-      previewSizeCm.value = clamp(
-        previewSizeCm.value + deltaCm,
-        MIN_PREVIEW_CM,
-        MAX_PREVIEW_CM
-      );
-    })
-    .onEnd((event) => {
-      "worklet";
-      if (lockArmed.value === 0) {
-        // Already locked mid-drag — no momentum should carry through.
-        return;
-      }
-      const velocity = -event.velocityX / PX_PER_CM;
-      isMomentumActive.value = 1;
-      previewSizeCm.value = withDecay(
-        { velocity, clamp: [MIN_PREVIEW_CM, MAX_PREVIEW_CM] },
-        () => {
-          "worklet";
-          isMomentumActive.value = 0;
-        }
-      );
-    })
-    .onFinalize(() => {
-      "worklet";
-      isDragging.value = 0;
-    });
 
   const handleOpenFocusSheet = useCallback(async () => {
     const authorized = await ensureScreenTimeAuthorized();
@@ -340,46 +122,15 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         <ProfileAvatarButton onPress={() => router.push("/profile")} />
       </View>
 
-      {/* ── Comparison scene ────────────────────────────────────────── */}
-      <GestureDetector gesture={panGesture}>
-        <View style={styles.scene}>
-          {/* All objects on a single line — only visible ones show */}
-          {OBJECT_STAGES.map((obj, i) => (
-            <SceneObject
-              key={obj.id}
-              stage={obj}
-              index={i}
-              cameraPosition={cameraPosition}
-              currentSizeCm={comparisonReferenceSizeCm}
-            />
-          ))}
-
-          {/* Marshmallow (rendered last = foreground) */}
-          <View style={styles.marshmallowPosition}>
-            <Animated.View
-              style={[styles.marshmallowScale, marshmallowAnimatedStyle]}
-            >
-              <MarshmallowCharacter
-                color={profile.color}
-                name={profile.name}
-                sizeCm={MARSHMALLOW_BASE_SIZE_CM}
-              />
-            </Animated.View>
-          </View>
-        </View>
-      </GestureDetector>
-
-
-      {/* ── Info section ────────────────────────────────────────────── */}
-      <View style={styles.infoSection}>
-        <Text style={styles.sizeText}>
-          {actualSizeCm}cm
-        </Text>
-        <Text style={styles.messageText}>
-          {isDiscovered ? referenceStage.message : "???"}
-        </Text>
-      </View>
-
+      {/* ── Growth scene: scale world, ruler and size readout ───────── */}
+      <GrowthScene
+        sizeCm={actualSizeCm}
+        color={profile.color}
+        name={profile.name}
+        items={profile.items}
+        hapticsEnabled={hapticsEnabled}
+        style={styles.growthScene}
+      />
 
       {/* ── Quick Block timer ───────────────────────────────────────── */}
       {isQuickBlockActive && (
@@ -505,7 +256,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 0,
   },
   headerTitle: {
     fontSize: 22,
@@ -513,61 +264,24 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
   },
 
-  /* Scene */
-  scene: {
-    height: SCENE_HEIGHT,
-    marginTop: 8,
-    position: "relative",
-    overflow: "hidden",
-  },
-
-  /* Marshmallow */
-  marshmallowPosition: {
-    position: "absolute",
-    // Align the marshmallow's vertical center with the objects' ground line.
-    bottom: OBJECT_GROUND_Y - MARSHMALLOW_BODY_HEIGHT / 2,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
-  marshmallowScale: {
-    // Scale from the feet, not the center — otherwise shrinking (comparing
-    // against huge future objects) lifts the marshmallow's feet off the
-    // ground line so it looks like it's floating in front of the object,
-    // and growing (comparing against tiny early objects) pushes it down
-    // through the floor instead of up and out of frame.
-    transformOrigin: "50% 100%",
-  },
-
-  /* Info */
-  infoSection: {
-    alignItems: "center",
-    marginTop: 28,
-    gap: 4,
-  },
-  sizeText: {
-    fontSize: 50,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
-  },
-  messageText: {
-    fontSize: 18,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    textAlign: "center",
+  /* Growth scene — bled out to the screen edges so the camera has room */
+  growthScene: {
+    marginTop: Theme.spacing.sm,
+    marginHorizontal: -Theme.spacing.xxl,
   },
 
   /* Focus button */
   focusButton: {
     borderRadius: 16,
     paddingVertical: 18,
-    marginTop: 76,
+    marginTop: Theme.spacing.xxxl,
+    marginBottom: Theme.spacing.sm,
   },
   focusButtonActive: {
     backgroundColor: Theme.colors.danger,
   },
   focusButtonActiveSpacing: {
-    marginTop: 20,
+    marginTop: Theme.spacing.xl,
   },
 
   /* Quick Block timer */
