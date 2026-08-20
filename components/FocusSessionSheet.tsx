@@ -29,6 +29,10 @@ import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
+const MIN_DURATION = 5;
+const MAX_DURATION = 240;
+const DURATION_STEP = 5;
+
 interface FocusSessionSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   currentSizeCm: number;

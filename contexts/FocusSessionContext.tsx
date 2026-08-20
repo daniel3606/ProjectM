@@ -55,7 +55,7 @@ interface FocusSessionContextValue {
 const FocusSessionContext = createContext<FocusSessionContextValue | null>(null);
 
 export function FocusSessionProvider({ children }: { children: React.ReactNode }) {
-  const [activeSession, setActiveSession] = usePersistedState<ActiveSession | null>(
+  const [activeSession, setActiveSession, activeSessionLoaded] = usePersistedState<ActiveSession | null>(
     "focusSession.active",
     null
   );
@@ -181,7 +181,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   // Also schedules a future notification so the user is notified even if
   // the app is killed or backgrounded before the timer fires.
   useEffect(() => {
-    if (!activeSession) return;
+    if (!activeSessionLoaded || !activeSession) return;
 
     const endsAt = activeSession.startedAt + activeSession.durationMinutes * 60_000;
     const remainingMs = endsAt - Date.now();
@@ -204,7 +204,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     }
     const timer = setTimeout(autoEnd, remainingMs);
     return () => clearTimeout(timer);
-  }, [activeSession, stopSession]);
+  }, [activeSession, activeSessionLoaded, stopSession]);
 
   const value = useMemo(
     () => ({

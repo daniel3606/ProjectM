@@ -44,7 +44,7 @@ function normalizePlan(plan: TimedBlockPlan): TimedBlockPlan {
 }
 
 export function TimedBlockPlansProvider({ children }: { children: React.ReactNode }) {
-  const [rawPlans, setPlans] = usePersistedState<TimedBlockPlan[]>("timedBlockPlans", []);
+  const [rawPlans, setPlans, plansLoaded] = usePersistedState<TimedBlockPlan[]>("timedBlockPlans", []);
   const plans = useMemo(() => rawPlans.map(normalizePlan), [rawPlans]);
 
   const addPlan = useCallback(
@@ -89,6 +89,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
   // never opened at the scheduled time — the tick() loop below only runs
   // while this JS is alive. Re-registers wholesale on every plan change.
   useEffect(() => {
+    if (!plansLoaded) return;
     const schedulable = plans
       .filter((plan) => plan.enabled && plan.daysOfWeek.length > 0)
       .map((plan) => ({
@@ -101,8 +102,9 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         endMinute: plan.endMinute,
         appIds: plan.appIds,
       }));
+    if (schedulable.length === 0) return;
     ScreenTime.scheduleTimedBlocks(schedulable).catch(() => {});
-  }, [plans]);
+  }, [plans, plansLoaded]);
 
   // Adopts a block the TimedBlockMonitor extension already started while the
   // app wasn't running, so the UI (timer, growth preview) reflects reality
