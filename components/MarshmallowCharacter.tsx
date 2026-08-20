@@ -21,6 +21,17 @@ const HOLD_MS = 150;
 const OPEN_MS = 100;
 const MOUTH_LIFT = -3;
 
+/** Layout height of the body, and therefore of the whole character. */
+export const MARSHMALLOW_BODY_HEIGHT = 222;
+
+/**
+ * Minor size-driven scale applied inside the character. Exported so callers
+ * that place the character in a scaled scene can work out its drawn height.
+ */
+export function getMarshmallowIntrinsicScale(sizeCm: number) {
+  return 0.9 + Math.min(sizeCm / 60, 0.4);
+}
+
 
 function randomBlinkDelay() {
   return 3000 + Math.random() * 3000;
@@ -50,7 +61,7 @@ export default function MarshmallowCharacter({
   const faceEmoji = items?.face
     ? MARSHMALLOW_ITEMS.find((i) => i.id === items.face)?.emoji
     : undefined;
-  const scale = 0.9 + Math.min(sizeCm / 60, 0.4);
+  const scale = getMarshmallowIntrinsicScale(sizeCm);
 
   const blinkScaleY = useSharedValue(1);
   const mouthTranslateY = useSharedValue(0);
@@ -160,7 +171,7 @@ const styles = StyleSheet.create({
   },
   body: {
     width: 200,
-    height: 222,
+    height: MARSHMALLOW_BODY_HEIGHT,
     borderRadius: 70,
     alignItems: "center",
     justifyContent: "center",
