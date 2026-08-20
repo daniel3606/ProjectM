@@ -30,8 +30,8 @@ export default function OnboardingScreenTime() {
 
       <Screen topInset={40} style={styles.container}>
         <View style={styles.content}>
-          <HeroTitle>What's your{"\n"}average screen time?</HeroTitle>
-          <HeroSubtitle>We'll use this to set your starting point</HeroSubtitle>
+          <HeroTitle>What&apos;s your{"\n"}average screen time?</HeroTitle>
+          <HeroSubtitle>We&apos;ll use this to set your starting point</HeroSubtitle>
 
           <View style={styles.optionList}>
             {SCREEN_TIME_OPTIONS.map((option) => (

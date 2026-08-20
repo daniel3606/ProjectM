@@ -30,7 +30,7 @@ export default function OnboardingPurpose() {
       <Screen topInset={40} style={styles.container}>
         <View style={styles.content}>
           <HeroTitle>What matters{"\n"}most to you?</HeroTitle>
-          <HeroSubtitle>Tell us why you're joining Marshmallow</HeroSubtitle>
+          <HeroSubtitle>Tell us why you&apos;re joining Marshmallow</HeroSubtitle>
 
           <View style={styles.optionList}>
             {PURPOSE_OPTIONS.map((option) => (

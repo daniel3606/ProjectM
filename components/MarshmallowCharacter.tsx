@@ -10,7 +10,6 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MARSHMALLOW_ITEMS, type EquippedItems } from "@/constants/items";
 
 
@@ -87,7 +86,7 @@ export default function MarshmallowCharacter({
       cancelAnimation(blinkScaleY);
       cancelAnimation(mouthTranslateY);
     };
-  }, []);
+  }, [blinkScaleY, mouthTranslateY]);
 
   const eyeBlinkStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: blinkScaleY.value }],
@@ -96,8 +95,6 @@ export default function MarshmallowCharacter({
   const mouthBlinkStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: mouthTranslateY.value }],
   }));
-  const insets = useSafeAreaInsets();
-
 
   return (
     <View style={[styles.container]}>

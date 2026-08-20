@@ -57,5 +57,23 @@
     "patch-package": "^8.0.1",
     "typescript": "~5.9.2"
   },
+  "expo": {
+    "install": {
+      "exclude": [
+        "expo",
+        "expo-haptics",
+        "expo-linking",
+        "expo-notifications",
+        "expo-router",
+        "expo-secure-store",
+        "expo-splash-screen",
+        "expo-system-ui",
+        "expo-web-browser",
+        "react-native",
+        "@types/jest",
+        "eslint-config-expo"
+      ]
+    }
+  },
   "private": true
 }

@@ -30,8 +30,6 @@ export default function ProfileScreen() {
   const totalSessions = history.length;
   const totalMinutes = history.reduce((sum, s) => sum + s.durationMinutes, 0);
   const totalGrowth = history.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
-  const hours = Math.floor(totalMinutes / 60);
-  const mins = totalMinutes % 60;
 
   // Use remote stats if available and higher
   const displayGrowth = remoteProfile

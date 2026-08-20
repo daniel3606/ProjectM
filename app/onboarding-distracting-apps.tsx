@@ -48,7 +48,7 @@ export default function OnboardingDistractingApps() {
         <View style={styles.content}>
           <HeroTitle>Which apps{"\n"}distract you most?</HeroTitle>
           <HeroSubtitle>
-            Select at least {MIN_APPS} apps — we'll use these for quick-add on focus blocks
+            Select at least {MIN_APPS} apps — we&apos;ll use these for quick-add on focus blocks
           </HeroSubtitle>
 
           <View style={styles.counterRow}>

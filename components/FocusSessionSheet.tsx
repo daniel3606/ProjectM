@@ -23,7 +23,6 @@ import {
   getGrowthForDuration,
   type FocusMode,
 } from "@/constants/marshmallow";
-import { getStageForSize, getNextStage } from "@/constants/growthStages";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import * as ScreenTime from "@/modules/screen-time";
@@ -55,12 +54,6 @@ export default function FocusSessionSheet({
   const snapPoints = useMemo(() => ["85%"], []);
 
   const expectedGrowth = getGrowthForDuration(totalMinutes, focusMode);
-  const projectedSize = currentSizeCm + expectedGrowth;
-  const currentStage = getStageForSize(currentSizeCm);
-  const projectedStage = getStageForSize(projectedSize);
-  const nextStage = getNextStage(currentSizeCm);
-  const willReachNewStage =
-    projectedStage.id !== currentStage.id && projectedStage.sizeCm > currentStage.sizeCm;
 
   const appCount = selectedApps.filter((i) => i.type === "application").length;
   const catCount = selectedApps.filter((i) => i.type === "category").length;
@@ -144,7 +137,7 @@ export default function FocusSessionSheet({
 
     sheetRef.current?.dismiss();
     onStartSession(config);
-  }, [totalSelected, totalMinutes, focusMode, expectedGrowth, sheetRef, onStartSession]);
+  }, [totalSelected, totalMinutes, focusMode, expectedGrowth, selectedApps, sheetRef, onStartSession]);
 
   return (
     <BottomSheetModal
