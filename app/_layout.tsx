@@ -1,9 +1,9 @@
 import Fonts from "@/constants/fonts";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { MarshmallowProfileProvider, useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
-import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
 import { FriendsProvider } from "@/contexts/FriendsContext";
+import { MarshmallowProfileProvider, useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
 import { requestNotificationPermissions } from "@/lib/notifications";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
@@ -66,6 +66,7 @@ export default function Layout() {
                   <AuthNavigationGuard />
                   <Stack>
                     <Stack.Screen name="index" options={{ headerShown: false }} />
+                    <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
 
                     <Stack.Screen
                       name="auth/verify"

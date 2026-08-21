@@ -1,13 +1,13 @@
 import {
-  isDuplicateSignUpUser,
-  mapAuthErrorMessage,
-  mapSignInError,
-  mapSignUpError,
-  mapUnknownAuthError,
-  normalizeEmail,
-  validateSignInInput,
-  validateSignUpInput,
-  type SignInResult,
+    isDuplicateSignUpUser,
+    mapAuthErrorMessage,
+    mapSignInError,
+    mapSignUpError,
+    mapUnknownAuthError,
+    normalizeEmail,
+    validateSignInInput,
+    validateSignUpInput,
+    type SignInResult,
 } from "@/lib/auth";
 import { getAuthRedirectUrl } from "@/lib/authRedirect";
 import { supabase } from "@/lib/supabase";

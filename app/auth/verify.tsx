@@ -1,13 +1,13 @@
+import { Button, Screen, ScreenSubtitle, ScreenTitle } from "@/components/ui";
 import Theme from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
   getPostAuthRoute,
   isValidSignupOtp,
   sanitizeSignupOtpInput,
   SIGNUP_OTP_MAX_LENGTH,
 } from "@/lib/auth";
-import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
-import { Button, Screen, ScreenSubtitle, ScreenTitle } from "@/components/ui";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {

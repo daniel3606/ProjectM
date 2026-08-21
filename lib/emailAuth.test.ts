@@ -16,13 +16,13 @@ jest.mock("@/lib/authRedirect", () => ({
   getAuthRedirectUrl: () => "marshmallow://auth/callback",
 }));
 
-import { supabase } from "@/lib/supabase";
 import {
-  resendSignupVerificationEmail,
-  signInWithEmail,
-  signOutCurrentUser,
-  signUpWithEmail,
+    resendSignupVerificationEmail,
+    signInWithEmail,
+    signOutCurrentUser,
+    signUpWithEmail,
 } from "@/lib/emailAuth";
+import { supabase } from "@/lib/supabase";
 
 const mockSignUp = supabase.auth.signUp as jest.Mock;
 const mockSignInWithPassword = supabase.auth.signInWithPassword as jest.Mock;
