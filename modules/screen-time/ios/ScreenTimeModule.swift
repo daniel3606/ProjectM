@@ -5,7 +5,15 @@ import ManagedSettings
 import DeviceActivity
 
 public class ScreenTimeModule: Module {
-    private let store = ManagedSettingsStore()
+    // Lazily created so module load (app launch) does not instantiate
+    // Family Controls types before JS has a chance to render.
+    private var managedStore: ManagedSettingsStore?
+    private var store: ManagedSettingsStore {
+        if managedStore == nil {
+            managedStore = ManagedSettingsStore()
+        }
+        return managedStore!
+    }
     private var currentSelection = FamilyActivitySelection()
 
     public func definition() -> ModuleDefinition {
@@ -176,6 +184,11 @@ public class ScreenTimeModule: Module {
         AsyncFunction("scheduleTimedBlocks") { (plans: [[String: Any]], promise: Promise) in
             guard #available(iOS 16.0, *) else {
                 promise.reject("UNAVAILABLE", "Screen Time API requires iOS 16.0+")
+                return
+            }
+
+            if plans.isEmpty {
+                promise.resolve(nil)
                 return
             }
 

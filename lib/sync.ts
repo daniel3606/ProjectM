@@ -1,3 +1,5 @@
+import type { User } from "@supabase/supabase-js";
+import { avatarUrlFromMetadata, displayNameFromMetadata } from "@/lib/auth";
 import { supabase } from "@/lib/supabase";
 import type { CompletedSession } from "@/contexts/FocusSessionContext";
 import type { EquippedItems } from "@/constants/items";
@@ -85,8 +87,34 @@ export async function fetchRemoteProfile(userId: string) {
     .from("profiles")
     .select("*")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
   return data;
+}
+
+/**
+ * Fill empty profile fields from auth metadata after social/email signup.
+ * Does not overwrite marshmallow display_name, email, or avatar once set.
+ */
+export async function ensureAppProfile(user: User): Promise<void> {
+  let remote = await fetchRemoteProfile(user.id);
+  if (!remote) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    remote = await fetchRemoteProfile(user.id);
+  }
+  if (!remote) return;
+
+  const metadata = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const update: ProfileUpdate = {};
+  if (!remote.email && user.email) update.email = user.email;
+
+  const avatarUrl = avatarUrlFromMetadata(metadata);
+  if (!remote.avatar_url && avatarUrl) update.avatar_url = avatarUrl;
+
+  const displayName = displayNameFromMetadata(metadata);
+  if (!remote.display_name && displayName) update.display_name = displayName;
+
+  if (Object.keys(update).length === 0) return;
+  await supabase.from("profiles").update(update).eq("id", user.id);
 }
 
 /** Persist onboarding answers and/or completion onto the profile. */

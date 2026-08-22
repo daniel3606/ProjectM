@@ -1,5 +1,6 @@
 import Theme from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPostAuthRoute, validateSignInInput, validateSignUpInput } from "@/lib/auth";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
   BottomSheetBackdrop,
@@ -13,30 +14,36 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "@/components/ui";
+import SocialAuthButtons from "@/components/SocialAuthButtons";
 
 type AuthMode = "login" | "signup";
 
-function SignInForm() {
-  const { signIn } = useAuth();
+function SignInForm({ onNeedsVerification }: { onNeedsVerification: (email: string) => void }) {
+  const { signIn, isAuthBusy } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !password) {
-      setError("Please enter both email and password");
+    if (loading || isAuthBusy) return;
+    const validationError = validateSignInInput(email.trim(), password);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
     setLoading(true);
     try {
-      const { error: signInError } = await signIn(email, password);
+      const { error: signInError, needsVerification } = await signIn(email, password);
       if (signInError) {
         setError(signInError);
       }
-    } catch (err: any) {
-      setError(err.message ?? "Sign in failed");
+      if (needsVerification) {
+        onNeedsVerification(email.trim());
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign in failed");
     } finally {
       setLoading(false);
     }
@@ -74,124 +81,43 @@ function SignInForm() {
         label="Log In"
         onPress={onSubmit}
         loading={loading}
+        disabled={isAuthBusy && !loading}
         style={formStyles.submitButton}
       />
     </View>
   );
 }
 
-function SignUpForm() {
-  const { signUp, resendConfirmation, confirmSignup } = useAuth();
+function SignUpForm({ onNeedsVerification }: { onNeedsVerification: (email: string) => void }) {
+  const { signUp, isAuthBusy } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [awaitingCode, setAwaitingCode] = useState(false);
   const [error, setError] = useState("");
-  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
 
   const onSubmit = async () => {
-    if (!email || !password) {
-      setError("Please enter both email and password");
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
+    if (loading || isAuthBusy) return;
+    const validationError = validateSignUpInput(email.trim(), password, confirmPassword);
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
-    setInfo("");
     setLoading(true);
     try {
       const { error: signUpError, needsConfirmation } = await signUp(email, password);
       if (signUpError) {
         setError(signUpError);
       } else if (needsConfirmation) {
-        setAwaitingCode(true);
-        setInfo("Enter the 6-digit code from your email.");
+        onNeedsVerification(email.trim());
       }
-    } catch (err: any) {
-      setError(err.message ?? "Sign up failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setLoading(false);
     }
   };
-
-  const onConfirmCode = async () => {
-    if (code.trim().length < 6) {
-      setError("Enter the 6-digit code from your email");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    try {
-      const { error: confirmError } = await confirmSignup(email, code.trim());
-      if (confirmError) {
-        setError(confirmError);
-      }
-    } catch (err: any) {
-      setError(err.message ?? "Confirmation failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const onResend = async () => {
-    if (!email) {
-      setError("Enter your email to resend the confirmation code");
-      return;
-    }
-    setError("");
-    setLoading(true);
-    try {
-      const { error: resendError } = await resendConfirmation(email);
-      if (resendError) {
-        setError(resendError);
-      } else {
-        setInfo("A new confirmation email is on the way.");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (awaitingCode) {
-    return (
-      <View style={formStyles.form}>
-        <Text style={formStyles.title}>Check Your Email</Text>
-        <Text style={formStyles.info}>
-          We sent a 6-digit code to {email}.
-        </Text>
-
-        <Text style={formStyles.label}>Confirmation code</Text>
-        <BottomSheetTextInput
-          style={formStyles.input}
-          value={code}
-          onChangeText={setCode}
-          placeholder="123456"
-          placeholderTextColor={Theme.colors.gray}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          maxLength={8}
-        />
-
-        {error ? <Text style={formStyles.error}>{error}</Text> : null}
-        {info ? <Text style={formStyles.info}>{info}</Text> : null}
-
-        <Button
-          label="Confirm"
-          onPress={onConfirmCode}
-          loading={loading}
-          style={formStyles.submitButton}
-        />
-        <Pressable onPress={onResend} style={formStyles.resendLink}>
-          <Text style={formStyles.resendText}>Resend code</Text>
-        </Pressable>
-      </View>
-    );
-  }
 
   return (
     <View style={formStyles.form}>
@@ -235,6 +161,7 @@ function SignUpForm() {
         label="Sign Up"
         onPress={onSubmit}
         loading={loading}
+        disabled={isAuthBusy && !loading}
         style={formStyles.submitButton}
       />
     </View>
@@ -245,17 +172,35 @@ export default function WelcomeScreen() {
   const insets = useSafeAreaInsets();
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [socialError, setSocialError] = useState("");
   const router = useRouter();
-  const { session, isLoading: authLoading } = useAuth();
+  const { status, user, isLoading: authLoading } = useAuth();
   const { onboardingCompleted, isProfileReady } = useMarshmallowProfile();
 
   useEffect(() => {
-    if (authLoading || !isProfileReady || !session) return;
-    router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
-  }, [authLoading, isProfileReady, session, onboardingCompleted, router]);
+    if (authLoading || !isProfileReady) return;
+    if (status === "needs_verification") {
+      router.replace({
+        pathname: "/auth/verify",
+        params: { email: user?.email ?? "" },
+      });
+      return;
+    }
+    if (status === "authenticated") {
+      router.replace(getPostAuthRoute(onboardingCompleted));
+    }
+  }, [authLoading, isProfileReady, status, user?.email, onboardingCompleted, router]);
+
+  const goToVerification = useCallback(
+    (email: string) => {
+      bottomSheetRef.current?.dismiss();
+      router.push({ pathname: "/auth/verify", params: { email } });
+    },
+    [router]
+  );
 
   const snapPoints = useMemo(
-    () => [authMode === "login" ? "50%" : "60%"],
+    () => [authMode === "login" ? "72%" : "84%"],
     [authMode]
   );
 
@@ -274,17 +219,20 @@ export default function WelcomeScreen() {
 
   const openSheet = useCallback((mode: AuthMode) => {
     setAuthMode(mode);
+    setSocialError("");
     bottomSheetRef.current?.present();
   }, []);
 
   const toggleMode = useCallback(() => {
     setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
+    setSocialError("");
   }, []);
 
-  // Logged-in users are routed away once profile status is known; keep this
-  // screen hidden so onboarding/home don't flash the welcome UI on refresh.
-  if (authLoading || session) {
-    return null;
+  // Keep a visible root while session restore/navigation happens. Returning
+  // null here blanks the navigator and can crash Release builds on device.
+  // Also skip the welcome UI for signed-in users so they never flash login.
+  if (authLoading || status === "authenticated" || status === "needs_verification") {
+    return <View style={[styles.container, { paddingTop: insets.top + 40 }]} />;
   }
 
   return (
@@ -319,7 +267,7 @@ export default function WelcomeScreen() {
           style={styles.guestButton}
           onPress={() => {
             if (!isProfileReady) return;
-            router.replace(onboardingCompleted ? "/(tabs)" : "/custominit");
+            router.replace(getPostAuthRoute(onboardingCompleted));
           }}
         >
           <Text style={styles.guestButtonText}>Continue As Guest</Text>
@@ -342,7 +290,14 @@ export default function WelcomeScreen() {
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.sheetScrollContent}
         >
-          {authMode === "login" ? <SignInForm /> : <SignUpForm />}
+          {authMode === "login" ? (
+            <SignInForm onNeedsVerification={goToVerification} />
+          ) : (
+            <SignUpForm onNeedsVerification={goToVerification} />
+          )}
+
+          {socialError ? <Text style={formStyles.error}>{socialError}</Text> : null}
+          <SocialAuthButtons onError={setSocialError} />
 
           <Pressable onPress={toggleMode} style={styles.toggleLink}>
             <Text style={styles.toggleText}>
@@ -397,22 +352,6 @@ const formStyles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Theme.fonts.regular,
     marginTop: 4,
-  },
-  info: {
-    color: Theme.colors.secondary,
-    fontSize: 14,
-    fontFamily: Theme.fonts.regular,
-    marginTop: 4,
-  },
-  resendLink: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-  },
-  resendText: {
-    color: Theme.colors.secondary,
-    fontFamily: Theme.fonts.medium,
-    fontSize: 14,
-    textDecorationLine: "underline",
   },
   submitButton: {
     marginTop: 16,

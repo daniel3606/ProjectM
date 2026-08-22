@@ -1,8 +1,6 @@
 import EditBlockSheet from "@/components/EditBlockSheet";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
-import FocusSessionSheet, {
-  type FocusSessionConfig,
-} from "@/components/FocusSessionSheet";
+import FocusSessionSheet from "@/components/FocusSessionSheet";
 import GrowthResultModal from "@/components/GrowthResultModal";
 import NameGateModal from "@/components/NameGateModal";
 import ProfileAvatarButton from "@/components/ProfileAvatarButton";
@@ -10,7 +8,10 @@ import { GrowthScene } from "@/components/growth";
 import { Button, Card, Screen } from "@/components/ui";
 import { formatTimeRemaining } from "@/constants/marshmallow";
 import Theme from "@/constants/theme";
-import { useFocusSession } from "@/contexts/FocusSessionContext";
+import {
+  useFocusSession,
+  type FocusSessionConfig,
+} from "@/contexts/FocusSessionContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
@@ -88,7 +89,12 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const handleStartSession = useCallback(async (config: FocusSessionConfig) => {
     setIsLoading(true);
     try {
-      await ScreenTime.blockAll();
+      const appIds = config.appIds ?? [];
+      if (appIds.length > 0) {
+        await ScreenTime.applyBlocking(appIds);
+      } else {
+        await ScreenTime.blockAll();
+      }
       startSession(config);
     } catch (error) {
       Alert.alert("Error", `Failed to start focus session: ${error}`);

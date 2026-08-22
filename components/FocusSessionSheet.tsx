@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -22,19 +23,14 @@ import {
   getGrowthForDuration,
   type FocusMode,
 } from "@/constants/marshmallow";
-import { getStageForSize, getNextStage } from "@/constants/growthStages";
+import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
-export interface FocusSessionConfig {
-  durationMinutes: number;
-  focusMode: FocusMode;
-  expectedGrowthCm: number;
-}
-
-const DURATION_STEP = 5;
 const MIN_DURATION = 5;
 const MAX_DURATION = 240;
+const DURATION_STEP = 5;
 
 interface FocusSessionSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
@@ -48,6 +44,7 @@ export default function FocusSessionSheet({
   onStartSession,
 }: FocusSessionSheetProps) {
   const insets = useSafeAreaInsets();
+  const { distractingApps } = useMarshmallowProfile();
 
   const [totalMinutes, setTotalMinutes] = useState(30);
   const [focusMode, setFocusMode] = useState<FocusMode>("flexible");
@@ -57,12 +54,6 @@ export default function FocusSessionSheet({
   const snapPoints = useMemo(() => ["85%"], []);
 
   const expectedGrowth = getGrowthForDuration(totalMinutes, focusMode);
-  const projectedSize = currentSizeCm + expectedGrowth;
-  const currentStage = getStageForSize(currentSizeCm);
-  const projectedStage = getStageForSize(projectedSize);
-  const nextStage = getNextStage(currentSizeCm);
-  const willReachNewStage =
-    projectedStage.id !== currentStage.id && projectedStage.sizeCm > currentStage.sizeCm;
 
   const appCount = selectedApps.filter((i) => i.type === "application").length;
   const catCount = selectedApps.filter((i) => i.type === "category").length;
@@ -107,6 +98,18 @@ export default function FocusSessionSheet({
     }
   }, []);
 
+  const handleQuickAdd = useCallback((app: ScreenTimeItem) => {
+    setSelectedApps((prev) => {
+      if (prev.some((item) => item.id === app.id)) return prev;
+      return [...prev, app];
+    });
+  }, []);
+
+  const recommendedApps = useMemo(
+    () => distractingApps.filter((app) => app.type === "application"),
+    [distractingApps]
+  );
+
   const handleDeepFocusPress = useCallback(() => {
     Alert.alert(
       "Premium Feature",
@@ -129,11 +132,12 @@ export default function FocusSessionSheet({
       durationMinutes: totalMinutes,
       focusMode,
       expectedGrowthCm: expectedGrowth,
+      appIds: selectedApps.map((item) => item.id),
     };
 
     sheetRef.current?.dismiss();
     onStartSession(config);
-  }, [totalSelected, totalMinutes, focusMode, expectedGrowth, sheetRef, onStartSession]);
+  }, [totalSelected, totalMinutes, focusMode, expectedGrowth, selectedApps, sheetRef, onStartSession]);
 
   return (
     <BottomSheetModal
@@ -233,6 +237,49 @@ export default function FocusSessionSheet({
 
         {/* ── Applications to Block ──────────────────────────────── */}
         <SectionLabel style={styles.sectionTitle}>Applications to Block</SectionLabel>
+
+        {recommendedApps.length > 0 && (
+          <>
+            <Text style={styles.quickAddLabel}>Quick add from onboarding</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickAddRow}
+            >
+              {recommendedApps.map((app) => {
+                const isAdded = selectedApps.some((item) => item.id === app.id);
+                return (
+                  <Pressable
+                    key={app.id}
+                    onPress={() => handleQuickAdd(app)}
+                    disabled={isAdded}
+                    style={({ pressed }) => [
+                      styles.quickAddChip,
+                      isAdded && styles.quickAddChipAdded,
+                      pressed && !isAdded && styles.pressed,
+                    ]}
+                  >
+                    <Ionicons
+                      name={isAdded ? "checkmark-circle" : "add-circle-outline"}
+                      size={16}
+                      color={isAdded ? Theme.colors.success : Theme.colors.secondary}
+                    />
+                    <Text
+                      style={[
+                        styles.quickAddChipText,
+                        isAdded && styles.quickAddChipTextAdded,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {app.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </>
+        )}
+
         <Card tone="surface" style={styles.card}>
           {isLoadingApps ? (
             <ActivityIndicator
@@ -456,6 +503,41 @@ const styles = StyleSheet.create({
   },
 
   /* Applications */
+  quickAddLabel: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.textSecondary,
+    marginBottom: 8,
+  },
+  quickAddRow: {
+    gap: 8,
+    paddingBottom: 12,
+  },
+  quickAddChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: Theme.radius.lg,
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+    maxWidth: 160,
+  },
+  quickAddChipAdded: {
+    borderColor: Theme.colors.success,
+    backgroundColor: Theme.colors.cardActiveTint,
+  },
+  quickAddChipText: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.text,
+    flexShrink: 1,
+  },
+  quickAddChipTextAdded: {
+    color: Theme.colors.success,
+  },
   appLoader: {
     paddingVertical: 8,
   },

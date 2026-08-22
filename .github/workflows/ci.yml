@@ -41,4 +41,4 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx expo doctor
+      - run: npx expo-doctor
