@@ -157,19 +157,26 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
 
     setActiveSession((current) => {
       if (current) {
-        const { startedAt, ...config } = current;
-        const completed: CompletedSession = { ...config, completedAt: Date.now() };
-        setHistory((prev) =>
-          [completed, ...prev].slice(0, MAX_HISTORY)
-        );
-        setPendingGrowthResult({
-          growthCm: current.expectedGrowthCm,
-          durationMinutes: current.durationMinutes,
-          focusMode: current.focusMode,
-          label: current.label,
-        });
-        // Fire-and-forget sync to Supabase
-        syncCompletedSession(completed).catch(() => {});
+        const endsAt = current.startedAt + current.durationMinutes * 60_000;
+        const ranFullDuration = Date.now() >= endsAt;
+
+        // Ended early (cancelled, or the underlying plan changed mid-window):
+        // no growth, and it doesn't count as a completed session.
+        if (ranFullDuration) {
+          const { startedAt, ...config } = current;
+          const completed: CompletedSession = { ...config, completedAt: Date.now() };
+          setHistory((prev) =>
+            [completed, ...prev].slice(0, MAX_HISTORY)
+          );
+          setPendingGrowthResult({
+            growthCm: current.expectedGrowthCm,
+            durationMinutes: current.durationMinutes,
+            focusMode: current.focusMode,
+            label: current.label,
+          });
+          // Fire-and-forget sync to Supabase
+          syncCompletedSession(completed).catch(() => {});
+        }
       }
       return null;
     });
