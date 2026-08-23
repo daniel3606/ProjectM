@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import type { FocusMode } from "@/constants/marshmallow";
 
 export type AuthorizationStatus =
   | "notDetermined"
@@ -184,4 +185,25 @@ export function setMarshmallowColorHex(hex: string): void {
 export function setMarshmallowItems(items: Record<string, string>): void {
   if (MOCK_MODE || Platform.OS !== "ios") return;
   getNativeModule().setMarshmallowItems(items);
+}
+
+export interface QuickBlockLiveActivityParams {
+  startedAt: number;
+  durationMinutes: number;
+  label?: string;
+  focusMode?: FocusMode;
+}
+
+export async function startQuickBlockLiveActivity(
+  params: QuickBlockLiveActivityParams
+): Promise<boolean> {
+  if (MOCK_MODE) return false;
+  if (Platform.OS !== "ios") return false;
+  return await getNativeModule().startQuickBlockLiveActivity(params);
+}
+
+export async function endQuickBlockLiveActivity(): Promise<void> {
+  if (MOCK_MODE) return;
+  if (Platform.OS !== "ios") return;
+  await getNativeModule().endQuickBlockLiveActivity();
 }

@@ -17,7 +17,7 @@ export interface FocusSessionConfig {
   expectedGrowthCm: number;
   /** App/category/web IDs to block; empty means block everything. */
   appIds?: string[];
-  /** Set when this session was auto-started by a Timed Block plan rather than manually. */
+  /** Set when this session was auto-started by a Timed Block plan rather than manually. Live Activities are skipped for these. */
   planId?: string;
   /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
   label?: string;
@@ -241,6 +241,21 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     const timer = setTimeout(autoEnd, remainingMs);
     return () => clearTimeout(timer);
   }, [activeSession, activeSessionLoaded, stopSession]);
+
+  // Live Activity on Lock Screen / Dynamic Island for manually started Quick Blocks.
+  useEffect(() => {
+    if (!activeSession || activeSession.planId) {
+      void ScreenTime.endQuickBlockLiveActivity();
+      return;
+    }
+
+    void ScreenTime.startQuickBlockLiveActivity({
+      startedAt: activeSession.startedAt,
+      durationMinutes: activeSession.durationMinutes,
+      label: activeSession.label ?? "Focus Block",
+      focusMode: activeSession.focusMode,
+    });
+  }, [activeSession]);
 
   const value = useMemo(
     () => ({

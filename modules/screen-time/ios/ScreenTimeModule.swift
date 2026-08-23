@@ -4,6 +4,7 @@ import FamilyControls
 import ManagedSettings
 import DeviceActivity
 import WidgetKit
+import ActivityKit
 
 public class ScreenTimeModule: Module {
     // Lazily created so module load (app launch) does not instantiate
@@ -358,6 +359,65 @@ public class ScreenTimeModule: Module {
             SharedBlockState.defaults.set(items, forKey: SharedBlockState.marshmallowItemsKey)
             SharedBlockState.defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
+        }
+
+        // Async: starts a Live Activity for a Quick Block session.
+        AsyncFunction("startQuickBlockLiveActivity") { (params: [String: Any], promise: Promise) in
+            if #available(iOS 16.2, *) {
+                guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+                    promise.resolve(false)
+                    return
+                }
+
+                let startedAtMs = params["startedAt"] as? Double ?? 0
+                let durationMinutes = params["durationMinutes"] as? Int ?? 0
+                let label = params["label"] as? String ?? "Focus Block"
+                let focusMode = params["focusMode"] as? String ?? "flexible"
+
+                guard startedAtMs > 0, durationMinutes > 0 else {
+                    promise.resolve(false)
+                    return
+                }
+
+                let startedAt = Date(timeIntervalSince1970: startedAtMs / 1000)
+                let endsAt = startedAt.addingTimeInterval(Double(durationMinutes) * 60)
+
+                Task {
+                    for activity in Activity<QuickBlockAttributes>.activities {
+                        await activity.end(nil, dismissalPolicy: .immediate)
+                    }
+
+                    let attributes = QuickBlockAttributes(label: label, focusMode: focusMode)
+                    let state = QuickBlockAttributes.ContentState(startedAt: startedAt, endsAt: endsAt)
+
+                    do {
+                        _ = try Activity.request(
+                            attributes: attributes,
+                            content: .init(state: state, staleDate: endsAt),
+                            pushType: nil
+                        )
+                        promise.resolve(true)
+                    } catch {
+                        promise.reject("LIVE_ACTIVITY_ERROR", error.localizedDescription)
+                    }
+                }
+            } else {
+                promise.resolve(false)
+            }
+        }
+
+        // Async: ends any running Quick Block Live Activity.
+        AsyncFunction("endQuickBlockLiveActivity") { (promise: Promise) in
+            if #available(iOS 16.2, *) {
+                Task {
+                    for activity in Activity<QuickBlockAttributes>.activities {
+                        await activity.end(nil, dismissalPolicy: .immediate)
+                    }
+                    promise.resolve(nil)
+                }
+            } else {
+                promise.resolve(nil)
+            }
         }
     }
 
