@@ -10,7 +10,7 @@ import Animated, {
   Easing,
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
-import { MARSHMALLOW_ITEMS, type EquippedItems } from "@/constants/items";
+import { resolveEquippedEmoji, type EquippedItems } from "@/constants/items";
 
 
 
@@ -51,15 +51,11 @@ export default function MarshmallowCharacter({
   isBlocking,
   items,
 }: MarshmallowCharacterProps) {
-  const headwearEmoji = items?.headwear
-    ? MARSHMALLOW_ITEMS.find((i) => i.id === items.headwear)?.emoji
-    : undefined;
-  const wingsEmoji = items?.wings
-    ? MARSHMALLOW_ITEMS.find((i) => i.id === items.wings)?.emoji
-    : undefined;
-  const faceEmoji = items?.face
-    ? MARSHMALLOW_ITEMS.find((i) => i.id === items.face)?.emoji
-    : undefined;
+  const {
+    headwear: headwearEmoji,
+    wings: wingsEmoji,
+    face: faceEmoji,
+  } = resolveEquippedEmoji(items);
   const scale = getMarshmallowIntrinsicScale(sizeCm);
 
   const blinkScaleY = useSharedValue(1);

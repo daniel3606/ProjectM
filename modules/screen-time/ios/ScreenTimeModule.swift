@@ -3,6 +3,7 @@ import SwiftUI
 import FamilyControls
 import ManagedSettings
 import DeviceActivity
+import WidgetKit
 
 public class ScreenTimeModule: Module {
     // Lazily created so module load (app launch) does not instantiate
@@ -206,10 +207,19 @@ public class ScreenTimeModule: Module {
                     let startMinute = raw["startMinute"] as? Int,
                     let endHour = raw["endHour"] as? Int,
                     let endMinute = raw["endMinute"] as? Int,
+                    let durationMinutes = raw["durationMinutes"] as? Int,
                     !daysOfWeek.isEmpty
                 else { continue }
 
-                stored.append(StoredPlan(id: id, label: label, daysOfWeek: daysOfWeek, appIds: appIds))
+                stored.append(
+                    StoredPlan(
+                        id: id,
+                        label: label,
+                        daysOfWeek: daysOfWeek,
+                        appIds: appIds,
+                        durationMinutes: durationMinutes
+                    )
+                )
 
                 let schedule = DeviceActivitySchedule(
                     intervalStart: DateComponents(hour: startHour, minute: startMinute),
@@ -252,19 +262,70 @@ public class ScreenTimeModule: Module {
             promise.resolve([
                 "planId": planId,
                 "startedAt": defaults.double(forKey: SharedBlockState.activeStartedAtKey),
+                "durationMinutes": defaults.integer(forKey: SharedBlockState.activeDurationMinutesKey),
                 "label": defaults.string(forKey: SharedBlockState.activeLabelKey) ?? "",
             ])
         }
 
-        // Async: clears the active native block state written by the extension,
-        // so stale shared state doesn't cause phantom re-adoption on next app open.
+        // Async: mirrors FocusSessionContext's activeSession into the App
+        // Group, for both Quick Blocks (no planId) and Timed Blocks started
+        // from JS — the MarshmallowWidget extension reads this to render a
+        // remaining-time countdown without the app running.
+        AsyncFunction("setActiveNativeBlock") { (params: [String: Any], promise: Promise) in
+            let defaults = SharedBlockState.defaults
+            if let planId = params["planId"] as? String {
+                defaults.set(planId, forKey: SharedBlockState.activePlanIdKey)
+            } else {
+                defaults.removeObject(forKey: SharedBlockState.activePlanIdKey)
+            }
+            defaults.set(params["startedAt"] as? Double ?? 0, forKey: SharedBlockState.activeStartedAtKey)
+            defaults.set(
+                params["durationMinutes"] as? Int ?? 0,
+                forKey: SharedBlockState.activeDurationMinutesKey
+            )
+            defaults.set(params["label"] as? String ?? "", forKey: SharedBlockState.activeLabelKey)
+            defaults.synchronize()
+            WidgetCenter.shared.reloadAllTimelines()
+            promise.resolve(nil)
+        }
+
+        // Async: clears the active native block state written by the extension
+        // or setActiveNativeBlock, so stale shared state doesn't cause phantom
+        // re-adoption on next app open.
         AsyncFunction("clearActiveNativeBlock") { (promise: Promise) in
             let defaults = SharedBlockState.defaults
             defaults.removeObject(forKey: SharedBlockState.activePlanIdKey)
             defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
+            defaults.removeObject(forKey: SharedBlockState.activeDurationMinutesKey)
             defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
             defaults.synchronize()
+            WidgetCenter.shared.reloadAllTimelines()
             promise.resolve(nil)
+        }
+
+        // Sync: keeps the widget's marshmallow size in sync with
+        // FocusSessionContext's history-derived size.
+        Function("setMarshmallowSizeCm") { (sizeCm: Double) in
+            SharedBlockState.defaults.set(sizeCm, forKey: SharedBlockState.marshmallowSizeCmKey)
+            SharedBlockState.defaults.synchronize()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+
+        // Sync: keeps the widget's marshmallow color in sync with
+        // MarshmallowProfileContext.
+        Function("setMarshmallowColorHex") { (hex: String) in
+            SharedBlockState.defaults.set(hex, forKey: SharedBlockState.marshmallowColorHexKey)
+            SharedBlockState.defaults.synchronize()
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+
+        // Sync: keeps the widget's equipped items in sync. Takes already
+        // resolved slot -> emoji pairs, so the item catalogue stays defined
+        // only in constants/items.ts.
+        Function("setMarshmallowItems") { (items: [String: String]) in
+            SharedBlockState.defaults.set(items, forKey: SharedBlockState.marshmallowItemsKey)
+            SharedBlockState.defaults.synchronize()
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 

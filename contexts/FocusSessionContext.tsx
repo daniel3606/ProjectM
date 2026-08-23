@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { usePersistedState } from "@/lib/storage";
-import type { FocusMode } from "@/constants/marshmallow";
+import { computeMarshmallowSizeCm, type FocusMode } from "@/constants/marshmallow";
 import {
   notifyBlockEnded,
   scheduleBlockEndNotification,
@@ -107,6 +107,28 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     };
   }, [activeSession]);
 
+  // Mirrors activeSession into the App Group so the MarshmallowWidget
+  // extension can show a remaining-time countdown without the app running.
+  // Covers Quick Block start, Timed Block adoption, and updateSession edits
+  // uniformly, since all of them funnel through this same state.
+  useEffect(() => {
+    if (activeSession) {
+      ScreenTime.setActiveNativeBlock({
+        planId: activeSession.planId,
+        startedAt: activeSession.startedAt,
+        durationMinutes: activeSession.durationMinutes,
+        label: activeSession.label ?? "Focus Block",
+      }).catch(() => {});
+    } else {
+      ScreenTime.clearActiveNativeBlock().catch(() => {});
+    }
+  }, [activeSession]);
+
+  // Keeps the widget's marshmallow size in sync with history-derived size.
+  useEffect(() => {
+    ScreenTime.setMarshmallowSizeCm(computeMarshmallowSizeCm(history));
+  }, [history]);
+
   // Hydrate session history from Supabase on login
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -157,19 +179,26 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
 
     setActiveSession((current) => {
       if (current) {
-        const { startedAt, ...config } = current;
-        const completed: CompletedSession = { ...config, completedAt: Date.now() };
-        setHistory((prev) =>
-          [completed, ...prev].slice(0, MAX_HISTORY)
-        );
-        setPendingGrowthResult({
-          growthCm: current.expectedGrowthCm,
-          durationMinutes: current.durationMinutes,
-          focusMode: current.focusMode,
-          label: current.label,
-        });
-        // Fire-and-forget sync to Supabase
-        syncCompletedSession(completed).catch(() => {});
+        const endsAt = current.startedAt + current.durationMinutes * 60_000;
+        const ranFullDuration = Date.now() >= endsAt;
+
+        // Ended early (cancelled, or the underlying plan changed mid-window):
+        // no growth, and it doesn't count as a completed session.
+        if (ranFullDuration) {
+          const { startedAt, ...config } = current;
+          const completed: CompletedSession = { ...config, completedAt: Date.now() };
+          setHistory((prev) =>
+            [completed, ...prev].slice(0, MAX_HISTORY)
+          );
+          setPendingGrowthResult({
+            growthCm: current.expectedGrowthCm,
+            durationMinutes: current.durationMinutes,
+            focusMode: current.focusMode,
+            label: current.label,
+          });
+          // Fire-and-forget sync to Supabase
+          syncCompletedSession(completed).catch(() => {});
+        }
       }
       return null;
     });

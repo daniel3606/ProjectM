@@ -11,7 +11,7 @@ const {
   getTargetBuildSetting,
 } = require("./xcodeTargetUtils");
 
-const TARGET_NAME = "TimedBlockMonitor";
+const TARGET_NAME = "MarshmallowWidget";
 const APP_GROUP_ID = "group.com.dllim.marshmallow";
 const SOURCE_DIR = path.join(__dirname, "..", "targets", TARGET_NAME);
 const SHARED_STATE_FILE = "SharedBlockState.swift";
@@ -24,14 +24,13 @@ const SHARED_STATE_SOURCE = path.join(
   SHARED_STATE_FILE
 );
 
-// Adds the TimedBlockMonitor DeviceActivityMonitor extension target so
-// scheduled blocks can start/end at the OS level even when the app isn't
-// running (see modules/screen-time/ios/ScreenTimeModule.swift's
-// scheduleTimedBlocks + targets/TimedBlockMonitor). Xcode project targets
-// can't be expressed in app.json directly, so this plugin builds the target
-// by hand with the `xcode` package (the same one @expo/config-plugins uses
-// internally) every time `expo prebuild` regenerates ios/.
-module.exports = function withTimedBlockMonitor(config) {
+// Adds the MarshmallowWidget WidgetKit extension target (the 2x2 home-screen
+// widget) — reads the same App Group SharedBlockState that ScreenTimeModule
+// and TimedBlockMonitor already write to, but never calls any Screen Time
+// API itself. Mirrors withTimedBlockMonitor.js's approach to hand-building
+// an Xcode target with the `xcode` package, since Expo has no config-plugin
+// primitive for adding native targets directly.
+module.exports = function withMarshmallowWidget(config) {
   config = withEntitlementsPlist(config, (config) => {
     config.modResults["com.apple.security.application-groups"] = [APP_GROUP_ID];
     return config;
@@ -47,28 +46,9 @@ module.exports = function withTimedBlockMonitor(config) {
       for (const file of fs.readdirSync(SOURCE_DIR)) {
         fs.copyFileSync(path.join(SOURCE_DIR, file), path.join(destDir, file));
       }
-      // Duplicated (not symlinked) so the extension gets its own compiled
-      // copy — the original under modules/screen-time/ios compiles into the
-      // main app via ScreenTime.podspec's file glob, and that target has no
-      // DeviceActivity/extension entitlements to share this copy with.
+      // Duplicated (not symlinked), same reasoning as withTimedBlockMonitor.js
+      // — this target compiles its own copy independent of the main app's.
       fs.copyFileSync(SHARED_STATE_SOURCE, path.join(destDir, SHARED_STATE_FILE));
-
-      // `pod install` fails on this project without `use_modular_headers!`
-      // (AppCheckCore's Swift pod can't import GoogleUtilities/RecaptchaInterop,
-      // which don't define modules, when building as static libraries) — every
-      // `expo prebuild` regenerates ios/Podfile from scratch, so this has to be
-      // patched back in every time rather than hand-edited once.
-      const podfilePath = path.join(projectRoot, "Podfile");
-      const podfile = fs.readFileSync(podfilePath, "utf8");
-      if (!podfile.includes("use_modular_headers!")) {
-        fs.writeFileSync(
-          podfilePath,
-          podfile.replace(
-            /^(target ['"].+['"] do\n)/m,
-            "$1  use_modular_headers!\n"
-          )
-        );
-      }
 
       return config;
     },
@@ -89,18 +69,9 @@ module.exports = function withTimedBlockMonitor(config) {
     project.addBuildPhase([], "PBXResourcesBuildPhase", "Resources", target.uuid);
     project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
 
-    // addSourceFile needs a real PBXGroup key to resolve `<group>`-relative
-    // paths against — this project has no "Plugins" group (the fallback used
-    // when no group is passed), so without this every addSourceFile call
-    // throws deep inside pbxProject.js's path-correction helper. No `path` on
-    // the group itself (undefined, purely organizational) — the file
-    // references below already carry the full `TimedBlockMonitor/...` path,
-    // so a group path here would double it up.
+    // See withTimedBlockMonitor.js for why the group needs no `path` and why
+    // addSourceFile needs a real PBXGroup key to resolve against.
     const group = project.addPbxGroup([], TARGET_NAME);
-    // addPbxGroup always writes a `path` key, even when passed undefined —
-    // it serializes as the literal string "undefined", which Xcode then
-    // treats as a real subfolder name. Strip it so the group is purely
-    // organizational (see the path-doubling comment above).
     delete group.pbxGroup.path;
     const mainGroupId = project.getFirstProject().firstProject.mainGroup;
     project.getPBXGroupByKey(mainGroupId).children.push({
@@ -119,7 +90,7 @@ module.exports = function withTimedBlockMonitor(config) {
       group.uuid
     );
 
-    for (const framework of ["DeviceActivity", "FamilyControls", "ManagedSettings", "WidgetKit"]) {
+    for (const framework of ["WidgetKit", "SwiftUI"]) {
       project.addFramework(`${framework}.framework`, { target: target.uuid });
     }
 

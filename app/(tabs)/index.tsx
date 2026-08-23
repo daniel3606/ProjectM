@@ -6,7 +6,7 @@ import NameGateModal from "@/components/NameGateModal";
 import ProfileAvatarButton from "@/components/ProfileAvatarButton";
 import { GrowthScene } from "@/components/growth";
 import { Button, Card, Screen } from "@/components/ui";
-import { formatTimeRemaining } from "@/constants/marshmallow";
+import { computeMarshmallowSizeCm, formatTimeRemaining } from "@/constants/marshmallow";
 import Theme from "@/constants/theme";
 import {
   useFocusSession,
@@ -21,8 +21,6 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
-
-const INITIAL_SIZE_CM = 3;
 
 interface HomeScreenProps {
   /**
@@ -47,11 +45,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     clearPendingGrowthResult,
   } = useFocusSession();
 
-  /** The marshmallow's real size, derived from completed session history. */
-  const actualSizeCm = useMemo(() => {
-    const totalGrowth = history.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
-    return Math.round((INITIAL_SIZE_CM + totalGrowth) * 10) / 10;
-  }, [history]);
+  const actualSizeCm = useMemo(() => computeMarshmallowSizeCm(history), [history]);
   const isFocusActive = !!activeSession;
   // A session started by a Timed Block plan carries `planId`; one started
   // manually from this screen ("Quick Block") never does. The two get

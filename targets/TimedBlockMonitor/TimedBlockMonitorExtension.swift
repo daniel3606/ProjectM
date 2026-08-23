@@ -2,6 +2,7 @@ import DeviceActivity
 import FamilyControls
 import ManagedSettings
 import UserNotifications
+import WidgetKit
 
 // Runs inside the TimedBlockMonitor app extension, invoked by iOS itself at
 // the start/end of each DeviceActivitySchedule registered from
@@ -28,8 +29,10 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
         let defaults = SharedBlockState.defaults
         defaults.set(plan.id, forKey: SharedBlockState.activePlanIdKey)
         defaults.set(Date().timeIntervalSince1970 * 1000, forKey: SharedBlockState.activeStartedAtKey)
+        defaults.set(plan.durationMinutes, forKey: SharedBlockState.activeDurationMinutesKey)
         defaults.set(plan.label, forKey: SharedBlockState.activeLabelKey)
         defaults.synchronize()
+        WidgetCenter.shared.reloadAllTimelines()
 
         notify(title: "Timed Block Started", body: "\"\(plan.label)\" is now blocking your apps.")
     }
@@ -48,8 +51,10 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
             store.clearAllSettings()
             defaults.removeObject(forKey: SharedBlockState.activePlanIdKey)
             defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
+            defaults.removeObject(forKey: SharedBlockState.activeDurationMinutesKey)
             defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
             defaults.synchronize()
+            WidgetCenter.shared.reloadAllTimelines()
         }
 
         notify(title: "Block Ended", body: "\"\(plan.label)\" has ended. Apps are unblocked.")

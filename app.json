@@ -43,7 +43,8 @@
       ],
       "expo-image",
       "./plugins/withFamilyControls",
-      "./plugins/withTimedBlockMonitor"
+      "./plugins/withTimedBlockMonitor",
+      "./plugins/withMarshmallowWidget"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -13,7 +13,11 @@ type ScreenTimeNativeModule = {
   scheduleTimedBlocks: (plans: unknown[]) => Promise<void>;
   clearScheduledBlocks: () => Promise<void>;
   getActiveNativeBlock: () => Promise<unknown>;
+  setActiveNativeBlock: (block: Record<string, unknown>) => Promise<void>;
   clearActiveNativeBlock: () => Promise<void>;
+  setMarshmallowSizeCm: (sizeCm: number) => void;
+  setMarshmallowColorHex: (hex: string) => void;
+  setMarshmallowItems: (items: Record<string, string>) => void;
 };
 
 let ScreenTimeModule: ScreenTimeNativeModule;
@@ -35,7 +39,11 @@ try {
     scheduleTimedBlocks: noop,
     clearScheduledBlocks: noop,
     getActiveNativeBlock: async () => null,
+    setActiveNativeBlock: noop,
     clearActiveNativeBlock: noop,
+    setMarshmallowSizeCm: () => {},
+    setMarshmallowColorHex: () => {},
+    setMarshmallowItems: () => {},
   };
 }
 
