@@ -32,3 +32,17 @@ export function getItemsForSlot(slot: ItemSlot): MarshmallowItem[] {
 }
 
 export type EquippedItems = Partial<Record<ItemSlot, string>>;
+
+/** Maps each equipped slot to the emoji it renders as, dropping unknown item ids. */
+export function resolveEquippedEmoji(
+  items: EquippedItems | undefined
+): Partial<Record<ItemSlot, string>> {
+  const resolved: Partial<Record<ItemSlot, string>> = {};
+  if (!items) return resolved;
+
+  for (const [slot, itemId] of Object.entries(items) as [ItemSlot, string | undefined][]) {
+    const emoji = MARSHMALLOW_ITEMS.find((item) => item.id === itemId)?.emoji;
+    if (emoji) resolved[slot] = emoji;
+  }
+  return resolved;
+}
