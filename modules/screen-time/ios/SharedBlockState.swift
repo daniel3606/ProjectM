@@ -22,6 +22,11 @@ enum SharedBlockState {
     // refreshed by ScreenTimeModule.scheduleTimedBlocks whenever plans change.
     static let planMetadataKey = "marshmallow_timed_block_plans"
 
+    // JSON-encoded [String: ScheduleSnapshot] (activity id -> last-registered
+    // schedule) so scheduleTimedBlocks can tell which plans actually changed
+    // and only re-register those — see ScheduleSnapshot below.
+    static let scheduleSnapshotsKey = "marshmallow_timed_block_schedule_snapshots"
+
     // Written by the extension when a scheduled block starts/ends, and by
     // ScreenTimeModule.setActiveNativeBlock for a JS-started block (Quick or
     // Timed), so the JS side can reconcile FocusSessionContext state after a
@@ -48,4 +53,18 @@ struct StoredPlan: Codable {
     let daysOfWeek: [Int] // 0 = Sunday ... 6 = Saturday, matches JS Date#getDay()
     let appIds: [String]
     let durationMinutes: Int
+}
+
+// The subset of a plan that actually determines its DeviceActivitySchedule.
+// Used only to detect real schedule changes between scheduleTimedBlocks
+// calls — re-registering an unchanged schedule with the OS causes the
+// TimedBlockMonitor extension to receive a spurious intervalDidEnd +
+// intervalDidStart for any plan currently mid-interval, which duplicates the
+// "Block Ended"/"Timed Block Started" notifications it sends.
+struct ScheduleSnapshot: Codable, Equatable {
+    let daysOfWeek: [Int]
+    let startHour: Int
+    let startMinute: Int
+    let endHour: Int
+    let endMinute: Int
 }

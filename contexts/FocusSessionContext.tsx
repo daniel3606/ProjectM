@@ -215,6 +215,13 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     const endsAt = activeSession.startedAt + activeSession.durationMinutes * 60_000;
     const remainingMs = endsAt - Date.now();
 
+    // Re-runs whenever activeSession changes identity, including in-place
+    // edits (e.g. duration changed via updateSession) — cancel whatever
+    // end notification was scheduled for the previous state first, or the
+    // stale one still fires alongside the new one.
+    cancelBlockEndNotification(endNotificationIdRef.current);
+    endNotificationIdRef.current = null;
+
     // Schedule a future notification as a background-safe fallback.
     scheduleBlockEndNotification(endsAt, activeSession.expectedGrowthCm, activeSession.label)
       .then((id) => { endNotificationIdRef.current = id; });

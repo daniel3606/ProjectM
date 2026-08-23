@@ -179,9 +179,10 @@ public class ScreenTimeModule: Module {
 
         // Async: registers OS-level monitoring (DeviceActivityCenter) for every
         // enabled plan, so the TimedBlockMonitor extension can start/end the
-        // shield even when this app isn't running. Replaces any previously
-        // registered schedule wholesale — callers pass the full current plan
-        // list every time (add/edit/remove/toggle all funnel through here).
+        // shield even when this app isn't running. Callers pass the full
+        // current plan list every time (add/edit/remove/toggle all funnel
+        // through here), but only plans whose schedule actually changed are
+        // re-registered with the OS — see ScheduleSnapshot for why.
         AsyncFunction("scheduleTimedBlocks") { (plans: [[String: Any]], promise: Promise) in
             guard #available(iOS 16.0, *) else {
                 promise.reject("UNAVAILABLE", "Screen Time API requires iOS 16.0+")
@@ -194,9 +195,12 @@ public class ScreenTimeModule: Module {
             }
 
             let center = DeviceActivityCenter()
-            center.stopMonitoring(center.activities)
+            let previousSchedules = ScreenTimeModule.loadScheduleSnapshots()
 
             var stored: [StoredPlan] = []
+            var newSchedules: [String: ScheduleSnapshot] = [:]
+            var idsToStart: [String] = []
+
             for raw in plans {
                 guard
                     let id = raw["id"] as? String,
@@ -221,9 +225,34 @@ public class ScreenTimeModule: Module {
                     )
                 )
 
+                let snapshot = ScheduleSnapshot(
+                    daysOfWeek: daysOfWeek.sorted(),
+                    startHour: startHour,
+                    startMinute: startMinute,
+                    endHour: endHour,
+                    endMinute: endMinute
+                )
+                newSchedules[id] = snapshot
+                if previousSchedules[id] != snapshot {
+                    idsToStart.append(id)
+                }
+            }
+
+            // Stop monitoring for plans that were removed/disabled and for
+            // plans whose schedule changed (they get restarted below with the
+            // new schedule). Anything unchanged is left alone so a currently
+            // mid-interval plan doesn't get a spurious end+start callback.
+            let idsToStop = Set(previousSchedules.keys).subtracting(newSchedules.keys)
+                .union(idsToStart.filter { previousSchedules[$0] != nil })
+            if !idsToStop.isEmpty {
+                center.stopMonitoring(idsToStop.map { DeviceActivityName($0) })
+            }
+
+            for id in idsToStart {
+                guard let snapshot = newSchedules[id] else { continue }
                 let schedule = DeviceActivitySchedule(
-                    intervalStart: DateComponents(hour: startHour, minute: startMinute),
-                    intervalEnd: DateComponents(hour: endHour, minute: endMinute),
+                    intervalStart: DateComponents(hour: snapshot.startHour, minute: snapshot.startMinute),
+                    intervalEnd: DateComponents(hour: snapshot.endHour, minute: snapshot.endMinute),
                     repeats: true
                 )
                 // DeviceActivitySchedule has no day-of-week filter, so every plan
@@ -231,6 +260,8 @@ public class ScreenTimeModule: Module {
                 // before applying the shield.
                 try? center.startMonitoring(DeviceActivityName(id), during: schedule)
             }
+
+            ScreenTimeModule.saveScheduleSnapshots(newSchedules)
 
             if let data = try? JSONEncoder().encode(stored) {
                 SharedBlockState.defaults.set(data, forKey: SharedBlockState.planMetadataKey)
@@ -246,6 +277,7 @@ public class ScreenTimeModule: Module {
                 center.stopMonitoring(center.activities)
             }
             SharedBlockState.defaults.removeObject(forKey: SharedBlockState.planMetadataKey)
+            SharedBlockState.defaults.removeObject(forKey: SharedBlockState.scheduleSnapshotsKey)
             SharedBlockState.defaults.synchronize()
             promise.resolve(nil)
         }
@@ -371,5 +403,21 @@ public class ScreenTimeModule: Module {
         }
 
         return items
+    }
+
+    // MARK: - Schedule change detection
+
+    private static func loadScheduleSnapshots() -> [String: ScheduleSnapshot] {
+        guard
+            let data = SharedBlockState.defaults.data(forKey: SharedBlockState.scheduleSnapshotsKey),
+            let snapshots = try? JSONDecoder().decode([String: ScheduleSnapshot].self, from: data)
+        else { return [:] }
+        return snapshots
+    }
+
+    private static func saveScheduleSnapshots(_ snapshots: [String: ScheduleSnapshot]) {
+        guard let data = try? JSONEncoder().encode(snapshots) else { return }
+        SharedBlockState.defaults.set(data, forKey: SharedBlockState.scheduleSnapshotsKey)
+        SharedBlockState.defaults.synchronize()
     }
 }
