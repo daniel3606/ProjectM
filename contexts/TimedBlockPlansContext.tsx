@@ -100,6 +100,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         startMinute: plan.startMinute,
         endHour: plan.endHour,
         endMinute: plan.endMinute,
+        durationMinutes: plan.durationMinutes,
         appIds: plan.appIds,
       }));
     if (schedulable.length === 0) return;

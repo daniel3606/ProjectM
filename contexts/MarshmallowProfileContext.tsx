@@ -1,9 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
-import type { EquippedItems, ItemSlot } from "@/constants/items";
+import { resolveEquippedEmoji, type EquippedItems, type ItemSlot } from "@/constants/items";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePersistedState } from "@/lib/storage";
 import { syncProfile, syncEquippedItems, fetchRemoteProfile, syncOnboarding } from "@/lib/sync";
+import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
 type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
@@ -107,6 +108,16 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     setRawScreenTime,
     setOnboardingCompleted,
   ]);
+
+  // Keeps the widget's marshmallow appearance in sync, whether it changed
+  // locally or was just hydrated from the remote profile.
+  useEffect(() => {
+    ScreenTime.setMarshmallowColorHex(color);
+  }, [color]);
+
+  useEffect(() => {
+    ScreenTime.setMarshmallowItems(resolveEquippedEmoji(items));
+  }, [items]);
 
   const isProfileReady =
     !authLoading &&

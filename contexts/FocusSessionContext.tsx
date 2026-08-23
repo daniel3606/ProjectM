@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { usePersistedState } from "@/lib/storage";
-import type { FocusMode } from "@/constants/marshmallow";
+import { computeMarshmallowSizeCm, type FocusMode } from "@/constants/marshmallow";
 import {
   notifyBlockEnded,
   scheduleBlockEndNotification,
@@ -106,6 +106,28 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       cancelled = true;
     };
   }, [activeSession]);
+
+  // Mirrors activeSession into the App Group so the MarshmallowWidget
+  // extension can show a remaining-time countdown without the app running.
+  // Covers Quick Block start, Timed Block adoption, and updateSession edits
+  // uniformly, since all of them funnel through this same state.
+  useEffect(() => {
+    if (activeSession) {
+      ScreenTime.setActiveNativeBlock({
+        planId: activeSession.planId,
+        startedAt: activeSession.startedAt,
+        durationMinutes: activeSession.durationMinutes,
+        label: activeSession.label ?? "Focus Block",
+      }).catch(() => {});
+    } else {
+      ScreenTime.clearActiveNativeBlock().catch(() => {});
+    }
+  }, [activeSession]);
+
+  // Keeps the widget's marshmallow size in sync with history-derived size.
+  useEffect(() => {
+    ScreenTime.setMarshmallowSizeCm(computeMarshmallowSizeCm(history));
+  }, [history]);
 
   // Hydrate session history from Supabase on login
   useEffect(() => {

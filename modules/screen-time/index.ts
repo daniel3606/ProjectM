@@ -23,12 +23,23 @@ export interface NativeSchedulablePlan {
   startMinute: number;
   endHour: number;
   endMinute: number;
+  durationMinutes: number;
   appIds: string[];
 }
 
 export interface ActiveNativeBlock {
   planId: string;
   startedAt: number;
+  durationMinutes: number;
+  label: string;
+}
+
+/** Mirrors FocusSessionContext's activeSession into the App Group for the MarshmallowWidget extension. */
+export interface NativeActiveBlockUpdate {
+  /** Absent for a Quick Block (no plan). */
+  planId?: string;
+  startedAt: number;
+  durationMinutes: number;
   label: string;
 }
 
@@ -145,4 +156,32 @@ export async function getActiveNativeBlock(): Promise<ActiveNativeBlock | null> 
 export async function clearActiveNativeBlock(): Promise<void> {
   if (MOCK_MODE || Platform.OS !== "ios") return;
   await getNativeModule().clearActiveNativeBlock();
+}
+
+/**
+ * Mirrors the currently running block (Quick or Timed) into the App Group,
+ * so the MarshmallowWidget extension can show a remaining-time countdown
+ * without the app running.
+ */
+export async function setActiveNativeBlock(block: NativeActiveBlockUpdate): Promise<void> {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  await getNativeModule().setActiveNativeBlock(block);
+}
+
+/** Keeps the widget's marshmallow size in sync with the app's history-derived size. */
+export function setMarshmallowSizeCm(sizeCm: number): void {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  getNativeModule().setMarshmallowSizeCm(sizeCm);
+}
+
+/** Keeps the widget's marshmallow color in sync with the user's chosen color. */
+export function setMarshmallowColorHex(hex: string): void {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  getNativeModule().setMarshmallowColorHex(hex);
+}
+
+/** Keeps the widget's equipped items in sync, as already-resolved slot -> emoji pairs. */
+export function setMarshmallowItems(items: Record<string, string>): void {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  getNativeModule().setMarshmallowItems(items);
 }
