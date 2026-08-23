@@ -66,7 +66,6 @@ export default function Layout() {
                   <AuthNavigationGuard />
                   <Stack>
                     <Stack.Screen name="index" options={{ headerShown: false }} />
-                    <Stack.Screen name="auth/callback" options={{ headerShown: false }} />
 
                     <Stack.Screen
                       name="auth/verify"
