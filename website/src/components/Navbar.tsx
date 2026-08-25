@@ -25,35 +25,43 @@ export default function Navbar() {
   const close = () => setOpen(false);
 
   return (
-    <header className={[styles.header, scrolled ? styles.scrolled : ""].join(" ")}>
-      <div className={`container ${styles.inner}`}>
-        <Link href="/" className={styles.brand} onClick={close}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/icon.png" alt="" width={36} height={36} className={styles.logo} />
-          <span className={styles.wordmark}>Marshmallow</span>
-        </Link>
+    <>
+      <header className={[styles.header, scrolled ? styles.scrolled : ""].join(" ")}>
+        <div className={`container ${styles.inner}`}>
+          <Link href="/" className={styles.brand} onClick={close}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/icon.png"
+              alt=""
+              width={36}
+              height={36}
+              className={styles.logo}
+            />
+            <span className={styles.wordmark}>Marshmallow</span>
+          </Link>
 
-        <nav className={styles.desktopNav} aria-label="Primary">
-          <a href="#how-it-works">How it works</a>
-          <a href="#growth">Growth</a>
-          <a href="#features">Features</a>
-          <a className={styles.cta} href="#waitlist">
-            Join Waitlist
-          </a>
-        </nav>
+          <nav className={styles.desktopNav} aria-label="Primary">
+            <a href="#how-it-works">How it works</a>
+            <a href="#growth">Growth</a>
+            <a href="#features">Features</a>
+            <a className={styles.cta} href="#waitlist">
+              Join Waitlist
+            </a>
+          </nav>
 
-        <button
-          type="button"
-          className={[styles.menuButton, open ? styles.menuButtonOpen : ""].join(" ")}
-          aria-expanded={open}
-          aria-controls="mobile-nav"
-          aria-label={open ? "Close menu" : "Open menu"}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <span />
-          <span />
-        </button>
-      </div>
+          <button
+            type="button"
+            className={[styles.menuButton, open ? styles.menuButtonOpen : ""].join(" ")}
+            aria-expanded={open}
+            aria-controls="mobile-nav"
+            aria-label={open ? "Close menu" : "Open menu"}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span />
+            <span />
+          </button>
+        </div>
+      </header>
 
       <div
         id="mobile-nav"
@@ -74,6 +82,6 @@ export default function Navbar() {
           </a>
         </nav>
       </div>
-    </header>
+    </>
   );
 }

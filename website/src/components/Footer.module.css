@@ -20,6 +20,8 @@
 
 .brand img {
   border-radius: 8px;
+  background: var(--color-white);
+  box-shadow: 0 0 0 1px rgba(204, 194, 183, 0.7);
 }
 
 .links {

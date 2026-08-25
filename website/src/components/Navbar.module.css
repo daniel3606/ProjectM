@@ -5,15 +5,14 @@
   height: var(--nav-height);
   display: flex;
   align-items: center;
-  backdrop-filter: blur(14px);
-  background: rgba(255, 242, 229, 0.72);
+  background: rgba(255, 242, 229, 0.94);
   border-bottom: 1px solid transparent;
   transition: border-color 180ms ease, background 180ms ease;
 }
 
 .scrolled {
   border-bottom-color: rgba(204, 194, 183, 0.55);
-  background: rgba(255, 242, 229, 0.9);
+  background: rgba(255, 242, 229, 0.98);
 }
 
 .inner {
@@ -35,6 +34,8 @@
 
 .logo {
   border-radius: 10px;
+  background: var(--color-white);
+  box-shadow: 0 0 0 1px rgba(204, 194, 183, 0.7);
 }
 
 .wordmark {
@@ -128,8 +129,8 @@
     flex-direction: column;
     position: fixed;
     inset: var(--nav-height) 0 0;
-    z-index: 30;
-    background: rgba(255, 242, 229, 0.98);
+    z-index: 35;
+    background: #fff2e5;
     padding: 1.5rem;
     transform: translateY(-12px);
     opacity: 0;
