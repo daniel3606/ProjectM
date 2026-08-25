@@ -1,0 +1,38 @@
+.section {
+  padding: clamp(2.5rem, 6vw, 4.5rem) 0 clamp(4rem, 8vw, 6rem);
+}
+
+.panel {
+  text-align: center;
+  padding: clamp(2.5rem, 6vw, 4rem) clamp(1.25rem, 4vw, 2rem);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.75), transparent 55%),
+    rgba(255, 245, 234, 0.9);
+  border: 1px solid rgba(204, 194, 183, 0.7);
+}
+
+.panel h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3.4vw, 2.5rem);
+  letter-spacing: -0.03em;
+}
+
+.support {
+  margin: 0.75rem 0 1.75rem;
+  color: var(--color-text-secondary);
+  font-size: 1.05rem;
+}
+
+.form {
+  display: flex;
+  justify-content: center;
+}
+
+.skeleton {
+  height: 68px;
+  width: min(100%, 520px);
+  border-radius: calc(var(--radius-lg) + 6px);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(204, 194, 183, 0.7);
+}

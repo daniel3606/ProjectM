@@ -1,0 +1,34 @@
+/** Design tokens mirrored from the Marshmallow mobile app. */
+export const colors = {
+  text: "#1C1C1E",
+  textSecondary: "#999999",
+  background: "#FFF2E5",
+  backgroundSoft: "#FFF8F0",
+  secondary: "#8B635C",
+  secondaryLight: "#A87D75",
+  secondaryDark: "#6F4E48",
+  gray: "#8E8E93",
+  lightGray: "#F2F2F7",
+  card: "#FFF5EA",
+  cardBorder: "#CCC2B7",
+  white: "#FFFFFF",
+  marshmallow: "#FFF5EE",
+  eye: "#2C2C2E",
+  success: "#34C759",
+  danger: "#FF3B30",
+} as const;
+
+export const radius = {
+  sm: 10,
+  md: 12,
+  lg: 14,
+  xl: 16,
+  xxl: 20,
+  pill: 999,
+} as const;
+
+export const SITE_URL = "https://themarshmallow.app";
+export const SITE_NAME = "Marshmallow";
+export const SITE_TITLE = "Marshmallow — Take Back Your Screen Time";
+export const SITE_DESCRIPTION =
+  "Marshmallow turns reducing screen time into a visual growth journey. Block distracting apps, complete focus sessions, and watch your marshmallow grow.";
