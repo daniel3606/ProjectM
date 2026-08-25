@@ -22,6 +22,8 @@
   justify-content: space-between;
   gap: 1rem;
   width: min(100% - 2.5rem, var(--content-max));
+  position: relative;
+  z-index: 2;
 }
 
 .brand {
@@ -87,6 +89,8 @@
   justify-content: center;
   gap: 6px;
   cursor: pointer;
+  position: relative;
+  z-index: 3;
 }
 
 .menuButton span {
@@ -95,6 +99,15 @@
   width: 100%;
   background: var(--color-text);
   border-radius: 2px;
+  transition: transform 180ms ease, opacity 180ms ease;
+}
+
+.menuButtonOpen span:first-child {
+  transform: translateY(4px) rotate(45deg);
+}
+
+.menuButtonOpen span:last-child {
+  transform: translateY(-4px) rotate(-45deg);
 }
 
 .mobileNav {
@@ -111,19 +124,23 @@
   }
 
   .mobileNav {
-    display: block;
+    display: flex;
+    flex-direction: column;
     position: fixed;
     inset: var(--nav-height) 0 0;
+    z-index: 30;
     background: rgba(255, 242, 229, 0.98);
     padding: 1.5rem;
-    transform: translateY(-8px);
+    transform: translateY(-12px);
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-    transition: opacity 180ms ease, transform 180ms ease;
+    transition: opacity 180ms ease, transform 180ms ease, visibility 180ms ease;
   }
 
   .mobileOpen {
     opacity: 1;
+    visibility: visible;
     transform: translateY(0);
     pointer-events: auto;
   }

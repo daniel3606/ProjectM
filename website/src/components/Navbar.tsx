@@ -44,7 +44,7 @@ export default function Navbar() {
 
         <button
           type="button"
-          className={styles.menuButton}
+          className={[styles.menuButton, open ? styles.menuButtonOpen : ""].join(" ")}
           aria-expanded={open}
           aria-controls="mobile-nav"
           aria-label={open ? "Close menu" : "Open menu"}
@@ -58,7 +58,6 @@ export default function Navbar() {
       <div
         id="mobile-nav"
         className={[styles.mobileNav, open ? styles.mobileOpen : ""].join(" ")}
-        hidden={!open}
       >
         <nav aria-label="Mobile">
           <a href="#how-it-works" onClick={close}>

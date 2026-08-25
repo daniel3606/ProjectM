@@ -2,7 +2,6 @@
 
 import { FormEvent, useId, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { joinWaitlist } from "@/lib/waitlist";
 import { sanitizeSource } from "@/lib/source";
 import styles from "./WaitlistForm.module.css";
 
@@ -39,10 +38,26 @@ export default function WaitlistForm({
     }
 
     startTransition(async () => {
-      const result = await joinWaitlist(trimmed, source);
-      setStatus(result.status === "success" ? "success" : result.status);
-      if (result.status === "success" || result.status === "exists") {
-        setEmail("");
+      try {
+        const response = await fetch("/api/waitlist", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: trimmed, source }),
+        });
+        const result = (await response.json()) as { status?: FormStatus };
+        const next =
+          result.status === "success" ||
+          result.status === "exists" ||
+          result.status === "invalid" ||
+          result.status === "error"
+            ? result.status
+            : "error";
+        setStatus(next);
+        if (next === "success" || next === "exists") {
+          setEmail("");
+        }
+      } catch {
+        setStatus("error");
       }
     });
   };
