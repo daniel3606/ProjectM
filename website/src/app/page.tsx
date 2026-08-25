@@ -1,6 +1,7 @@
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import ProductLoop from "@/components/ProductLoop";
+import AppScreens from "@/components/AppScreens";
 import GrowthShowcase from "@/components/GrowthShowcase";
 import FeatureSection from "@/components/FeatureSection";
 import FinalCTA from "@/components/FinalCTA";
@@ -13,6 +14,7 @@ export default function HomePage() {
       <main>
         <Hero />
         <ProductLoop />
+        <AppScreens />
         <GrowthShowcase />
         <FeatureSection />
         <FinalCTA />

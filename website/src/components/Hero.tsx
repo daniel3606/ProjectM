@@ -1,5 +1,5 @@
+import Image from "next/image";
 import { Suspense } from "react";
-import MarshmallowMark from "@/components/MarshmallowMark";
 import WaitlistForm from "@/components/WaitlistForm";
 import styles from "./Hero.module.css";
 
@@ -27,44 +27,18 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className={styles.visual} aria-hidden="true">
+        <div className={styles.visual}>
           <div className={styles.phone}>
             <div className={styles.phoneChrome}>
-              <div className={styles.notch} />
-              <div className={styles.phoneScreen}>
-                <div className={styles.appHeader}>
-                  <span>Marshmallow</span>
-                  <span className={styles.avatar} />
-                </div>
-                <div className={styles.scene}>
-                  <div className={styles.ruler}>
-                    <span>12cm</span>
-                    <span>8cm</span>
-                    <span>4cm</span>
-                  </div>
-                  <div className={styles.stage}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/objects/donut.png"
-                      alt=""
-                      width={56}
-                      height={56}
-                      className={styles.compare}
-                    />
-                    <MarshmallowMark size={118} />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/objects/cupcake.png"
-                      alt=""
-                      width={48}
-                      height={48}
-                      className={styles.compare}
-                    />
-                  </div>
-                  <p className={styles.sizeLabel}>A growing marshmallow · 10.5 cm</p>
-                </div>
-                <div className={styles.appCta}>Start Focus Session</div>
-              </div>
+              <Image
+                src="/screenshots/focus-session.png"
+                alt="The Marshmallow app starting a focus session: Flexible or Deep Focus mode, the apps being blocked, and a 30 minute block duration."
+                width={720}
+                height={1565}
+                sizes="(max-width: 900px) 74vw, 320px"
+                className={styles.screen}
+                priority
+              />
             </div>
           </div>
         </div>

@@ -77,6 +77,11 @@
   animation: rise 420ms ease;
 }
 
+.successIcon {
+  color: var(--color-success-ink);
+  margin-bottom: 6px;
+}
+
 .successTitle {
   margin: 0;
   font-size: 1.25rem;

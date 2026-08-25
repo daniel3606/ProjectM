@@ -3,6 +3,7 @@
 import { FormEvent, useId, useMemo, useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { sanitizeSource } from "@/lib/source";
+import Icon from "@/components/Icon";
 import styles from "./WaitlistForm.module.css";
 
 type FormStatus = "idle" | "invalid" | "success" | "exists" | "error";
@@ -69,6 +70,7 @@ export default function WaitlistForm({
         role="status"
         aria-live="polite"
       >
+        <Icon name="checkmark-circle" size={26} className={styles.successIcon} />
         <p className={styles.successTitle}>
           {status === "exists" ? "You're already on the waitlist." : "You're on the list."}
         </p>

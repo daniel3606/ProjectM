@@ -65,102 +65,18 @@
   filter: drop-shadow(0 28px 50px rgba(111, 78, 72, 0.22));
 }
 
+/* Bezel only. The screen art and status bar come from the device screenshot. */
 .phoneChrome {
-  border-radius: 36px;
-  padding: 10px;
+  border-radius: 44px;
+  padding: 8px;
   background: linear-gradient(160deg, #2c2c2e, #1c1c1e 55%, #3a2f2c);
 }
 
-.notch {
-  width: 34%;
-  height: 8px;
-  margin: 4px auto 10px;
-  border-radius: 999px;
-  background: #0d0d0f;
-}
-
-.phoneScreen {
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at 70% 18%, rgba(255, 255, 255, 0.55), transparent 40%),
-    var(--color-bg);
-  padding: 18px 16px 20px;
-  min-height: 540px;
-  display: flex;
-  flex-direction: column;
-}
-
-.appHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-weight: 700;
-  font-size: 1.15rem;
-  margin-bottom: 1.25rem;
-}
-
-.avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--color-secondary);
-  opacity: 0.85;
-}
-
-.scene {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1rem;
-  position: relative;
-}
-
-.ruler {
-  position: absolute;
-  left: 0;
-  top: 18%;
-  bottom: 28%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  color: var(--color-gray);
-  font-size: 0.7rem;
-  font-weight: 600;
-  opacity: 0.7;
-}
-
-.stage {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 0.65rem;
-  min-height: 220px;
-  padding-left: 1.5rem;
-}
-
-.compare {
-  opacity: 0.92;
-  margin-bottom: 10px;
-}
-
-.sizeLabel {
-  margin: 0;
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-
-.appCta {
-  margin-top: 1.25rem;
-  text-align: center;
-  background: var(--color-secondary);
-  color: white;
-  font-weight: 600;
-  border-radius: var(--radius-lg);
-  padding: 14px 12px;
-  box-shadow: var(--shadow-button);
+.screen {
+  width: 100%;
+  height: auto;
+  border-radius: 36px;
+  display: block;
 }
 
 @keyframes fadeUp {
@@ -194,7 +110,7 @@
     font-size: clamp(2.2rem, 10vw, 3rem);
   }
 
-  .phoneScreen {
-    min-height: 480px;
+  .phone {
+    width: min(74vw, 300px);
   }
 }
