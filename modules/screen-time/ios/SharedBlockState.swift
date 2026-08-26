@@ -37,6 +37,11 @@ enum SharedBlockState {
     static let activeDurationMinutesKey = "marshmallow_active_native_duration_minutes"
     static let activeLabelKey = "marshmallow_active_native_label"
 
+    // The growth this block pays out if it runs to completion, so the widget
+    // can show it as a pending "+x.x" alongside the current size. Growth is
+    // only actually awarded by the app on completion.
+    static let activeGrowthCmKey = "marshmallow_active_native_growth_cm"
+
     // Kept in sync from JS (FocusSessionContext/MarshmallowProfileContext)
     // purely for MarshmallowWidget to render without needing the app open.
     static let marshmallowSizeCmKey = "marshmallow_size_cm"
@@ -53,6 +58,8 @@ struct StoredPlan: Codable {
     let daysOfWeek: [Int] // 0 = Sunday ... 6 = Saturday, matches JS Date#getDay()
     let appIds: [String]
     let durationMinutes: Int
+    // Optional so plans persisted before this field existed still decode.
+    let expectedGrowthCm: Double?
 }
 
 // The subset of a plan that actually determines its DeviceActivitySchedule.

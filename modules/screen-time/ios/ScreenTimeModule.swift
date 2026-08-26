@@ -222,7 +222,8 @@ public class ScreenTimeModule: Module {
                         label: label,
                         daysOfWeek: daysOfWeek,
                         appIds: appIds,
-                        durationMinutes: durationMinutes
+                        durationMinutes: durationMinutes,
+                        expectedGrowthCm: raw["expectedGrowthCm"] as? Double
                     )
                 )
 
@@ -317,6 +318,10 @@ public class ScreenTimeModule: Module {
                 forKey: SharedBlockState.activeDurationMinutesKey
             )
             defaults.set(params["label"] as? String ?? "", forKey: SharedBlockState.activeLabelKey)
+            defaults.set(
+                params["expectedGrowthCm"] as? Double ?? 0,
+                forKey: SharedBlockState.activeGrowthCmKey
+            )
             defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
             promise.resolve(nil)
@@ -331,6 +336,7 @@ public class ScreenTimeModule: Module {
             defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
             defaults.removeObject(forKey: SharedBlockState.activeDurationMinutesKey)
             defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
+            defaults.removeObject(forKey: SharedBlockState.activeGrowthCmKey)
             defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
             promise.resolve(nil)
@@ -361,8 +367,8 @@ public class ScreenTimeModule: Module {
             WidgetCenter.shared.reloadAllTimelines()
         }
 
-        // Async: starts a Live Activity for a Quick Block session.
-        AsyncFunction("startQuickBlockLiveActivity") { (params: [String: Any], promise: Promise) in
+        // Async: starts a Live Activity for the running block, Quick or Timed.
+        AsyncFunction("startBlockLiveActivity") { (params: [String: Any], promise: Promise) in
             if #available(iOS 16.2, *) {
                 guard ActivityAuthorizationInfo().areActivitiesEnabled else {
                     promise.resolve(false)
@@ -383,12 +389,12 @@ public class ScreenTimeModule: Module {
                 let endsAt = startedAt.addingTimeInterval(Double(durationMinutes) * 60)
 
                 Task {
-                    for activity in Activity<QuickBlockAttributes>.activities {
+                    for activity in Activity<BlockAttributes>.activities {
                         await activity.end(nil, dismissalPolicy: .immediate)
                     }
 
-                    let attributes = QuickBlockAttributes(label: label, focusMode: focusMode)
-                    let state = QuickBlockAttributes.ContentState(startedAt: startedAt, endsAt: endsAt)
+                    let attributes = BlockAttributes(label: label, focusMode: focusMode)
+                    let state = BlockAttributes.ContentState(startedAt: startedAt, endsAt: endsAt)
 
                     do {
                         _ = try Activity.request(
@@ -406,11 +412,11 @@ public class ScreenTimeModule: Module {
             }
         }
 
-        // Async: ends any running Quick Block Live Activity.
-        AsyncFunction("endQuickBlockLiveActivity") { (promise: Promise) in
+        // Async: ends any running block Live Activity.
+        AsyncFunction("endBlockLiveActivity") { (promise: Promise) in
             if #available(iOS 16.2, *) {
                 Task {
-                    for activity in Activity<QuickBlockAttributes>.activities {
+                    for activity in Activity<BlockAttributes>.activities {
                         await activity.end(nil, dismissalPolicy: .immediate)
                     }
                     promise.resolve(nil)

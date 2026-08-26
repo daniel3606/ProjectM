@@ -26,6 +26,8 @@ export interface NativeSchedulablePlan {
   endMinute: number;
   durationMinutes: number;
   appIds: string[];
+  /** Growth this plan pays out on completion, so the widget can preview it for extension-started blocks. */
+  expectedGrowthCm: number;
 }
 
 export interface ActiveNativeBlock {
@@ -42,6 +44,8 @@ export interface NativeActiveBlockUpdate {
   startedAt: number;
   durationMinutes: number;
   label: string;
+  /** Growth awarded if this block runs to completion; shown as a pending "+x.x" on the widget. */
+  expectedGrowthCm: number;
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -187,23 +191,29 @@ export function setMarshmallowItems(items: Record<string, string>): void {
   getNativeModule().setMarshmallowItems(items);
 }
 
-export interface QuickBlockLiveActivityParams {
+export interface BlockLiveActivityParams {
   startedAt: number;
   durationMinutes: number;
   label?: string;
   focusMode?: FocusMode;
 }
 
-export async function startQuickBlockLiveActivity(
-  params: QuickBlockLiveActivityParams
+/**
+ * Shows the Lock Screen / Dynamic Island Live Activity for the running block.
+ * Used for both Quick Blocks and Timed Blocks; a Timed Block that the
+ * TimedBlockMonitor extension started while the app was killed only gets one
+ * once the app next opens, since extensions can't request Live Activities.
+ */
+export async function startBlockLiveActivity(
+  params: BlockLiveActivityParams
 ): Promise<boolean> {
   if (MOCK_MODE) return false;
   if (Platform.OS !== "ios") return false;
-  return await getNativeModule().startQuickBlockLiveActivity(params);
+  return await getNativeModule().startBlockLiveActivity(params);
 }
 
-export async function endQuickBlockLiveActivity(): Promise<void> {
+export async function endBlockLiveActivity(): Promise<void> {
   if (MOCK_MODE) return;
   if (Platform.OS !== "ios") return;
-  await getNativeModule().endQuickBlockLiveActivity();
+  await getNativeModule().endBlockLiveActivity();
 }

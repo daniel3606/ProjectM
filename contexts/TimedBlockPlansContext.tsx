@@ -102,6 +102,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         endMinute: plan.endMinute,
         durationMinutes: plan.durationMinutes,
         appIds: plan.appIds,
+        expectedGrowthCm: getGrowthForDuration(plan.durationMinutes, plan.focusMode),
       }));
     if (schedulable.length === 0) return;
     ScreenTime.scheduleTimedBlocks(schedulable).catch(() => {});

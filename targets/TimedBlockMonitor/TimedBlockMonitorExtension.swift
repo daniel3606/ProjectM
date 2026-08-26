@@ -31,6 +31,7 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
         defaults.set(Date().timeIntervalSince1970 * 1000, forKey: SharedBlockState.activeStartedAtKey)
         defaults.set(plan.durationMinutes, forKey: SharedBlockState.activeDurationMinutesKey)
         defaults.set(plan.label, forKey: SharedBlockState.activeLabelKey)
+        defaults.set(plan.expectedGrowthCm ?? 0, forKey: SharedBlockState.activeGrowthCmKey)
         defaults.synchronize()
         WidgetCenter.shared.reloadAllTimelines()
 
@@ -53,6 +54,7 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
             defaults.removeObject(forKey: SharedBlockState.activeStartedAtKey)
             defaults.removeObject(forKey: SharedBlockState.activeDurationMinutesKey)
             defaults.removeObject(forKey: SharedBlockState.activeLabelKey)
+            defaults.removeObject(forKey: SharedBlockState.activeGrowthCmKey)
             defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
         }

@@ -124,12 +124,12 @@ export default function MarshmallowCharacter({
               </View>
 
               {isBlocking ? (
-                <Animated.View style={[styles.mouthDeterminedLines, mouthBlinkStyle]}>
-                  <View style={styles.mouthLineStraight} />
-                </Animated.View>
-              ) : (
                 <Animated.View style={[styles.mouthSmileWrap, mouthBlinkStyle]}>
                   <View style={styles.mouthSmileLine} />
+                </Animated.View>
+              ) : (
+                <Animated.View style={[styles.mouthDeterminedLines, mouthBlinkStyle]}>
+                  <View style={styles.mouthLineStraight} />
                 </Animated.View>
               )}
 
