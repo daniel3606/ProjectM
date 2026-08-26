@@ -8,6 +8,12 @@ export type AuthorizationStatus =
   | "unavailable"
   | "unknown";
 
+/**
+ * How a block reads its item list: "block" shields exactly those items,
+ * "allowOnly" shields everything except them.
+ */
+export type BlockMode = "block" | "allowOnly";
+
 export interface ScreenTimeItem {
   id: string;
   type: "application" | "category" | "webDomain";
@@ -112,6 +118,30 @@ export async function blockAll(): Promise<void> {
 export async function applyBlocking(itemIds: string[]): Promise<void> {
   if (MOCK_MODE) return;
   await getNativeModule().applyBlocking(itemIds);
+}
+
+/**
+ * Inverse of `applyBlocking`: shields every app category and web domain
+ * *except* the ones named, leaving those as the only things still reachable.
+ * A no-op guard lives on the caller — allow-only with an empty list would
+ * shield the whole device.
+ */
+export async function applyAllowOnly(itemIds: string[]): Promise<void> {
+  if (MOCK_MODE) return;
+  await getNativeModule().applyAllowOnly(itemIds);
+}
+
+/** Applies `itemIds` under whichever policy `mode` names. */
+export async function applyBlockMode(mode: BlockMode, itemIds: string[]): Promise<void> {
+  if (mode === "allowOnly") {
+    await applyAllowOnly(itemIds);
+    return;
+  }
+  if (itemIds.length > 0) {
+    await applyBlocking(itemIds);
+    return;
+  }
+  await blockAll();
 }
 
 export async function clearBlocking(): Promise<void> {

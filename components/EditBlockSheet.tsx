@@ -110,7 +110,9 @@ export default function EditBlockSheet({ sheetRef, session, onSave, onCancelBloc
     if (!session) return;
     const appIds = selectedApps.map((i) => i.id);
     try {
-      await (appIds.length > 0 ? ScreenTime.applyBlocking(appIds) : ScreenTime.blockAll());
+      // Preserve the running block's policy — re-applying as a plain block
+      // would quietly downgrade an "Allow Only" session on every edit.
+      await ScreenTime.applyBlockMode(session.blockMode ?? "block", appIds);
     } catch {
       Alert.alert("Error", "Failed to update blocked apps.");
       return;

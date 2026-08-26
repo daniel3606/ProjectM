@@ -2,7 +2,11 @@ import Fonts from "@/constants/fonts";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
 import { FriendsProvider } from "@/contexts/FriendsContext";
-import { MarshmallowProfileProvider, useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import {
+  MarshmallowProfileProvider,
+  useMarshmallowProfile,
+} from "@/contexts/MarshmallowProfileContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
 import { requestNotificationPermissions } from "@/lib/notifications";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
@@ -59,104 +63,109 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <BottomSheetModalProvider>
-          <MarshmallowProfileProvider>
-            <FocusSessionProvider>
-              <TimedBlockPlansProvider>
-                <FriendsProvider>
-                  <AuthNavigationGuard />
-                  <Stack>
-                    <Stack.Screen name="index" options={{ headerShown: false }} />
+          <SubscriptionProvider>
+            <MarshmallowProfileProvider>
+              <FocusSessionProvider>
+                <TimedBlockPlansProvider>
+                  <FriendsProvider>
+                    <AuthNavigationGuard />
+                    <Stack>
+                      <Stack.Screen
+                        name="index"
+                        options={{ headerShown: false }}
+                      />
 
-                    <Stack.Screen
-                      name="auth/verify"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="auth/verify"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="auth/callback"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="auth/callback"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="custominit"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                        animation: "default",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="custominit"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                          animation: "default",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="onboarding-purpose"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                        animation: "default",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="onboarding-purpose"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                          animation: "default",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="onboarding-screentime"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                        animation: "default",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="onboarding-screentime"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                          animation: "default",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="onboarding-screentime-access"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                        animation: "default",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="onboarding-screentime-access"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                          animation: "default",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="onboarding-distracting-apps"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                        animation: "default",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="onboarding-distracting-apps"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                          animation: "default",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="onboarding-premium"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                        animation: "default",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="onboarding-premium"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                          animation: "default",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="(tabs)"
-                      options={{
-                        headerShown: false,
-                        animation: "fade",
-                      }}
-                    />
+                      <Stack.Screen
+                        name="(tabs)"
+                        options={{
+                          headerShown: false,
+                          animation: "fade",
+                        }}
+                      />
 
-                    <Stack.Screen
-                      name="profile"
-                      options={{
-                        headerShown: false,
-                        presentation: "card",
-                      }}
-                    />
-                  </Stack>
-                </FriendsProvider>
-              </TimedBlockPlansProvider>
-            </FocusSessionProvider>
-          </MarshmallowProfileProvider>
+                      <Stack.Screen
+                        name="profile"
+                        options={{
+                          headerShown: false,
+                          presentation: "card",
+                        }}
+                      />
+                    </Stack>
+                  </FriendsProvider>
+                </TimedBlockPlansProvider>
+              </FocusSessionProvider>
+            </MarshmallowProfileProvider>
+          </SubscriptionProvider>
         </BottomSheetModalProvider>
       </AuthProvider>
     </GestureHandlerRootView>
