@@ -46,13 +46,19 @@ The table is insert-only under RLS (anon/authenticated can insert; no select/upd
 3. Framework preset: Next.js.
 4. Add the environment variables above.
 5. Deploy.
-6. Attach the domain `themarshmallow.app` (and `www` if desired) in Vercel → Domains. Point DNS as Vercel instructs — do not change DNS from this repo.
+6. Attach both `www.themarshmallow.app` and the apex `themarshmallow.app` in Vercel → Domains, with the apex redirecting to `www`. `www` is the canonical host and is what `SITE_URL` names, so metadata resolves without a redirect hop. Point DNS as Vercel instructs — do not change DNS from this repo.
 
 ## Social preview card
 
-`public/og-image.png` is the 1200x630 card that X, iMessage, Discord, and Slack
-show when the site is shared. It is committed rather than generated at request
-time, so production serves a static file and never rasterises an image.
+`public/og-image-v2.png` is the 1200x630 card that X, iMessage, Discord, and
+Slack show when the site is shared. It is committed rather than generated at
+request time, so production serves a static file and never rasterises an image.
+
+The filename is versioned on purpose. X caches card images against their URL
+for roughly a week and retired the Card Validator that used to force a
+re-scrape, so a redrawn card only reaches already-shared posts under a URL X
+has not seen before. When the artwork changes, bump the suffix in both
+`scripts/generate-og-image.py` and `SITE_OG_IMAGE` in `src/constants/theme.ts`.
 
 Re-run the generator after changing the hero quote, the brand colors, or the
 character:
