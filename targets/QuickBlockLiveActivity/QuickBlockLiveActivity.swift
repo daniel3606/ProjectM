@@ -2,8 +2,8 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
-// Live Activity for Quick Blocks — full marshmallow on the Lock Screen banner,
-// black-and-white outline icon in the Dynamic Island.
+// Live Activity for a running block, Quick or Timed — the marshmallow on the
+// Lock Screen banner and in the Dynamic Island, alongside a live countdown.
 
 // MARK: - Palette (mirrors constants/colors.ts + MarshmallowWidget)
 
@@ -82,6 +82,7 @@ private struct SmileShape: Shape {
 private struct MarshmallowCharacterView: View {
     let colorHex: String
     let items: [String: String]
+    /// Smiles while apps are blocked; a flat determined mouth otherwise.
     let isBlocking: Bool
     let height: CGFloat
 
@@ -174,11 +175,6 @@ private struct MarshmallowCharacterView: View {
     @ViewBuilder
     private var mouth: some View {
         if isBlocking {
-            Capsule()
-                .fill(Character.ink)
-                .frame(width: Character.determinedSize.width, height: Character.determinedSize.height)
-                .offset(x: Character.determinedOffset.width, y: Character.determinedOffset.height)
-        } else {
             SmileShape()
                 .stroke(
                     Character.ink,
@@ -186,63 +182,32 @@ private struct MarshmallowCharacterView: View {
                 )
                 .frame(width: Character.smileSize.width, height: Character.smileSize.height)
                 .offset(x: Character.smileOffset.width, y: Character.smileOffset.height)
-        }
-    }
-}
-
-/// Black-and-white outline marshmallow for Dynamic Island compact/minimal slots.
-private struct MarshmallowOutlineIconView: View {
-    let height: CGFloat
-
-    private var scale: CGFloat { height / Character.bodyHeight }
-    private var strokeWidth: CGFloat { max(2, 2.5 * scale) }
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: Character.bodyCornerRadius, style: .circular)
-                .fill(Color.white)
-                .overlay(
-                    RoundedRectangle(cornerRadius: Character.bodyCornerRadius, style: .circular)
-                        .stroke(Color.black, lineWidth: strokeWidth)
-                )
-                .frame(width: Character.bodyWidth, height: Character.bodyHeight)
-                .overlay(outlineFace)
-        }
-        .frame(width: Character.bodyWidth, height: Character.bodyHeight)
-        .scaleEffect(scale)
-        .frame(width: Character.bodyWidth * scale, height: height)
-    }
-
-    private var outlineFace: some View {
-        ZStack {
-            outlineEye(centreX: Character.faceShiftX - Character.eyeCentreX)
-            outlineEye(centreX: Character.faceShiftX + Character.eyeCentreX)
-
+        } else {
             Capsule()
-                .fill(Color.black)
+                .fill(Character.ink)
                 .frame(width: Character.determinedSize.width, height: Character.determinedSize.height)
                 .offset(x: Character.determinedOffset.width, y: Character.determinedOffset.height)
         }
-    }
-
-    private func outlineEye(centreX: CGFloat) -> some View {
-        Circle()
-            .fill(Color.black)
-            .frame(width: Character.eyeDiameter, height: Character.eyeDiameter)
-            .offset(x: centreX, y: Character.eyeCentreY)
     }
 }
 
 // MARK: - Live Activity
 
+private enum CompactIsland {
+    /// Text(timerInterval:) otherwise reserves room for the widest form it
+    /// could ever render ("59:59:59"), which widens the island far more than
+    /// a focus block ever needs.
+    static let countdownWidth: CGFloat = 42
+}
+
 struct QuickBlockLiveActivity: Widget {
     var body: some WidgetConfiguration {
-        ActivityConfiguration(for: QuickBlockAttributes.self) { context in
+        ActivityConfiguration(for: BlockAttributes.self) { context in
             lockScreenView(context: context)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    MarshmallowOutlineIconView(height: 36)
+                    islandCharacter(height: 36)
                         .padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -265,22 +230,40 @@ struct QuickBlockLiveActivity: Widget {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             } compactLeading: {
-                MarshmallowOutlineIconView(height: 20)
+                // The compact regions size the island itself, so both stay
+                // deliberately narrow — anything wider starts covering the
+                // status bar's clock and the indicators opposite it.
+                islandCharacter(height: 15)
             } compactTrailing: {
                 countdownText(
                     startedAt: context.state.startedAt,
                     endsAt: context.state.endsAt,
                     font: .system(size: 12, weight: .semibold, design: .rounded)
                 )
+                .frame(maxWidth: CompactIsland.countdownWidth)
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
                 .foregroundStyle(.white)
             } minimal: {
-                MarshmallowOutlineIconView(height: 18)
+                islandCharacter(height: 15)
             }
         }
     }
 
+    /// The same full-color marshmallow the Lock Screen banner shows, minus
+    /// equipped items — headwear and wings are drawn outside the body's frame
+    /// and would spill past the island's edges at these sizes.
+    private func islandCharacter(height: CGFloat) -> some View {
+        MarshmallowCharacterView(
+            colorHex: LiveActivityProfile.load().colorHex,
+            items: [:],
+            isBlocking: true,
+            height: height
+        )
+    }
+
     @ViewBuilder
-    private func lockScreenView(context: ActivityViewContext<QuickBlockAttributes>) -> some View {
+    private func lockScreenView(context: ActivityViewContext<BlockAttributes>) -> some View {
         let profile = LiveActivityProfile.load()
 
         HStack(spacing: 12) {

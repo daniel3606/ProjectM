@@ -18,8 +18,8 @@ type ScreenTimeNativeModule = {
   setMarshmallowSizeCm: (sizeCm: number) => void;
   setMarshmallowColorHex: (hex: string) => void;
   setMarshmallowItems: (items: Record<string, string>) => void;
-  startQuickBlockLiveActivity: (params: Record<string, unknown>) => Promise<boolean>;
-  endQuickBlockLiveActivity: () => Promise<void>;
+  startBlockLiveActivity: (params: Record<string, unknown>) => Promise<boolean>;
+  endBlockLiveActivity: () => Promise<void>;
 };
 
 let ScreenTimeModule: ScreenTimeNativeModule;
@@ -46,8 +46,8 @@ try {
     setMarshmallowSizeCm: () => {},
     setMarshmallowColorHex: () => {},
     setMarshmallowItems: () => {},
-    startQuickBlockLiveActivity: async () => false,
-    endQuickBlockLiveActivity: noop,
+    startBlockLiveActivity: async () => false,
+    endBlockLiveActivity: noop,
   };
 }
 

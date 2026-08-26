@@ -17,7 +17,7 @@ export interface FocusSessionConfig {
   expectedGrowthCm: number;
   /** App/category/web IDs to block; empty means block everything. */
   appIds?: string[];
-  /** Set when this session was auto-started by a Timed Block plan rather than manually. Live Activities are skipped for these. */
+  /** Set when this session was auto-started by a Timed Block plan rather than manually. */
   planId?: string;
   /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
   label?: string;
@@ -118,6 +118,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
         startedAt: activeSession.startedAt,
         durationMinutes: activeSession.durationMinutes,
         label: activeSession.label ?? "Focus Block",
+        expectedGrowthCm: activeSession.expectedGrowthCm,
       }).catch(() => {});
     } else {
       ScreenTime.clearActiveNativeBlock().catch(() => {});
@@ -242,14 +243,17 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     return () => clearTimeout(timer);
   }, [activeSession, activeSessionLoaded, stopSession]);
 
-  // Live Activity on Lock Screen / Dynamic Island for manually started Quick Blocks.
+  // Live Activity on Lock Screen / Dynamic Island for whichever block is
+  // running. Timed Blocks the TimedBlockMonitor extension started while the
+  // app was killed pick one up here too, once the adoption path in
+  // TimedBlockPlansContext fills in activeSession.
   useEffect(() => {
-    if (!activeSession || activeSession.planId) {
-      void ScreenTime.endQuickBlockLiveActivity();
+    if (!activeSession) {
+      void ScreenTime.endBlockLiveActivity();
       return;
     }
 
-    void ScreenTime.startQuickBlockLiveActivity({
+    void ScreenTime.startBlockLiveActivity({
       startedAt: activeSession.startedAt,
       durationMinutes: activeSession.durationMinutes,
       label: activeSession.label ?? "Focus Block",

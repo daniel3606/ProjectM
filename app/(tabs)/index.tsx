@@ -122,6 +122,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         color={profile.color}
         name={profile.name}
         items={profile.items}
+        isBlocking={isFocusActive}
         hapticsEnabled={hapticsEnabled}
         style={styles.growthScene}
       />

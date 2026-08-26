@@ -10,6 +10,9 @@ import SwiftUI
 struct ActiveBlockInfo {
     let startedAt: Date
     let endsAt: Date
+    /// Growth this block pays out on completion, previewed as "(+x.x)" next
+    /// to the current size. The app only awards it once the block finishes.
+    let growthCm: Double
 }
 
 struct MarshmallowEntry: TimelineEntry {
@@ -69,7 +72,11 @@ struct Provider: TimelineProvider {
             let startedAt = Date(timeIntervalSince1970: startedAtMs / 1000)
             let endsAt = startedAt.addingTimeInterval(Double(durationMinutes) * 60)
             if endsAt > Date() {
-                activeBlock = ActiveBlockInfo(startedAt: startedAt, endsAt: endsAt)
+                activeBlock = ActiveBlockInfo(
+                    startedAt: startedAt,
+                    endsAt: endsAt,
+                    growthCm: defaults.double(forKey: SharedBlockState.activeGrowthCmKey)
+                )
             }
         }
 
@@ -92,6 +99,8 @@ private enum Palette {
     static let text = Color(hex: "#1C1C1E")
     static let textSecondary = Color(hex: "#999999")
     static let secondary = Color(hex: "#8B635C")
+    /// Colors.success, used for the pending growth a running block will pay out.
+    static let growth = Color(hex: "#34C759")
     /// MARSHMALLOW_COLORS[0] ("Strawberry"), the app's own default.
     static let defaultMarshmallowHex = "#FFB5C2"
 }
@@ -169,8 +178,7 @@ private struct SmileShape: Shape {
 private struct MarshmallowCharacterView: View {
     let colorHex: String
     let items: [String: String]
-    /// Swaps the smile for the determined mouth, as the home screen does
-    /// while apps are blocked.
+    /// Smiles while apps are blocked; a flat determined mouth otherwise.
     let isBlocking: Bool
     /// Drawn height in points; the whole character scales to match.
     let height: CGFloat
@@ -264,11 +272,6 @@ private struct MarshmallowCharacterView: View {
     @ViewBuilder
     private var mouth: some View {
         if isBlocking {
-            Capsule()
-                .fill(Character.ink)
-                .frame(width: Character.determinedSize.width, height: Character.determinedSize.height)
-                .offset(x: Character.determinedOffset.width, y: Character.determinedOffset.height)
-        } else {
             SmileShape()
                 .stroke(
                     Character.ink,
@@ -276,6 +279,11 @@ private struct MarshmallowCharacterView: View {
                 )
                 .frame(width: Character.smileSize.width, height: Character.smileSize.height)
                 .offset(x: Character.smileOffset.width, y: Character.smileOffset.height)
+        } else {
+            Capsule()
+                .fill(Character.ink)
+                .frame(width: Character.determinedSize.width, height: Character.determinedSize.height)
+                .offset(x: Character.determinedOffset.width, y: Character.determinedOffset.height)
         }
     }
 }
@@ -284,6 +292,14 @@ private struct MarshmallowCharacterView: View {
 
 struct MarshmallowWidgetEntryView: View {
     var entry: Provider.Entry
+
+    private var isBlocking: Bool { entry.activeBlock != nil }
+
+    // While a block runs the countdown is the headline and there's an extra
+    // row competing for the widget's height, so the size readout steps down
+    // to make room for it.
+    private var sizeNumberFontSize: CGFloat { isBlocking ? 22 : 36 }
+    private var sizeUnitFontSize: CGFloat { isBlocking ? 11 : 16 }
 
     var body: some View {
         VStack(spacing: 4) {
@@ -297,22 +313,11 @@ struct MarshmallowWidgetEntryView: View {
             // room for them rather than letting them run into the edge.
             .padding(.top, 10)
 
-            // Mirrors GrowthScene's SizeIndicator: bold number, smaller
-            // secondary unit, aligned on their baselines.
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(String(format: "%.1f", entry.sizeCm))
-                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(Palette.text)
-                Text("cm")
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundColor(Palette.textSecondary)
-            }
-            .minimumScaleFactor(0.7)
-            .lineLimit(1)
+            sizeRow
 
             if let active = entry.activeBlock {
                 Text(timerInterval: active.startedAt...active.endsAt, countsDown: true)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .multilineTextAlignment(.center)
                     .minimumScaleFactor(0.7)
@@ -320,9 +325,32 @@ struct MarshmallowWidgetEntryView: View {
                     .foregroundColor(Palette.secondary)
             }
         }
-        .padding(10)
+        .padding(8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .widgetBackground(Palette.background)
+    }
+
+    /// Mirrors GrowthScene's SizeIndicator: bold number, smaller secondary
+    /// unit, aligned on their baselines. While a block is running the growth
+    /// it will pay out sits between the two, e.g. "12.5 (+1.2) cm".
+    private var sizeRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(String(format: "%.1f", entry.sizeCm))
+                .font(.system(size: sizeNumberFontSize, weight: .bold, design: .rounded))
+                .foregroundColor(Palette.text)
+
+            if let growthCm = entry.activeBlock?.growthCm, growthCm > 0 {
+                Text(String(format: "(+%.1f)", growthCm))
+                    .font(.system(size: sizeUnitFontSize, weight: .bold, design: .rounded))
+                    .foregroundColor(Palette.growth)
+            }
+
+            Text("cm")
+                .font(.system(size: sizeUnitFontSize, weight: .semibold, design: .rounded))
+                .foregroundColor(Palette.textSecondary)
+        }
+        .minimumScaleFactor(0.5)
+        .lineLimit(1)
     }
 }
 

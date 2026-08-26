@@ -33,9 +33,10 @@ const SHARED_STATE_SOURCE = path.join(
 );
 
 // Adds the QuickBlockLiveActivity WidgetKit extension target for ActivityKit
-// Live Activities on Quick Blocks. The shared QuickBlockActivityAttributes
-// struct is compiled into both the main app (for Activity.request) and this
-// extension (for the Live Activity UI).
+// Live Activities, used by both Quick Blocks and Timed Blocks — the target
+// name predates Timed Block support and is kept so the extension's bundle id
+// stays stable. The shared BlockAttributes struct is compiled into both the
+// main app (for Activity.request) and this extension (for the Live Activity UI).
 module.exports = function withQuickBlockLiveActivity(config) {
   config = withInfoPlist(config, (config) => {
     config.modResults.NSSupportsLiveActivities = true;
