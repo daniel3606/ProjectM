@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import {
   SITE_DESCRIPTION,
   SITE_NAME,
+  SITE_OG_IMAGE,
   SITE_TITLE,
   SITE_URL,
   colors,
@@ -33,11 +34,13 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     siteName: SITE_NAME,
     locale: "en_US",
+    images: [SITE_OG_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,
+    images: [SITE_OG_IMAGE],
   },
   icons: {
     icon: [
