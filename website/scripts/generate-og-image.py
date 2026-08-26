@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Render `public/og-image.png`, the 1200x630 social preview card.
+"""Render `public/og-image-v2.png`, the 1200x630 social preview card.
 
 The card is a build-time artifact so production never has to rasterise it:
 the committed PNG is served straight from `public/`. Re-run this script after
 changing the tagline, the brand colors, or the character.
+
+The filename is versioned. X caches card images against their URL, so a
+redrawn card under the same name never reaches posts already shared — bump
+the suffix here and in `SITE_OG_IMAGE` together whenever the artwork changes.
 
     pip install pillow fonttools brotli
     python3 scripts/generate-og-image.py
@@ -29,7 +33,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 ROOT = Path(__file__).resolve().parent.parent
 FONT_DIR = ROOT / "public" / "fonts"
-OUTPUT = ROOT / "public" / "og-image.png"
+OUTPUT = ROOT / "public" / "og-image-v2.png"
 
 WIDTH, HEIGHT = 1200, 630
 SS = 3  # supersample factor; the card is drawn at 3x and downsampled
