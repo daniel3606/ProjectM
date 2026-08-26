@@ -1,0 +1,3 @@
+{
+  "ignoreCommand": "echo 'Root is the Expo app; website deploys from website/ via marshmallow-website' && exit 0"
+}
