@@ -74,8 +74,9 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Keep a jumped-to section clear of the fixed navbar. */
-section[id] {
+/* Keep a jumped-to section or anchor clear of the fixed navbar. */
+section[id],
+.scroll-anchor {
   scroll-margin-top: calc(var(--nav-height) + 12px);
 }
 

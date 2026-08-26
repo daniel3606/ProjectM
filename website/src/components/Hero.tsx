@@ -20,9 +20,9 @@ export default function Hero() {
             Marshmallow turns reducing screen time into a visual growth journey —
             block distractions, finish focus sessions, and watch your marshmallow grow.
           </p>
-          <div id="waitlist-hero" className={styles.formWrap}>
+          <div id="waitlist" className={`scroll-anchor ${styles.formWrap}`}>
             <Suspense fallback={<WaitlistFallback />}>
-              <WaitlistForm id="waitlist" />
+              <WaitlistForm id="waitlist-hero" />
             </Suspense>
           </div>
         </div>
