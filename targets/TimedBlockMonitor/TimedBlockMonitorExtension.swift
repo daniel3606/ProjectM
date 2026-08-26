@@ -1,3 +1,4 @@
+import ActivityKit
 import DeviceActivity
 import FamilyControls
 import ManagedSettings
@@ -35,6 +36,8 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
         defaults.synchronize()
         WidgetCenter.shared.reloadAllTimelines()
 
+        startLiveActivity(for: plan)
+
         notify(title: "Timed Block Started", body: "\"\(plan.label)\" is now blocking your apps.")
     }
 
@@ -57,9 +60,41 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
             defaults.removeObject(forKey: SharedBlockState.activeGrowthCmKey)
             defaults.synchronize()
             WidgetCenter.shared.reloadAllTimelines()
+            endLiveActivity()
         }
 
         notify(title: "Block Ended", body: "\"\(plan.label)\" has ended. Apps are unblocked.")
+    }
+
+    // Puts the block on the Lock Screen / Notification Center the moment it
+    // starts, instead of only once the app is next opened. Best-effort:
+    // ActivityKit can refuse a request from an extension, and the app raises
+    // the same Live Activity on launch when it adopts the running block.
+    private func startLiveActivity(for plan: StoredPlan) {
+        guard #available(iOS 16.2, *) else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        let startedAt = Date()
+        let endsAt = startedAt.addingTimeInterval(Double(plan.durationMinutes) * 60)
+
+        // A previous block's activity would otherwise linger next to this one.
+        endLiveActivity()
+
+        let attributes = BlockAttributes(label: plan.label, focusMode: plan.focusMode ?? "flexible")
+        let state = BlockAttributes.ContentState(startedAt: startedAt, endsAt: endsAt)
+
+        _ = try? Activity.request(
+            attributes: attributes,
+            content: .init(state: state, staleDate: endsAt),
+            pushType: nil
+        )
+    }
+
+    private func endLiveActivity() {
+        guard #available(iOS 16.2, *) else { return }
+        for activity in Activity<BlockAttributes>.activities {
+            Task { await activity.end(nil, dismissalPolicy: .immediate) }
+        }
     }
 
     private func loadPlan(id: String) -> StoredPlan? {

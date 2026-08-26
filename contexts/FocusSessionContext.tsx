@@ -42,6 +42,9 @@ const MAX_HISTORY = 50;
 
 interface FocusSessionContextValue {
   activeSession: ActiveSession | null;
+  /** False until the persisted session has been read. Gate anything that would
+   *  otherwise treat "not loaded yet" as "no block running". */
+  isSessionLoaded: boolean;
   history: CompletedSession[];
   pendingGrowthResult: PendingGrowthResult | null;
   /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
@@ -244,10 +247,16 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   }, [activeSession, activeSessionLoaded, stopSession]);
 
   // Live Activity on Lock Screen / Dynamic Island for whichever block is
-  // running. Timed Blocks the TimedBlockMonitor extension started while the
+  // running. Scheduled blocks the TimedBlockMonitor extension started while the
   // app was killed pick one up here too, once the adoption path in
   // TimedBlockPlansContext fills in activeSession.
+  //
+  // Gated on `activeSessionLoaded`: before storage resolves, `activeSession` is
+  // null, and acting on that would tear down the Live Activity of a block that
+  // is in fact still running.
   useEffect(() => {
+    if (!activeSessionLoaded) return;
+
     if (!activeSession) {
       void ScreenTime.endBlockLiveActivity();
       return;
@@ -259,11 +268,12 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       label: activeSession.label ?? "Focus Block",
       focusMode: activeSession.focusMode,
     });
-  }, [activeSession]);
+  }, [activeSession, activeSessionLoaded]);
 
   const value = useMemo(
     () => ({
       activeSession,
+      isSessionLoaded: activeSessionLoaded,
       history,
       pendingGrowthResult,
       startSession,
@@ -271,7 +281,16 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       updateSession,
       clearPendingGrowthResult,
     }),
-    [activeSession, history, pendingGrowthResult, startSession, stopSession, updateSession, clearPendingGrowthResult]
+    [
+      activeSession,
+      activeSessionLoaded,
+      history,
+      pendingGrowthResult,
+      startSession,
+      stopSession,
+      updateSession,
+      clearPendingGrowthResult,
+    ]
   );
 
   return (

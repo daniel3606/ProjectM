@@ -28,6 +28,8 @@ export interface NativeSchedulablePlan {
   appIds: string[];
   /** Growth this plan pays out on completion, so the widget can preview it for extension-started blocks. */
   expectedGrowthCm: number;
+  /** Shown on the Live Activity the monitor extension raises for this plan. */
+  focusMode: FocusMode;
 }
 
 export interface ActiveNativeBlock {
@@ -200,9 +202,10 @@ export interface BlockLiveActivityParams {
 
 /**
  * Shows the Lock Screen / Dynamic Island Live Activity for the running block.
- * Used for both Quick Blocks and Timed Blocks; a Timed Block that the
- * TimedBlockMonitor extension started while the app was killed only gets one
- * once the app next opens, since extensions can't request Live Activities.
+ * Used for both Quick Blocks and scheduled blocks. The TimedBlockMonitor
+ * extension raises the same activity when it starts a block while the app is
+ * killed, so calling this on adoption leaves that one in place rather than
+ * restarting it.
  */
 export async function startBlockLiveActivity(
   params: BlockLiveActivityParams
