@@ -42,7 +42,6 @@ export default function Navbar() {
 
           <nav className={styles.desktopNav} aria-label="Primary">
             <a href="#how-it-works">How it works</a>
-            <a href="#growth">Growth</a>
             <a href="#features">Features</a>
             <a className={styles.cta} href="#waitlist">
               Join Waitlist
@@ -70,9 +69,6 @@ export default function Navbar() {
         <nav aria-label="Mobile">
           <a href="#how-it-works" onClick={close}>
             How it works
-          </a>
-          <a href="#growth" onClick={close}>
-            Growth
           </a>
           <a href="#features" onClick={close}>
             Features
