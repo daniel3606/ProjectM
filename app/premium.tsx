@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
 import OnboardingButton from "@/components/OnboardingButton";
 import { Screen, HeroTitle, HeroSubtitle } from "@/components/ui";
-import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 const PREMIUM_FEATURES = [
   { icon: "lock-closed", label: "Deep Focus mode with 1.5x growth" },
@@ -15,17 +14,19 @@ const PREMIUM_FEATURES = [
   { icon: "people", label: "Compete with friends on leaderboards" },
 ] as const;
 
-export default function OnboardingPremium() {
+/**
+ * Deliberately outside onboarding: a new user meets the product and their
+ * marshmallow first, and is offered premium later from inside the app.
+ */
+export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { completeOnboarding } = useMarshmallowProfile();
 
-  const finishOnboarding = async () => {
-    await completeOnboarding();
-    // custominit is presented as a fullScreenModal, and purpose/screentime/
-    // premium are pushed inside that same modal stack. Dismiss the whole
-    // modal before replacing, otherwise (tabs) just gets pushed on top of it.
-    router.dismissAll();
+  const close = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
     router.replace("/(tabs)");
   };
 
@@ -41,7 +42,7 @@ export default function OnboardingPremium() {
 
       <Screen style={styles.container}>
         <Pressable
-          onPress={finishOnboarding}
+          onPress={close}
           hitSlop={12}
           style={[styles.closeButton, { top: insets.top + 12 }]}
         >
@@ -70,7 +71,7 @@ export default function OnboardingPremium() {
 
         <OnboardingButton
           label="Start Free Trial"
-          onPress={finishOnboarding}
+          onPress={close}
         />
       </Screen>
     </>

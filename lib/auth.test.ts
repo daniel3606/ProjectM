@@ -73,7 +73,7 @@ describe("auth helpers", () => {
   });
 
   it("sends authenticated users to onboarding or home", () => {
-    expect(getPostAuthRoute(false)).toBe("/custominit");
+    expect(getPostAuthRoute(false)).toBe("/onboarding");
     expect(getPostAuthRoute(true)).toBe("/(tabs)");
     expect(isPublicAuthRoute("/")).toBe(true);
     expect(isPublicAuthRoute("/auth/verify")).toBe(true);

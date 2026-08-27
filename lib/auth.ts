@@ -51,8 +51,8 @@ export function getAuthStatus(args: {
   return "authenticated";
 }
 
-export function getPostAuthRoute(onboardingCompleted: boolean): "/(tabs)" | "/custominit" {
-  return onboardingCompleted ? "/(tabs)" : "/custominit";
+export function getPostAuthRoute(onboardingCompleted: boolean): "/(tabs)" | "/onboarding" {
+  return onboardingCompleted ? "/(tabs)" : "/onboarding";
 }
 
 export function isPublicAuthRoute(pathname: string): boolean {
