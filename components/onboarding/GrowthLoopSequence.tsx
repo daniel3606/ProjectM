@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   Easing,
@@ -65,7 +65,14 @@ export default function GrowthLoopSequence({
   const focusBar = useSharedValue(skip ? 1 : 0);
 
   useEffect(() => {
+    // `skip` can flip true while the sequence is running, because the seen-once
+    // flag loads asynchronously. Jump to the end state rather than just
+    // cancelling the timers, or the screen is left showing an unstarted loop
+    // next to an enabled CTA.
     if (skip) {
+      setPhase(3);
+      tiles.value = 1;
+      focusBar.value = 1;
       onComplete();
       return;
     }
@@ -98,9 +105,12 @@ export default function GrowthLoopSequence({
   }, [focusBar, phase, skip, tiles]);
 
   const tileStyle = useAnimatedStyle(() => ({
-    opacity: 1 - tiles.value * 0.78,
-    transform: [{ scale: 1 - tiles.value * 0.06 }],
+    opacity: 1 - tiles.value * 0.45,
+    transform: [{ scale: 1 - tiles.value * 0.05 }],
   }));
+
+  const glyphStyle = useAnimatedStyle(() => ({ opacity: 1 - tiles.value }));
+  const lockStyle = useAnimatedStyle(() => ({ opacity: tiles.value }));
 
   const focusBarStyle = useAnimatedStyle(() => ({
     width: `${focusBar.value * 100}%`,
@@ -108,13 +118,18 @@ export default function GrowthLoopSequence({
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.tileRow, tileStyle]}>
+      <View style={styles.tileRow}>
         {APP_GLYPHS.map((glyph) => (
-          <View key={glyph} style={styles.tile}>
-            <Ionicons name={glyph} size={19} color="rgba(28,28,30,0.42)" />
-          </View>
+          <Animated.View key={glyph} style={[styles.tile, tileStyle]}>
+            <Animated.View style={[styles.tileGlyph, glyphStyle]}>
+              <Ionicons name={glyph} size={19} color="rgba(28,28,30,0.42)" />
+            </Animated.View>
+            <Animated.View style={[styles.tileGlyph, lockStyle]}>
+              <Ionicons name="lock-closed" size={16} color={Theme.colors.secondary} />
+            </Animated.View>
+          </Animated.View>
         ))}
-      </Animated.View>
+      </View>
 
       <MarshmallowStage
         color={color}
@@ -130,14 +145,42 @@ export default function GrowthLoopSequence({
 
       <View style={styles.steps}>
         {STEPS.map((label, index) => (
-          <SequenceStep key={label} label={label} active={phase >= index + 1} />
+          <React.Fragment key={label}>
+            {index > 0 ? <SequenceLink active={phase >= index + 1} /> : null}
+            <SequenceStep label={label} active={phase >= index + 1} />
+          </React.Fragment>
         ))}
       </View>
     </View>
   );
 }
 
+/** One line of the chain. Quiet until its moment in the sequence arrives. */
 function SequenceStep({ label, active }: { label: string; active: boolean }) {
+  const emphasis = useEmphasis(active);
+
+  const labelStyle = useAnimatedStyle(() => ({
+    opacity: 0.3 + emphasis.value * 0.7,
+  }));
+
+  return (
+    <Animated.Text style={[styles.stepLabel, labelStyle]}>{label}</Animated.Text>
+  );
+}
+
+/** The downward step between two lines, drawn rather than written as an arrow. */
+function SequenceLink({ active }: { active: boolean }) {
+  const emphasis = useEmphasis(active);
+
+  const linkStyle = useAnimatedStyle(() => ({
+    opacity: 0.2 + emphasis.value * 0.5,
+    transform: [{ scaleY: 0.6 + emphasis.value * 0.4 }],
+  }));
+
+  return <Animated.View style={[styles.stepLink, linkStyle]} />;
+}
+
+function useEmphasis(active: boolean) {
   const emphasis = useSharedValue(active ? 1 : 0);
 
   useEffect(() => {
@@ -147,21 +190,7 @@ function SequenceStep({ label, active }: { label: string; active: boolean }) {
     });
   }, [active, emphasis]);
 
-  const rowStyle = useAnimatedStyle(() => ({
-    opacity: 0.36 + emphasis.value * 0.64,
-  }));
-
-  const dotStyle = useAnimatedStyle(() => ({
-    opacity: 0.25 + emphasis.value * 0.75,
-    transform: [{ scale: 0.72 + emphasis.value * 0.28 }],
-  }));
-
-  return (
-    <Animated.View style={[styles.stepRow, rowStyle]}>
-      <Animated.View style={[styles.stepDot, dotStyle]} />
-      <Text style={styles.stepLabel}>{label}</Text>
-    </Animated.View>
-  );
+  return emphasis;
 }
 
 const styles = StyleSheet.create({
@@ -182,6 +211,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.cardBorder,
   },
+  /** Stacked so the app glyph and the lock cross-fade in place. */
+  tileGlyph: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   focusBarTrack: {
     width: 132,
     height: 3,
@@ -196,24 +231,20 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.secondary,
   },
   steps: {
-    marginTop: 28,
-    gap: 12,
-    alignSelf: "stretch",
-  },
-  stepRow: {
-    flexDirection: "row",
+    marginTop: 30,
     alignItems: "center",
-    gap: 12,
-  },
-  stepDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: Theme.colors.secondary,
   },
   stepLabel: {
     fontFamily: Theme.fonts.medium,
-    fontSize: 16,
+    fontSize: 17,
+    lineHeight: 23,
     color: Theme.colors.text,
+    textAlign: "center",
+  },
+  stepLink: {
+    width: 1,
+    height: 18,
+    marginVertical: 8,
+    backgroundColor: Theme.colors.secondary,
   },
 });

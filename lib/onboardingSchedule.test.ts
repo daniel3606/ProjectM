@@ -42,9 +42,9 @@ describe("nudging a preset", () => {
 
 describe("saving a preset as a real plan", () => {
   const apps: ScreenTimeItem[] = [
-    { id: "app.1", label: "One", type: "application" },
-    { id: "app.2", label: "Two", type: "application" },
-    { id: "cat.1", label: "Social", type: "category" },
+    { id: "app.1", label: "One", type: "application", index: 0 },
+    { id: "app.2", label: "Two", type: "application", index: 1 },
+    { id: "cat.1", label: "Social", type: "category", index: 0 },
   ];
 
   it("produces the same shape the Timed Block screen edits", () => {

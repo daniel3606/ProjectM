@@ -1,8 +1,8 @@
 import React, { useCallback } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
-import { SelectableCard } from "@/components/ui";
+import { Card } from "@/components/ui";
 import { hapticSelection } from "@/lib/haptics";
 
 interface OnboardingOptionProps {
@@ -18,6 +18,10 @@ interface OnboardingOptionProps {
 /**
  * A selectable row. Deliberately not a card grid: the list should read as a
  * list of answers, with the border and tint carrying the selected state.
+ *
+ * The row is pressable, the card around it is not, so anything revealed
+ * underneath (a time nudge, say) sits beside the touch target rather than
+ * inside it.
  */
 export default function OnboardingOption({
   label,
@@ -32,33 +36,40 @@ export default function OnboardingOption({
   }, [onPress]);
 
   return (
-    <SelectableCard
-      selected={selected}
-      onPress={handlePress}
-      style={styles.row}
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-    >
-      <View style={styles.labelRow}>
-        <View style={styles.labelText}>
-          <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
-          {detail ? <Text style={styles.detail}>{detail}</Text> : null}
-        </View>
+    <Card active={selected} style={styles.card}>
+      <Pressable
+        onPress={handlePress}
+        accessibilityRole="button"
+        accessibilityState={{ selected }}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        <View style={styles.labelRow}>
+          <View style={styles.labelText}>
+            <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
+            {detail ? <Text style={styles.detail}>{detail}</Text> : null}
+          </View>
 
-        {selected ? (
-          <Ionicons name="checkmark-circle" size={22} color={Theme.colors.secondary} />
-        ) : null}
-      </View>
+          {selected ? (
+            <Ionicons name="checkmark-circle" size={22} color={Theme.colors.secondary} />
+          ) : null}
+        </View>
+      </Pressable>
 
       {selected && children ? <View style={styles.expansion}>{children}</View> : null}
-    </SelectableCard>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
+  card: {
+    borderWidth: 1.5,
+  },
   row: {
     paddingVertical: 16,
     paddingHorizontal: 18,
+  },
+  pressed: {
+    opacity: 0.7,
   },
   labelRow: {
     flexDirection: "row",
@@ -84,8 +95,9 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
   },
   expansion: {
-    marginTop: 14,
     paddingTop: 14,
+    paddingBottom: 16,
+    paddingHorizontal: 18,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Theme.colors.cardBorder,
   },
