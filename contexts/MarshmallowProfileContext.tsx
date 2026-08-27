@@ -3,7 +3,13 @@ import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
 import { resolveEquippedEmoji, type EquippedItems, type ItemSlot } from "@/constants/items";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePersistedState } from "@/lib/storage";
-import { syncProfile, syncEquippedItems, fetchRemoteProfile, syncOnboarding } from "@/lib/sync";
+import {
+  syncProfile,
+  syncEquippedItems,
+  fetchRemoteProfile,
+  syncOnboarding,
+  type OnboardingAnswers,
+} from "@/lib/sync";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
@@ -20,12 +26,11 @@ interface MarshmallowProfileContextValue {
   setColor: (color: MarshmallowColorHex) => void;
   /** Equips `itemId` in its slot, or clears the slot if it's already equipped there. */
   toggleItem: (slot: ItemSlot, itemId: string) => void;
-  setOnboardingPurpose: (purpose: string) => void;
-  setOnboardingScreenTime: (screenTime: string) => void;
   /** Apps chosen during onboarding for quick-add on focus blocks. */
   distractingApps: ScreenTimeItem[];
   setDistractingApps: (apps: ScreenTimeItem[]) => void;
-  completeOnboarding: () => Promise<void>;
+  /** Marks onboarding done and pushes its answers in a single write. */
+  completeOnboarding: (answers?: OnboardingAnswers) => Promise<void>;
 }
 
 const DEFAULT_NAME = "Mochi";
@@ -45,14 +50,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
   const [onboardingCompleted, setOnboardingCompleted, onboardingLoaded] = usePersistedState(
     "onboarding.completed",
     false
-  );
-  const [onboardingPurpose, setRawPurpose] = usePersistedState<string | null>(
-    "onboarding.purpose",
-    null
-  );
-  const [onboardingScreenTime, setRawScreenTime] = usePersistedState<string | null>(
-    "onboarding.screenTime",
-    null
   );
   const [distractingApps, setRawDistractingApps] = usePersistedState<ScreenTimeItem[]>(
     "onboarding.distractingApps",
@@ -84,8 +81,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
           if (remote.equipped_items && typeof remote.equipped_items === "object") {
             setItems(remote.equipped_items as EquippedItems);
           }
-          if (remote.onboarding_purpose) setRawPurpose(remote.onboarding_purpose);
-          if (remote.onboarding_screen_time) setRawScreenTime(remote.onboarding_screen_time);
           setOnboardingCompleted(!!remote.onboarding_completed);
         }
 
@@ -104,8 +99,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     setRawName,
     setRawColor,
     setItems,
-    setRawPurpose,
-    setRawScreenTime,
     setOnboardingCompleted,
   ]);
 
@@ -159,22 +152,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     [setItems]
   );
 
-  const setOnboardingPurpose = useCallback(
-    (purpose: string) => {
-      setRawPurpose(purpose);
-      syncOnboarding({ purpose }).catch(() => {});
-    },
-    [setRawPurpose]
-  );
-
-  const setOnboardingScreenTime = useCallback(
-    (screenTime: string) => {
-      setRawScreenTime(screenTime);
-      syncOnboarding({ screenTime }).catch(() => {});
-    },
-    [setRawScreenTime]
-  );
-
   const setDistractingApps = useCallback(
     (apps: ScreenTimeItem[]) => {
       setRawDistractingApps(apps);
@@ -182,14 +159,13 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     [setRawDistractingApps]
   );
 
-  const completeOnboarding = useCallback(async () => {
-    setOnboardingCompleted(true);
-    await syncOnboarding({
-      purpose: onboardingPurpose,
-      screenTime: onboardingScreenTime,
-      completed: true,
-    });
-  }, [onboardingPurpose, onboardingScreenTime, setOnboardingCompleted]);
+  const completeOnboarding = useCallback(
+    async (answers: OnboardingAnswers = {}) => {
+      setOnboardingCompleted(true);
+      await syncOnboarding({ ...answers, completed: true });
+    },
+    [setOnboardingCompleted]
+  );
 
   const value = useMemo(
     () => ({
@@ -201,8 +177,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       setName,
       setColor,
       toggleItem,
-      setOnboardingPurpose,
-      setOnboardingScreenTime,
       distractingApps,
       setDistractingApps,
       completeOnboarding,
@@ -216,8 +190,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       setName,
       setColor,
       toggleItem,
-      setOnboardingPurpose,
-      setOnboardingScreenTime,
       distractingApps,
       setDistractingApps,
       completeOnboarding,

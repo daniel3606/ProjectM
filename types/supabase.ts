@@ -243,8 +243,11 @@ export type Database = {
           id: string
           marshmallow_color: string | null
           onboarding_completed: boolean
+          onboarding_current_minutes: number | null
+          onboarding_goals: string[]
           onboarding_purpose: string | null
           onboarding_screen_time: string | null
+          onboarding_target_minutes: number | null
           total_focus_minutes: number
           total_growth_cm: number
           updated_at: string
@@ -260,8 +263,11 @@ export type Database = {
           id: string
           marshmallow_color?: string | null
           onboarding_completed?: boolean
+          onboarding_current_minutes?: number | null
+          onboarding_goals?: string[]
           onboarding_purpose?: string | null
           onboarding_screen_time?: string | null
+          onboarding_target_minutes?: number | null
           total_focus_minutes?: number
           total_growth_cm?: number
           updated_at?: string
@@ -277,8 +283,11 @@ export type Database = {
           id?: string
           marshmallow_color?: string | null
           onboarding_completed?: boolean
+          onboarding_current_minutes?: number | null
+          onboarding_goals?: string[]
           onboarding_purpose?: string | null
           onboarding_screen_time?: string | null
+          onboarding_target_minutes?: number | null
           total_focus_minutes?: number
           total_growth_cm?: number
           updated_at?: string
