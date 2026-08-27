@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -36,17 +36,28 @@ interface FocusSessionSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   currentSizeCm: number;
   onStartSession: (config: FocusSessionConfig) => void;
+  /** Duration the sheet opens on. Lowered for a user's first session so it asks less of them. */
+  defaultDurationMinutes?: number;
 }
 
 export default function FocusSessionSheet({
   sheetRef,
   currentSizeCm,
   onStartSession,
+  defaultDurationMinutes = 30,
 }: FocusSessionSheetProps) {
   const insets = useSafeAreaInsets();
   const { distractingApps } = useMarshmallowProfile();
 
-  const [totalMinutes, setTotalMinutes] = useState(30);
+  const [totalMinutes, setTotalMinutes] = useState(defaultDurationMinutes);
+  // The caller's default can arrive after mount (it depends on persisted state),
+  // so adopt it until the user has set a duration themselves.
+  const durationTouchedRef = useRef(false);
+  useEffect(() => {
+    if (durationTouchedRef.current) return;
+    setTotalMinutes(defaultDurationMinutes);
+  }, [defaultDurationMinutes]);
+
   const [focusMode, setFocusMode] = useState<FocusMode>("flexible");
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(false);
@@ -78,14 +89,16 @@ export default function FocusSessionSheet({
       setIsLoadingApps(true);
       try {
         const items = await ScreenTime.getSelectedItems();
-        setSelectedApps(items);
+        // Falling back to the onboarding choices keeps a first session from
+        // opening on an empty selection with a disabled Start button.
+        setSelectedApps(items.length > 0 ? items : distractingApps);
       } catch {
         // Silently fail; user can pick apps manually
       } finally {
         setIsLoadingApps(false);
       }
     }
-  }, []);
+  }, [distractingApps]);
 
   const handlePickApps = useCallback(async () => {
     try {
@@ -118,10 +131,12 @@ export default function FocusSessionSheet({
   }, []);
 
   const handleDecreaseDuration = useCallback(() => {
+    durationTouchedRef.current = true;
     setTotalMinutes((prev) => Math.max(MIN_DURATION, prev - DURATION_STEP));
   }, []);
 
   const handleIncreaseDuration = useCallback(() => {
+    durationTouchedRef.current = true;
     setTotalMinutes((prev) => Math.min(MAX_DURATION, prev + DURATION_STEP));
   }, []);
 
