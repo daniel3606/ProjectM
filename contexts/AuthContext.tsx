@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { signInWithAppleNative } from "@/lib/appleAuth";
 import { signInWithGoogleOAuth } from "@/lib/googleAuth";
 import { ensureAppProfile } from "@/lib/sync";
+import { clearUserScopedState } from "@/lib/storage";
 import {
   getAuthStatus,
   mapUnknownAuthError,
@@ -26,6 +27,12 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthBusy: boolean;
   status: AuthStatus;
+  /**
+   * Increments on sign-out. Consumers key account-scoped state off this to
+   * drop the previous user's values instead of carrying them into the next
+   * session.
+   */
+  dataGeneration: number;
   isEmailVerified: boolean;
   signUp: (email: string, password: string) => Promise<SignUpResult>;
   signIn: (email: string, password: string) => Promise<SignInResult>;
@@ -46,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthBusy, setIsAuthBusy] = useState(false);
+  const [dataGeneration, setDataGeneration] = useState(0);
   const actionLockRef = useRef(false);
 
   const runExclusive = useCallback(async <T,>(fn: () => Promise<T>, busyValue: T): Promise<T> => {
@@ -133,7 +141,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return verifySignupEmailOtp(email, token);
   }, []);
 
+  /**
+   * Clearing storage is only half of a sign-out: the providers above still
+   * hold the previous account's values in memory, and would show them to
+   * whoever signs in next. Bumping this remounts them onto empty storage.
+   */
   const signOut = useCallback(async () => {
+    await clearUserScopedState();
+    setDataGeneration((generation) => generation + 1);
     await signOutCurrentUser();
   }, []);
 
@@ -144,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isAuthBusy,
       status,
+      dataGeneration,
       isEmailVerified: emailVerified,
       signUp,
       signIn,
@@ -159,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isAuthBusy,
       status,
+      dataGeneration,
       emailVerified,
       signUp,
       signIn,

@@ -12,10 +12,23 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
+
+/**
+ * Everything below this point is one account's data. Signing out bumps
+ * `dataGeneration`, which remounts the subtree so the previous user's state
+ * is dropped rather than left on screen until a hydrate replaces it.
+ *
+ * Keyed on the counter rather than the user id on purpose: a guest signing up
+ * is adopting the marshmallow they just made, and must not be reset.
+ */
+function AccountScope({ children }: { children: React.ReactNode }) {
+  const { dataGeneration } = useAuth();
+  return <React.Fragment key={dataGeneration}>{children}</React.Fragment>;
+}
 
 function AuthNavigationGuard() {
   const { status, user, isLoading } = useAuth();
@@ -62,74 +75,58 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <BottomSheetModalProvider>
-          <MarshmallowProfileProvider>
-            <SubscriptionProvider>
-              <FocusSessionProvider>
-                <TimedBlockPlansProvider>
-                  <StatsProvider>
-                    <FriendsProvider>
-                      <OnboardingProvider>
-                        <AuthNavigationGuard />
-                        <Stack>
-                          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <AccountScope>
+            <MarshmallowProfileProvider>
+              <SubscriptionProvider>
+                <FocusSessionProvider>
+                  <TimedBlockPlansProvider>
+                    <StatsProvider>
+                      <FriendsProvider>
+                        <OnboardingProvider>
+                          <AuthNavigationGuard />
+                          <Stack>
+                            <Stack.Screen name="index" options={{ headerShown: false }} />
 
-                          <Stack.Screen
-                            name="auth/verify"
-                            options={{
-                              headerShown: false,
-                              presentation: "card",
-                            }}
-                          />
+                            <Stack.Screen
+                              name="auth/verify"
+                              options={{ headerShown: false, presentation: "card" }}
+                            />
 
-                          <Stack.Screen
-                            name="auth/callback"
-                            options={{
-                              headerShown: false,
-                              presentation: "card",
-                            }}
-                          />
+                            <Stack.Screen
+                              name="auth/callback"
+                              options={{ headerShown: false, presentation: "card" }}
+                            />
 
-                          <Stack.Screen
-                            name="onboarding"
-                            options={{
-                              headerShown: false,
-                              animation: "fade",
-                            }}
-                          />
+                            <Stack.Screen
+                              name="onboarding"
+                              options={{ headerShown: false, animation: "fade" }}
+                            />
 
-                          <Stack.Screen
-                            name="(tabs)"
-                            options={{
-                              headerShown: false,
-                              animation: "fade",
-                            }}
-                          />
+                            <Stack.Screen
+                              name="(tabs)"
+                              options={{ headerShown: false, animation: "fade" }}
+                            />
 
-                          <Stack.Screen
-                            name="premium"
-                            options={{
-                              headerShown: false,
-                              presentation: "card",
-                            }}
-                          />
+                            <Stack.Screen
+                              name="premium"
+                              options={{ headerShown: false, presentation: "card" }}
+                            />
 
-                          <Stack.Screen
-                            name="settings"
-                            options={{
-                              headerShown: false,
-                              presentation: "card",
-                            }}
-                          />
+                            <Stack.Screen
+                              name="settings"
+                              options={{ headerShown: false, presentation: "card" }}
+                            />
 
-                          <Stack.Screen name="stats/apps" options={{ presentation: "card" }} />
-                        </Stack>
-                      </OnboardingProvider>
-                    </FriendsProvider>
-                  </StatsProvider>
-                </TimedBlockPlansProvider>
-              </FocusSessionProvider>
-            </SubscriptionProvider>
-          </MarshmallowProfileProvider>
+                            <Stack.Screen name="stats/apps" options={{ presentation: "card" }} />
+                          </Stack>
+                        </OnboardingProvider>
+                      </FriendsProvider>
+                    </StatsProvider>
+                  </TimedBlockPlansProvider>
+                </FocusSessionProvider>
+              </SubscriptionProvider>
+            </MarshmallowProfileProvider>
+          </AccountScope>
         </BottomSheetModalProvider>
       </AuthProvider>
     </GestureHandlerRootView>
