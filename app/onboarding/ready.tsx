@@ -9,7 +9,7 @@ import {
 } from "@/components/onboarding";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useOnboarding } from "@/contexts/OnboardingContext";
-import { hapticEmphasis } from "@/lib/haptics";
+import { hapticLight } from "@/lib/haptics";
 import { useOnboardingStep } from "@/lib/useOnboardingStep";
 
 /**
@@ -39,7 +39,9 @@ export default function OnboardingReadyStep() {
     const handOffTimer = setTimeout(() => {
       if (handedOffRef.current) return;
       handedOffRef.current = true;
-      hapticEmphasis();
+      // Subtle on purpose. Arriving at the app is not an achievement to
+      // celebrate, and a medium tap here reads as one.
+      hapticLight();
       // The completion flag is set synchronously inside; only the remote write
       // is asynchronous, and Home doesn't wait on it.
       void completeOnboarding();

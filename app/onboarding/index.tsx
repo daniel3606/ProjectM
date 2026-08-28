@@ -20,7 +20,8 @@ import { useOnboardingStep } from "@/lib/useOnboardingStep";
  * words before the button — about a second in total. It is not a loading
  * delay: everything on screen is already doing something.
  */
-const COPY_AT_MS = 420;
+/** Just past the character's entrance (120ms delay + 460ms), so it lands first. */
+const COPY_AT_MS = 600;
 const CTA_AT_MS = 950;
 
 const COMPACT_HEIGHT = 700;
