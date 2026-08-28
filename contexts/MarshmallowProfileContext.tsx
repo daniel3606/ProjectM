@@ -27,6 +27,13 @@ interface MarshmallowProfileContextValue {
   /** Apps chosen during onboarding for quick-add on focus blocks. */
   distractingApps: ScreenTimeItem[];
   setDistractingApps: (apps: ScreenTimeItem[]) => void;
+  /**
+   * Apps the user never wants reachable during a block. Merged into every
+   * block's selection regardless of which apps that block picked. Local only —
+   * it isn't part of the synced onboarding payload.
+   */
+  neverAllowedApps: ScreenTimeItem[];
+  setNeverAllowedApps: (apps: ScreenTimeItem[]) => void;
   completeOnboarding: () => Promise<void>;
 }
 
@@ -58,6 +65,10 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
   );
   const [distractingApps, setRawDistractingApps] = usePersistedState<ScreenTimeItem[]>(
     "onboarding.distractingApps",
+    []
+  );
+  const [neverAllowedApps, setNeverAllowedApps] = usePersistedState<ScreenTimeItem[]>(
+    "blocking.neverAllowedApps",
     []
   );
   const userId = user?.id ?? null;
@@ -208,6 +219,8 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       setOnboardingScreenTime,
       distractingApps,
       setDistractingApps,
+      neverAllowedApps,
+      setNeverAllowedApps,
       completeOnboarding,
     }),
     [
@@ -224,6 +237,8 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       setOnboardingScreenTime,
       distractingApps,
       setDistractingApps,
+      neverAllowedApps,
+      setNeverAllowedApps,
       completeOnboarding,
     ]
   );
