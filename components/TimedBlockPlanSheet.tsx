@@ -37,6 +37,12 @@ function formatHourLabel(hour: number): string {
   return `${displayHour} ${period}`;
 }
 
+// Module scope so the wheel rows keep a stable `label` prop and stay memoized
+// while the user drags.
+function formatMinuteLabel(minute: number): string {
+  return String(minute).padStart(2, "0");
+}
+
 interface TimedBlockPlanSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   editingPlan: TimedBlockPlan | null;
@@ -225,6 +231,10 @@ export default function TimedBlockPlanSheet({
       ref={sheetRef}
       snapPoints={snapPoints}
       enablePanDownToClose
+      // The wheels sit inside this sheet's scroll view; leaving the sheet's
+      // content pan enabled makes it fight them for the drag. Dragging the
+      // handle still closes the sheet.
+      enableContentPanningGesture={false}
       enableDynamicSizing={false}
       backdropComponent={renderBackdrop}
       keyboardBehavior="interactive"
@@ -354,7 +364,7 @@ export default function TimedBlockPlanSheet({
               data={MINUTES}
               selectedValue={startMinute}
               onChange={setStartMinute}
-              formatLabel={(m) => String(m).padStart(2, "0")}
+              formatLabel={formatMinuteLabel}
             />
           </View>
         </View>
@@ -374,7 +384,7 @@ export default function TimedBlockPlanSheet({
               data={MINUTES}
               selectedValue={endMinute}
               onChange={setEndMinute}
-              formatLabel={(m) => String(m).padStart(2, "0")}
+              formatLabel={formatMinuteLabel}
             />
           </View>
         </View>

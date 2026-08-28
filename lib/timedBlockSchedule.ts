@@ -25,6 +25,11 @@ export function findActiveOccurrence(
   return null;
 }
 
+/** Stable key for one run of one plan, used to remember a manual stop. */
+export function occurrenceKey(planId: string, startsAt: number): string {
+  return `${planId}-${startsAt}`;
+}
+
 function occurrenceForPlan(plan: TimedBlockPlan, now: number): PlanOccurrence | null {
   for (let daysAgo = 0; daysAgo < 7; daysAgo++) {
     const day = new Date(now - daysAgo * DAY_MS);

@@ -23,6 +23,17 @@ const SHARED_STATE_SOURCE = path.join(
   "ios",
   SHARED_STATE_FILE
 );
+// The extension raises the block's Live Activity itself, so it needs the same
+// BlockAttributes definition the app and the widget extension compile.
+const ATTRIBUTES_FILE = "QuickBlockActivityAttributes.swift";
+const ATTRIBUTES_SOURCE = path.join(
+  __dirname,
+  "..",
+  "modules",
+  "screen-time",
+  "ios",
+  ATTRIBUTES_FILE
+);
 
 // Adds the TimedBlockMonitor DeviceActivityMonitor extension target so
 // scheduled blocks can start/end at the OS level even when the app isn't
@@ -52,6 +63,7 @@ module.exports = function withTimedBlockMonitor(config) {
       // main app via ScreenTime.podspec's file glob, and that target has no
       // DeviceActivity/extension entitlements to share this copy with.
       fs.copyFileSync(SHARED_STATE_SOURCE, path.join(destDir, SHARED_STATE_FILE));
+      fs.copyFileSync(ATTRIBUTES_SOURCE, path.join(destDir, ATTRIBUTES_FILE));
 
       // `pod install` fails on this project without `use_modular_headers!`
       // (AppCheckCore's Swift pod can't import GoogleUtilities/RecaptchaInterop,
@@ -118,8 +130,19 @@ module.exports = function withTimedBlockMonitor(config) {
       { target: target.uuid },
       group.uuid
     );
+    project.addSourceFile(
+      `${TARGET_NAME}/${ATTRIBUTES_FILE}`,
+      { target: target.uuid },
+      group.uuid
+    );
 
-    for (const framework of ["DeviceActivity", "FamilyControls", "ManagedSettings", "WidgetKit"]) {
+    for (const framework of [
+      "ActivityKit",
+      "DeviceActivity",
+      "FamilyControls",
+      "ManagedSettings",
+      "WidgetKit",
+    ]) {
       project.addFramework(`${framework}.framework`, { target: target.uuid });
     }
 

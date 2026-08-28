@@ -10,7 +10,7 @@ import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 
 const PREMIUM_FEATURES = [
   { icon: "lock-closed", label: "Deep Focus mode with 1.5x growth" },
-  { icon: "infinite", label: "Unlimited timed blocks" },
+  { icon: "infinite", label: "Unlimited scheduled blocks" },
   { icon: "stats-chart", label: "Detailed screen time insights" },
   { icon: "people", label: "Compete with friends on leaderboards" },
 ] as const;
@@ -18,9 +18,15 @@ const PREMIUM_FEATURES = [
 export default function OnboardingPremium() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { completeOnboarding } = useMarshmallowProfile();
+  const { onboardingCompleted, completeOnboarding } = useMarshmallowProfile();
 
+  // Also reached as a paywall from Timed Block once the free plan limit is
+  // hit. In that case onboarding is already done, so just go back.
   const finishOnboarding = async () => {
+    if (onboardingCompleted) {
+      router.back();
+      return;
+    }
     await completeOnboarding();
     // custominit is presented as a fullScreenModal, and purpose/screentime/
     // premium are pushed inside that same modal stack. Dismiss the whole
