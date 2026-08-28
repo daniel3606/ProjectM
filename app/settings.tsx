@@ -4,6 +4,7 @@ import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 import { Screen, Button } from "@/components/ui";
+import AuthProviders from "@/components/AuthProviders";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
@@ -138,11 +139,7 @@ export default function SettingsScreen() {
               <Text style={styles.guestCtaText}>
                 Sign up to sync your progress and add friends
               </Text>
-              <Button
-                label="Sign Up"
-                onPress={() => router.replace("/")}
-                style={styles.signUpBtn}
-              />
+              <AuthProviders style={styles.guestProviders} />
             </View>
           )}
         </View>
@@ -307,7 +304,6 @@ const styles = StyleSheet.create({
     minWidth: 160,
   },
   guestCta: {
-    alignItems: "center",
     gap: 12,
   },
   guestCtaText: {
@@ -317,7 +313,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
   },
-  signUpBtn: {
-    minWidth: 160,
+  guestProviders: {
+    width: "100%",
   },
 });
