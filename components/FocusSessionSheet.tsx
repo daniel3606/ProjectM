@@ -1,13 +1,5 @@
-import React, { useCallback, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -17,48 +9,105 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
-import { Card, SelectableCard, Button, SectionLabel } from "@/components/ui";
-import {
-  formatDuration,
-  getGrowthForDuration,
-  type FocusMode,
-} from "@/constants/marshmallow";
+import SettingRow from "@/components/ui/SettingRow";
+import HoldToStartButton from "@/components/HoldToStartButton";
+import BlockedAppsSheet, { type BlockMode } from "@/components/BlockedAppsSheet";
+import { formatDuration, getGrowthForDuration } from "@/constants/marshmallow";
+import { describeBreakAllowance, supportsBreaks } from "@/lib/focusBreaks";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
 const MIN_DURATION = 5;
 const MAX_DURATION = 240;
-const DURATION_STEP = 5;
+
+/**
+ * The stepper walks in 5-minute jumps up to an hour, then 15-minute jumps —
+ * a 3h block doesn't need 3-hour-and-5-minute precision, and the coarser
+ * step keeps a long block a few taps away instead of dozens.
+ */
+const SHORT_STEP = 5;
+const LONG_STEP = 15;
+const LONG_STEP_FROM = 60;
+
+function stepDuration(minutes: number, direction: 1 | -1): number {
+  // Stepping down *from* the boundary should use the small step, so 60m goes
+  // to 55m rather than back to 45m.
+  const step =
+    direction === 1
+      ? minutes >= LONG_STEP_FROM
+        ? LONG_STEP
+        : SHORT_STEP
+      : minutes > LONG_STEP_FROM
+        ? LONG_STEP
+        : SHORT_STEP;
+  const next = minutes + direction * step;
+  return Math.min(MAX_DURATION, Math.max(MIN_DURATION, next));
+}
 
 interface FocusSessionSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   currentSizeCm: number;
   onStartSession: (config: FocusSessionConfig) => void;
+  /** Opens the paywall when a PRO-only control is tapped. */
+  onUpgrade: () => void;
 }
 
 export default function FocusSessionSheet({
   sheetRef,
   currentSizeCm,
   onStartSession,
+  onUpgrade,
 }: FocusSessionSheetProps) {
   const insets = useSafeAreaInsets();
-  const { distractingApps } = useMarshmallowProfile();
+  const {
+    distractingApps,
+    neverAllowedApps,
+    setNeverAllowedApps,
+  } = useMarshmallowProfile();
+  const { isPremium } = useSubscription();
 
   const [totalMinutes, setTotalMinutes] = useState(30);
-  const [focusMode, setFocusMode] = useState<FocusMode>("flexible");
+  const [isHardMode, setIsHardMode] = useState(false);
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
-  const [isLoadingApps, setIsLoadingApps] = useState(false);
+  const [blockMode, setBlockMode] = useState<BlockMode>("block");
 
-  const snapPoints = useMemo(() => ["85%"], []);
+  const blockedAppsSheetRef = useRef<BottomSheetModal>(null);
+  const snapPoints = useMemo(() => ["78%"], []);
 
+  // Hard Mode is the paid tier's "deep" focus, so it carries the 1.5x growth
+  // multiplier the rest of the app already knows about.
+  const focusMode = isHardMode ? "deep" : "flexible";
   const expectedGrowth = getGrowthForDuration(totalMinutes, focusMode);
 
-  const appCount = selectedApps.filter((i) => i.type === "application").length;
-  const catCount = selectedApps.filter((i) => i.type === "category").length;
-  const webCount = selectedApps.filter((i) => i.type === "webDomain").length;
-  const totalSelected = selectedApps.length;
+  const hasBreaks = supportsBreaks(totalMinutes, isHardMode);
+  const breakSummary = describeBreakAllowance(totalMinutes, isHardMode);
+
+  // Never Allowed always ends up shielded, but the two modes read their id
+  // list in opposite directions: "block" shields the list, "allowOnly" spares
+  // it. So the same intent means adding to one list and subtracting from the
+  // other — unioning in both would hand Allow Only a free pass to the very
+  // apps the user said to never allow.
+  const effectiveAppIds = useMemo(() => {
+    const picked = selectedApps.map((item) => item.id);
+    if (blockMode === "allowOnly") {
+      const banned = new Set(neverAllowedApps.map((item) => item.id));
+      return picked.filter((id) => !banned.has(id));
+    }
+    return [...new Set([...picked, ...neverAllowedApps.map((item) => item.id)])];
+  }, [selectedApps, neverAllowedApps, blockMode]);
+
+  // The same count means opposite things in the two modes, so the row says
+  // which one it is rather than leaving "5 Apps" to be read as blocked.
+  const appsRowValue = (() => {
+    const count = effectiveAppIds.length;
+    if (blockMode === "allowOnly") {
+      return count === 0 ? "None allowed" : `${count} allowed`;
+    }
+    return count === 0 ? "All apps" : `${count} ${count === 1 ? "App" : "Apps"}`;
+  })();
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -73,327 +122,228 @@ export default function FocusSessionSheet({
     []
   );
 
+  // Seeds from the persisted system selection, but only while nothing has been
+  // chosen here yet — the native selection is a superset, so re-reading it on
+  // every open would undo any item the user deselected in the Blocked Apps sheet.
   const handleSheetChange = useCallback(async (index: number) => {
-    if (index === 0) {
-      setIsLoadingApps(true);
-      try {
-        const items = await ScreenTime.getSelectedItems();
-        setSelectedApps(items);
-      } catch {
-        // Silently fail; user can pick apps manually
-      } finally {
-        setIsLoadingApps(false);
-      }
-    }
-  }, []);
-
-  const handlePickApps = useCallback(async () => {
+    if (index !== 0) return;
     try {
-      const picked = await ScreenTime.openAppPicker();
-      if (picked !== null) {
-        setSelectedApps(picked);
-      }
+      const items = await ScreenTime.getSelectedItems();
+      setSelectedApps((prev) => (prev.length > 0 ? prev : items));
     } catch {
-      Alert.alert("Error", "Failed to open app picker.");
+      // Silently fail; the user can still pick apps from the Blocked Apps sheet.
     }
   }, []);
 
-  const handleQuickAdd = useCallback((app: ScreenTimeItem) => {
-    setSelectedApps((prev) => {
-      if (prev.some((item) => item.id === app.id)) return prev;
-      return [...prev, app];
-    });
-  }, []);
+  // Losing premium (a lapsed subscription) must not leave a PRO-only setting
+  // switched on behind the user's back.
+  useEffect(() => {
+    if (isPremium) return;
+    setIsHardMode(false);
+    setBlockMode("block");
+  }, [isPremium]);
 
-  const recommendedApps = useMemo(
-    () => distractingApps.filter((app) => app.type === "application"),
-    [distractingApps]
+  const handleToggleHardMode = useCallback(
+    (value: boolean) => {
+      if (value && !isPremium) {
+        onUpgrade();
+        return;
+      }
+      setIsHardMode(value);
+    },
+    [isPremium, onUpgrade]
   );
 
-  const handleDeepFocusPress = useCallback(() => {
-    Alert.alert(
-      "Premium Feature",
-      "Deep Focus mode with 1.5x growth multiplier is coming soon for premium members."
-    );
-  }, []);
+  const handleDecrease = useCallback(
+    () => setTotalMinutes((prev) => stepDuration(prev, -1)),
+    []
+  );
+  const handleIncrease = useCallback(
+    () => setTotalMinutes((prev) => stepDuration(prev, 1)),
+    []
+  );
 
-  const handleDecreaseDuration = useCallback(() => {
-    setTotalMinutes((prev) => Math.max(MIN_DURATION, prev - DURATION_STEP));
-  }, []);
-
-  const handleIncreaseDuration = useCallback(() => {
-    setTotalMinutes((prev) => Math.min(MAX_DURATION, prev + DURATION_STEP));
+  const handleConfirmApps = useCallback((apps: ScreenTimeItem[], mode: BlockMode) => {
+    setSelectedApps(apps);
+    setBlockMode(mode);
   }, []);
 
   const handleStart = useCallback(() => {
-    if (totalSelected === 0 || totalMinutes === 0) return;
-
     const config: FocusSessionConfig = {
       durationMinutes: totalMinutes,
       focusMode,
       expectedGrowthCm: expectedGrowth,
-      appIds: selectedApps.map((item) => item.id),
+      appIds: effectiveAppIds,
+      blockMode,
+      isHardMode,
     };
 
     sheetRef.current?.dismiss();
     onStartSession(config);
-  }, [totalSelected, totalMinutes, focusMode, expectedGrowth, selectedApps, sheetRef, onStartSession]);
+  }, [
+    totalMinutes,
+    focusMode,
+    expectedGrowth,
+    effectiveAppIds,
+    blockMode,
+    isHardMode,
+    sheetRef,
+    onStartSession,
+  ]);
+
+  // Allow Only with nothing picked would shield the entire device with no way
+  // back in, so the start button stays locked until something is allowed.
+  const isStartDisabled = blockMode === "allowOnly" && effectiveAppIds.length === 0;
 
   return (
-    <BottomSheetModal
-      ref={sheetRef}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      enableDynamicSizing={false}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={styles.sheetBackground}
-      handleIndicatorStyle={styles.handleIndicator}
-      onChange={handleSheetChange}
-    >
-      <BottomSheetScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
+    <>
+      <BottomSheetModal
+        ref={sheetRef}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        enableDynamicSizing={false}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={styles.handleIndicator}
+        onChange={handleSheetChange}
       >
-
-        <Text style={styles.growthAmount}>Expected Growth: {currentSizeCm}cm+({expectedGrowth}cm)</Text>
-
-
-        {/* ── Focus Mode ─────────────────────────────────────────── */}
-        <SectionLabel style={styles.sectionTitle}>Focus Mode</SectionLabel>
-        <View style={styles.focusModeRow}>
-          {/* Flexible Focus */}
-          <SelectableCard
-            tone="surface"
-            selected={focusMode === "flexible"}
-            onPress={() => setFocusMode("flexible")}
-            style={styles.focusModeCard}
-          >
-            <View style={styles.focusModeHeader}>
-              <Ionicons
-                name="leaf-outline"
-                size={18}
-                color={
-                  focusMode === "flexible"
-                    ? Theme.colors.secondary
-                    : Theme.colors.text
-                }
-              />
-              <Text
-                style={[
-                  styles.focusModeTitle,
-                  focusMode === "flexible" && styles.focusModeTitleSelected,
-                ]}
-              >
-                Flexible
-              </Text>
-            </View>
-            <Text style={styles.focusModeDesc}>
-              Allow occasional phone use
-            </Text>
-            {focusMode === "flexible" && (
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color={Theme.colors.secondary}
-                style={styles.checkIcon}
-              />
-            )}
-          </SelectableCard>
-
-          {/* Deep Focus */}
-          <SelectableCard
-            tone="surface"
-            selected={focusMode === "deep"}
-            onPress={handleDeepFocusPress}
-            style={styles.focusModeCard}
-          >
-            <View style={styles.focusModeHeader}>
-              <Ionicons
-                name="lock-closed"
-                size={16}
-                color={Theme.colors.gray}
-              />
-              <Text style={styles.focusModeTitle}>Deep Focus</Text>
-            </View>
-            <Text style={styles.focusModeDesc}>
-              Strict blocking, 1.5x growth
-            </Text>
-            <View style={styles.proBadge}>
-              <Text style={styles.proBadgeText}>PRO</Text>
-            </View>
-            {focusMode === "deep" && (
-              <Ionicons
-                name="checkmark-circle"
-                size={20}
-                color={Theme.colors.secondary}
-                style={styles.checkIcon}
-              />
-            )}
-          </SelectableCard>
-        </View>
-
-        {/* ── Applications to Block ──────────────────────────────── */}
-        <SectionLabel style={styles.sectionTitle}>Applications to Block</SectionLabel>
-
-        {recommendedApps.length > 0 && (
-          <>
-            <Text style={styles.quickAddLabel}>Quick add from onboarding</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickAddRow}
+        <BottomSheetScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 24 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Pressable
+              onPress={() => sheetRef.current?.dismiss()}
+              hitSlop={12}
+              style={styles.headerButton}
+              testID="focus-sheet-close"
             >
-              {recommendedApps.map((app) => {
-                const isAdded = selectedApps.some((item) => item.id === app.id);
-                return (
-                  <Pressable
-                    key={app.id}
-                    onPress={() => handleQuickAdd(app)}
-                    disabled={isAdded}
-                    style={({ pressed }) => [
-                      styles.quickAddChip,
-                      isAdded && styles.quickAddChipAdded,
-                      pressed && !isAdded && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons
-                      name={isAdded ? "checkmark-circle" : "add-circle-outline"}
-                      size={16}
-                      color={isAdded ? Theme.colors.success : Theme.colors.secondary}
-                    />
-                    <Text
-                      style={[
-                        styles.quickAddChipText,
-                        isAdded && styles.quickAddChipTextAdded,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {app.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </>
-        )}
+              <Ionicons name="close" size={22} color={Theme.colors.text} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Quick Block</Text>
+            <View style={styles.headerButtonSpacer} />
+          </View>
 
-        <Card tone="surface" style={styles.card}>
-          {isLoadingApps ? (
-            <ActivityIndicator
-              color={Theme.colors.secondary}
-              style={styles.appLoader}
-            />
-          ) : totalSelected > 0 ? (
-            <View style={styles.appSummary}>
-              {appCount > 0 && (
-                <View style={styles.appSummaryRow}>
-                  <Ionicons
-                    name="apps-outline"
-                    size={18}
-                    color={Theme.colors.secondary}
-                  />
-                  <Text style={styles.appSummaryText}>
-                    {appCount} app{appCount !== 1 ? "s" : ""} selected
-                  </Text>
-                </View>
-              )}
-              {catCount > 0 && (
-                <View style={styles.appSummaryRow}>
-                  <Ionicons
-                    name="folder-outline"
-                    size={18}
-                    color={Theme.colors.secondary}
-                  />
-                  <Text style={styles.appSummaryText}>
-                    {catCount} categor{catCount !== 1 ? "ies" : "y"} selected
-                  </Text>
-                </View>
-              )}
-              {webCount > 0 && (
-                <View style={styles.appSummaryRow}>
-                  <Ionicons
-                    name="globe-outline"
-                    size={18}
-                    color={Theme.colors.secondary}
-                  />
-                  <Text style={styles.appSummaryText}>
-                    {webCount} web domain{webCount !== 1 ? "s" : ""} selected
-                  </Text>
-                </View>
-              )}
-            </View>
-          ) : (
-            <Text style={styles.noAppsText}>No apps selected yet</Text>
-          )}
-
-          <Button
-            variant="outline"
-            onPress={handlePickApps}
-            icon="add-circle-outline"
-            iconSize={18}
-            label="Choose Apps"
-          />
-        </Card>
-
-        {/* ── Block Duration ─────────────────────────────────────── */}
-        <SectionLabel style={styles.sectionTitle}>Block Duration</SectionLabel>
-        <View style={styles.durationCard}>
-          <Pressable
-            onPress={handleDecreaseDuration}
-            disabled={totalMinutes <= MIN_DURATION}
-            style={({ pressed }) => [
-              styles.durationStepButton,
-              pressed && styles.pressed,
-              totalMinutes <= MIN_DURATION && styles.durationStepButtonDisabled,
-            ]}
-          >
-            <Ionicons name="remove" size={22} color={Theme.colors.secondary} />
-          </Pressable>
-
-          <Text style={styles.durationValueText}>
-            {formatDuration(totalMinutes)}
+          {/* ── Expected Growth (unchanged) ─────────────────────────── */}
+          <Text style={styles.growthAmount}>
+            Expected Growth: {currentSizeCm}cm+({expectedGrowth}cm)
           </Text>
 
-          <Pressable
-            onPress={handleIncreaseDuration}
-            disabled={totalMinutes >= MAX_DURATION}
-            style={({ pressed }) => [
-              styles.durationStepButton,
-              pressed && styles.pressed,
-              totalMinutes >= MAX_DURATION && styles.durationStepButtonDisabled,
-            ]}
-          >
-            <Ionicons name="add" size={22} color={Theme.colors.secondary} />
-          </Pressable>
-        </View>
+          {/* ── Duration ────────────────────────────────────────────── */}
+          <View style={styles.durationRow}>
+            <Pressable
+              onPress={handleDecrease}
+              disabled={totalMinutes <= MIN_DURATION}
+              hitSlop={8}
+              testID="duration-decrease"
+              style={({ pressed }) => [
+                styles.stepButton,
+                pressed && styles.pressed,
+                totalMinutes <= MIN_DURATION && styles.stepButtonDisabled,
+              ]}
+            >
+              <Ionicons name="remove" size={26} color={Theme.colors.text} />
+            </Pressable>
 
-        {/* ── Start Button ───────────────────────────────────────── */}
-        <Button
-          onPress={handleStart}
-          disabled={totalSelected === 0 || totalMinutes === 0}
-          icon="timer-outline"
-          iconSize={22}
-          label={`Start ${formatDuration(totalMinutes)} Focus`}
-          style={styles.startButton}
-        />
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+            <View style={styles.durationPill}>
+              <Text style={styles.durationText}>{formatDuration(totalMinutes)}</Text>
+            </View>
+
+            <Pressable
+              onPress={handleIncrease}
+              disabled={totalMinutes >= MAX_DURATION}
+              hitSlop={8}
+              testID="duration-increase"
+              style={({ pressed }) => [
+                styles.stepButton,
+                pressed && styles.pressed,
+                totalMinutes >= MAX_DURATION && styles.stepButtonDisabled,
+              ]}
+            >
+              <Ionicons name="add" size={26} color={Theme.colors.text} />
+            </Pressable>
+          </View>
+
+          {/* ── Rows ────────────────────────────────────────────────── */}
+          <View style={styles.rows}>
+            <SettingRow
+              title="Blocked Apps"
+              value={appsRowValue}
+              chevron
+              onPress={() => blockedAppsSheetRef.current?.present()}
+              testID="blocked-apps-row"
+            />
+
+            <SettingRow
+              title="Breaks"
+              subtitle={
+                hasBreaks
+                  ? "Pause the block without ending it"
+                  : isHardMode
+                    ? "Hard Mode runs straight through"
+                    : `Blocks of ${formatDuration(60)} or longer earn breaks`
+              }
+              value={breakSummary}
+              disabled={!hasBreaks}
+              testID="breaks-row"
+            />
+
+            <SettingRow
+              title="Hard Mode"
+              subtitle="Can't end this block early"
+              pro={!isPremium}
+              testID="hard-mode-row"
+              accessory={
+                <Switch
+                  value={isHardMode}
+                  onValueChange={handleToggleHardMode}
+                  trackColor={SWITCH_TRACK_COLOR}
+                  thumbColor={Theme.colors.white}
+                  testID="hard-mode-switch"
+                />
+              }
+            />
+          </View>
+
+          <HoldToStartButton
+            label={isStartDisabled ? "Pick an app to allow" : "Hold to Start"}
+            onComplete={handleStart}
+            disabled={isStartDisabled}
+            style={styles.startButton}
+            testID="hold-to-start"
+          />
+        </BottomSheetScrollView>
+      </BottomSheetModal>
+
+      <BlockedAppsSheet
+        sheetRef={blockedAppsSheetRef}
+        selected={selectedApps}
+        mode={blockMode}
+        suggested={distractingApps}
+        isPremium={isPremium}
+        onUpgrade={onUpgrade}
+        onConfirm={handleConfirmApps}
+        neverAllowed={neverAllowedApps}
+        onChangeNeverAllowed={setNeverAllowedApps}
+      />
+    </>
   );
 }
+
+const SWITCH_TRACK_COLOR = {
+  false: Theme.colors.cardBorder,
+  true: Theme.colors.secondary,
+} as const;
 
 const styles = StyleSheet.create({
   sheetBackground: {
     backgroundColor: Theme.colors.card,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 16,
+    borderTopLeftRadius: Theme.radius.xxl,
+    borderTopRightRadius: Theme.radius.xxl,
+    ...Theme.shadows.sheet,
   },
   handleIndicator: {
     width: 40,
@@ -401,33 +351,34 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   scrollContent: {
-    paddingHorizontal: 24,
-    paddingTop: 8,
+    paddingHorizontal: Theme.spacing.xxl,
+    paddingTop: Theme.spacing.sm,
   },
 
   /* Header */
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    justifyContent: "space-between",
+    marginBottom: Theme.spacing.xl,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+  },
+  headerButtonSpacer: {
+    width: 40,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
-  },
-
-  /* Sections */
-  sectionTitle: {
-    marginBottom: 10,
-    marginTop: 20,
-  },
-
-  /* Card (shared) */
-  card: {
-    padding: 16,
-    alignItems: "center",
   },
 
   /* Expected Growth */
@@ -435,168 +386,55 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
-  },
-  growthTransition: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  growthStageMessage: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.success,
-    marginTop: 6,
+    textAlign: "center",
   },
 
-  /* Focus Mode */
-  focusModeRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  focusModeCard: {
-    flex: 1,
-    borderRadius: 14,
-    padding: 14,
-  },
-  focusModeHeader: {
+  /* Duration */
+  durationRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
+    gap: Theme.spacing.md,
+    marginTop: Theme.spacing.xxl,
   },
-  focusModeTitle: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.semibold,
+  stepButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+  },
+  stepButtonDisabled: {
+    opacity: 0.4,
+  },
+  durationPill: {
+    flex: 1,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+  },
+  durationText: {
+    fontSize: 26,
+    fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
   },
-  focusModeTitleSelected: {
-    color: Theme.colors.secondary,
+
+  /* Rows */
+  rows: {
+    gap: Theme.spacing.md,
+    marginTop: Theme.spacing.xl,
   },
-  focusModeDesc: {
-    fontSize: 12,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.textSecondary,
-    lineHeight: 16,
-  },
-  checkIcon: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-  },
-  proBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: Theme.colors.secondary,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  proBadgeText: {
-    fontSize: 10,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.white,
+
+  startButton: {
+    marginTop: Theme.spacing.xxxl,
   },
   pressed: {
     opacity: 0.7,
-  },
-
-  /* Applications */
-  quickAddLabel: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    marginBottom: 8,
-  },
-  quickAddRow: {
-    gap: 8,
-    paddingBottom: 12,
-  },
-  quickAddChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: Theme.radius.lg,
-    backgroundColor: Theme.colors.white,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-    maxWidth: 160,
-  },
-  quickAddChipAdded: {
-    borderColor: Theme.colors.success,
-    backgroundColor: Theme.colors.cardActiveTint,
-  },
-  quickAddChipText: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.text,
-    flexShrink: 1,
-  },
-  quickAddChipTextAdded: {
-    color: Theme.colors.success,
-  },
-  appLoader: {
-    paddingVertical: 8,
-  },
-  appSummary: {
-    width: "100%",
-    gap: 8,
-    marginBottom: 12,
-  },
-  appSummaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  appSummaryText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.text,
-  },
-  noAppsText: {
-    fontSize: 14,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.gray,
-    marginBottom: 12,
-  },
-  /* Duration */
-  durationCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: Theme.colors.white,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-  },
-  durationStepButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Theme.colors.background,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-  },
-  durationStepButtonDisabled: {
-    opacity: 0.4,
-  },
-  durationValueText: {
-    fontSize: 22,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.text,
-  },
-
-  /* Start Button */
-  startButton: {
-    borderRadius: 16,
-    paddingVertical: 18,
-    marginTop: 28,
   },
 });

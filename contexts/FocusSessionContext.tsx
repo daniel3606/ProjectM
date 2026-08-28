@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePersistedState } from "@/lib/storage";
 import { computeMarshmallowSizeCm, type FocusMode } from "@/constants/marshmallow";
 import {
@@ -6,9 +6,19 @@ import {
   scheduleBlockEndNotification,
   cancelBlockEndNotification,
 } from "@/lib/notifications";
+import {
+  INITIAL_BREAK_STATE,
+  endBreak as computeEndBreak,
+  getBreakAvailability,
+  isOnBreak,
+  startBreak as computeStartBreak,
+  type BreakAvailability,
+  type BreakState,
+} from "@/lib/focusBreaks";
 import { syncCompletedSession, fetchRemoteSessions } from "@/lib/sync";
 import { supabase } from "@/lib/supabase";
 import * as ScreenTime from "@/modules/screen-time";
+import type { BlockMode } from "@/modules/screen-time";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export interface FocusSessionConfig {
@@ -17,6 +27,13 @@ export interface FocusSessionConfig {
   expectedGrowthCm: number;
   /** App/category/web IDs to block; empty means block everything. */
   appIds?: string[];
+  /**
+   * Whether `appIds` lists what to block or the only things left open.
+   * Defaults to "block" for sessions saved before this existed.
+   */
+  blockMode?: BlockMode;
+  /** Hard Mode blocks can't be ended early and earn no breaks. */
+  isHardMode?: boolean;
   /** Set when this session was auto-started by a Timed Block plan rather than manually. */
   planId?: string;
   /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
@@ -25,6 +42,8 @@ export interface FocusSessionConfig {
 
 export interface ActiveSession extends FocusSessionConfig {
   startedAt: number;
+  /** Absent on sessions started before breaks existed; treated as unused. */
+  breakState?: BreakState;
 }
 
 export interface CompletedSession extends FocusSessionConfig {
@@ -53,6 +72,14 @@ interface FocusSessionContextValue {
   /** Patches the running session in place (e.g. duration/growth from an edit) without resetting `startedAt`. No-op if nothing is active. */
   updateSession: (patch: Partial<Omit<ActiveSession, "startedAt">>) => void;
   clearPendingGrowthResult: () => void;
+  /** True while a break is unblocking apps mid-session. */
+  isOnBreak: boolean;
+  /** Whether a break can be taken right now, and why not when it can't. */
+  breakAvailability: BreakAvailability | null;
+  /** Unblocks apps for the break length. No-op unless `breakAvailability.canTakeBreak`. */
+  startBreak: () => void;
+  /** Re-applies the block, ending the break early. No-op when not on a break. */
+  endBreak: () => void;
 }
 
 const FocusSessionContext = createContext<FocusSessionContextValue | null>(null);
@@ -150,7 +177,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
 
   const startSession = useCallback(
     (config: FocusSessionConfig, startedAt: number = Date.now()) => {
-      setActiveSession({ ...config, startedAt });
+      setActiveSession({ ...config, startedAt, breakState: INITIAL_BREAK_STATE });
     },
     [setActiveSession]
   );
@@ -165,6 +192,97 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   const clearPendingGrowthResult = useCallback(() => {
     setPendingGrowthResult(null);
   }, [setPendingGrowthResult]);
+
+  // ── Breaks ────────────────────────────────────────────────────────────
+  // A break lifts the shields for a few minutes without touching the session
+  // clock, so the block still pays out its full growth. Policy (how many,
+  // how long, how much friction) lives in lib/focusBreaks.
+  const breakState = activeSession?.breakState ?? INITIAL_BREAK_STATE;
+
+  // Bumped when a timing gate passes, so availability recomputes without
+  // polling every second in a provider the whole tree consumes.
+  const [breakTick, setBreakTick] = useState(0);
+
+  const breakAvailability = useMemo(() => {
+    if (!activeSession) return null;
+    return getBreakAvailability({
+      startedAt: activeSession.startedAt,
+      durationMinutes: activeSession.durationMinutes,
+      isHardMode: !!activeSession.isHardMode,
+      breakState,
+      now: Date.now(),
+    });
+    // `breakTick` is intentionally a dependency: it is the recompute signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSession, breakState, breakTick]);
+
+  // Wakes up exactly when the break button unlocks. `availableAt` is only
+  // returned while the gate is still closed, so this can't loop.
+  useEffect(() => {
+    const availableAt = breakAvailability?.availableAt;
+    if (availableAt == null) return;
+    const delay = availableAt - Date.now();
+    if (delay <= 0) {
+      setBreakTick((tick) => tick + 1);
+      return;
+    }
+    const timer = setTimeout(() => setBreakTick((tick) => tick + 1), delay + 250);
+    return () => clearTimeout(timer);
+  }, [breakAvailability]);
+
+  const endBreak = useCallback(() => {
+    if (activeSession?.breakState?.breakEndsAt == null) return;
+    const now = Date.now();
+    const sessionEndsAt =
+      activeSession.startedAt + activeSession.durationMinutes * 60_000;
+    // Re-shielding a block that has already elapsed would leave the shield up
+    // with no session to lift it, so past the end we only clear break state.
+    if (now < sessionEndsAt) {
+      ScreenTime.applyBlockMode(
+        activeSession.blockMode ?? "block",
+        activeSession.appIds ?? []
+      ).catch(() => {});
+    }
+    setActiveSession((current) =>
+      current?.breakState
+        ? { ...current, breakState: computeEndBreak(current.breakState, now) }
+        : current
+    );
+  }, [activeSession, setActiveSession]);
+
+  const startBreak = useCallback(() => {
+    if (!activeSession) return;
+    const now = Date.now();
+    const current = activeSession.breakState ?? INITIAL_BREAK_STATE;
+    const availability = getBreakAvailability({
+      startedAt: activeSession.startedAt,
+      durationMinutes: activeSession.durationMinutes,
+      isHardMode: !!activeSession.isHardMode,
+      breakState: current,
+      now,
+    });
+    if (!availability.canTakeBreak) return;
+
+    const endsAt = activeSession.startedAt + activeSession.durationMinutes * 60_000;
+    ScreenTime.clearBlocking().catch(() => {});
+    setActiveSession((session) =>
+      session ? { ...session, breakState: computeStartBreak(current, now, endsAt) } : session
+    );
+  }, [activeSession, setActiveSession]);
+
+  // Re-shields the moment the break's time is up, including after a cold
+  // launch mid-break (the timeout is re-armed from the persisted end time).
+  useEffect(() => {
+    const breakEndsAt = activeSession?.breakState?.breakEndsAt;
+    if (breakEndsAt == null) return;
+    const delay = breakEndsAt - Date.now();
+    if (delay <= 0) {
+      endBreak();
+      return;
+    }
+    const timer = setTimeout(endBreak, delay);
+    return () => clearTimeout(timer);
+  }, [activeSession, endBreak]);
 
   const stopSession = useCallback(() => {
     ScreenTime.clearBlocking().catch(() => {});
@@ -280,6 +398,10 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       stopSession,
       updateSession,
       clearPendingGrowthResult,
+      isOnBreak: !!activeSession && isOnBreak(breakState, Date.now()),
+      breakAvailability,
+      startBreak,
+      endBreak,
     }),
     [
       activeSession,
@@ -290,6 +412,10 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       stopSession,
       updateSession,
       clearPendingGrowthResult,
+      breakState,
+      breakAvailability,
+      startBreak,
+      endBreak,
     ]
   );
 
