@@ -115,7 +115,7 @@ private enum Palette {
 // SwiftUI has no equivalent of RN's flexbox + absolute positioning.
 
 private enum Character {
-    static let initialSizeCm = 3.0
+    static let initialSizeCm = 2.5
 
     static let bodyWidth: CGFloat = 200
     static let bodyHeight: CGFloat = 222

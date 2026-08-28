@@ -8,7 +8,6 @@ import { GrowthScene } from "@/components/growth";
 import { FirstSessionCoachMark } from "@/components/onboarding";
 import { Button, Card, Screen } from "@/components/ui";
 import { computeMarshmallowSizeCm, formatTimeRemaining } from "@/constants/marshmallow";
-import { BREAK_LENGTH_MINUTES } from "@/lib/focusBreaks";
 import Theme from "@/constants/theme";
 import {
   useFocusSession,
@@ -16,6 +15,7 @@ import {
 } from "@/contexts/FocusSessionContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useOnboarding } from "@/contexts/OnboardingContext";
+import { BREAK_LENGTH_MINUTES } from "@/lib/focusBreaks";
 import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 import * as ScreenTime from "@/modules/screen-time";
@@ -152,15 +152,16 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
       </View>
 
       {/* ── Growth scene: scale world, ruler and size readout ───────── */}
-      <GrowthScene
-        sizeCm={actualSizeCm}
-        color={profile.color}
-        name={profile.name}
-        items={profile.items}
-        isBlocking={isFocusActive}
-        hapticsEnabled={hapticsEnabled}
-        style={styles.growthScene}
-      />
+      <View style={styles.growthSlot}>
+        <GrowthScene
+          sizeCm={actualSizeCm}
+          color={profile.color}
+          name={profile.name}
+          items={profile.items}
+          isBlocking={isFocusActive}
+          hapticsEnabled={hapticsEnabled}
+        />
+      </View>
 
       {/* ── Quick Block timer ───────────────────────────────────────── */}
       {isQuickBlockActive && (
@@ -360,9 +361,12 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
   },
 
-  /* Growth scene — bled out to the screen edges so the camera has room */
-  growthScene: {
-    marginTop: Theme.spacing.sm,
+  /* Growth scene sits toward the top of the leftover space so it isn't
+     glued to the button, with a little air under the header. */
+  growthSlot: {
+    flex: 1,
+    justifyContent: "flex-start",
+    paddingTop: Theme.spacing.xl + Theme.spacing.lg,
     marginHorizontal: -Theme.spacing.xxl,
   },
 
@@ -371,7 +375,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 18,
     marginTop: Theme.spacing.xxxl,
-    marginBottom: Theme.spacing.sm,
+    marginBottom: 48,
   },
   focusButtonActive: {
     backgroundColor: Theme.colors.danger,

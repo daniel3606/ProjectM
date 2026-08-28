@@ -1,17 +1,19 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   type SharedValue,
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
+import { getObjectAspectRatio, getObjectImage } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
   GROUND_Y,
   OBJECT_LABEL_GAP,
   getDepthOpacity,
   getLabelOpacity,
-  screenOffsetToScale,
+  visualScaleForSize,
+  worldXToSize,
   type WorldStage,
 } from "@/lib/growthWorld";
 
@@ -20,8 +22,11 @@ interface WorldObjectProps {
   /** Draw order: larger objects sit in front of smaller neighbours. */
   depthIndex: number;
   cameraX: SharedValue<number>;
-  /** False until the marshmallow has grown at least as tall as this object. */
-  discovered: boolean;
+  /**
+   * True for objects the marshmallow has reached, and for the next two
+   * stages ahead. False objects render as a placeholder with a hidden name.
+   */
+  revealed: boolean;
 }
 
 /**
@@ -34,7 +39,10 @@ function WorldObject({
   stage,
   depthIndex,
   cameraX,
+  revealed,
 }: WorldObjectProps) {
+  const image = revealed ? getObjectImage(stage.id) : undefined;
+  const aspectRatio = image ? getObjectAspectRatio(stage.id) : 1;
 
   const columnStyle = useAnimatedStyle(() => {
     const offset = stage.worldX - cameraX.value;
@@ -45,16 +53,16 @@ function WorldObject({
   });
 
   const spriteStyle = useAnimatedStyle(() => {
-    const offset = stage.worldX - cameraX.value;
-    const scale = screenOffsetToScale(offset);
+    const cameraCm = worldXToSize(cameraX.value);
+    const scale = visualScaleForSize(stage.sizeCm, cameraCm);
     return {
       transform: [{ scale }],
     };
   });
 
   const labelStyle = useAnimatedStyle(() => {
-    const offset = stage.worldX - cameraX.value;
-    const scale = screenOffsetToScale(offset);
+    const cameraCm = worldXToSize(cameraX.value);
+    const scale = visualScaleForSize(stage.sizeCm, cameraCm);
     return {
       opacity: getLabelOpacity(
         cameraX.value,
@@ -74,13 +82,22 @@ function WorldObject({
       pointerEvents="none"
     >
       <Animated.View style={[styles.sprite, spriteStyle]}>
-        <View style={styles.placeholder}>
-          <Text style={styles.placeholderMark}>?</Text>
-        </View>
+        {image ? (
+          <Image
+            source={image}
+            style={[styles.artwork, { width: FOCUS_HEIGHT_PX * aspectRatio }]}
+            resizeMode="contain"
+            accessibilityLabel={stage.objectName}
+          />
+        ) : (
+          <View style={styles.placeholder} accessibilityLabel="Hidden object">
+            <Text style={styles.placeholderMark}>?</Text>
+          </View>
+        )}
       </Animated.View>
 
       <Animated.View style={[styles.label, labelStyle]}>
-        <Text style={styles.labelName}>{stage.objectName}</Text>
+        <Text style={styles.labelName}>{revealed ? stage.objectName : "???"}</Text>
         <Text style={styles.labelSize}>{stage.sizeCm}cm</Text>
       </Animated.View>
     </Animated.View>
@@ -102,6 +119,9 @@ const styles = StyleSheet.create({
     // Grow upward from the ground line rather than from the middle, so an
     // object never sinks through the floor as it scales.
     transformOrigin: "50% 100%",
+  },
+  artwork: {
+    height: FOCUS_HEIGHT_PX,
   },
   label: {
     position: "absolute",

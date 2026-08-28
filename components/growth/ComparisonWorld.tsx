@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useAnimatedReaction, type SharedValue } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
+import { isObjectRevealed } from "@/constants/growthStages";
 import { CULL_BUCKET_PX, getVisibleStages } from "@/lib/growthWorld";
 import WorldObject from "@/components/growth/WorldObject";
 
@@ -8,7 +9,10 @@ interface ComparisonWorldProps {
   cameraX: SharedValue<number>;
   /** Camera position at mount, used to pick the first batch of objects to mount. */
   initialCameraX: number;
-  /** Real marshmallow size — objects larger than this render as placeholders. */
+  /**
+   * Real marshmallow size. Artwork is shown for every object this size or
+   * smaller, plus the next two ahead; everything beyond that stays a placeholder.
+   */
   actualSizeCm: number;
 }
 
@@ -50,7 +54,7 @@ export default function ComparisonWorld({
           stage={stage}
           depthIndex={stage.index}
           cameraX={cameraX}
-          discovered={stage.sizeCm <= actualSizeCm}
+          revealed={isObjectRevealed(actualSizeCm, stage.sizeCm)}
         />
       ))}
     </>
