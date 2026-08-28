@@ -3,7 +3,7 @@ import Theme from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import {
-  getPostAuthRoute,
+  resolveAppRoute,
   isValidSignupOtp,
   sanitizeSignupOtpInput,
   SIGNUP_OTP_MAX_LENGTH,
@@ -39,7 +39,7 @@ export default function VerifyEmailScreen() {
 
   useEffect(() => {
     if (!isProfileReady || !isEmailVerified) return;
-    router.replace(getPostAuthRoute(onboardingCompleted));
+    router.replace(resolveAppRoute("authenticated", onboardingCompleted));
   }, [isProfileReady, isEmailVerified, onboardingCompleted, router]);
 
   const onResend = async () => {

@@ -4,15 +4,14 @@ import { useRouter } from "expo-router";
 import Theme from "@/constants/theme";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
-import { getPostAuthRoute } from "@/lib/auth";
+import { resolveAppRoute } from "@/lib/auth";
 
 /**
  * The entry point is a router, not a screen.
  *
- * Marshmallow no longer opens on a login wall: a new user goes straight into
- * the onboarding story and is asked for an account near the end of it, once
- * there is a marshmallow and a goal worth saving. Signing in lives inside that
- * flow, so nothing needs to be shown here — only decided.
+ * Marshmallow opens on a sign-in wall: an account owns the data, so there is
+ * nothing to show until we know whose it is. Where someone lands from here is
+ * decided entirely by `resolveAppRoute`.
  */
 export default function Index() {
   const router = useRouter();
@@ -20,17 +19,19 @@ export default function Index() {
   const { onboardingCompleted, isProfileReady } = useMarshmallowProfile();
 
   useEffect(() => {
-    if (isLoading || !isProfileReady) return;
+    if (isLoading || status === "loading") return;
+    // The profile only matters once there is an account to load it for.
+    if (status === "authenticated" && !isProfileReady) return;
 
-    if (status === "needs_verification") {
+    const route = resolveAppRoute(status, onboardingCompleted);
+    if (route === "/auth/verify") {
       router.replace({
         pathname: "/auth/verify",
         params: { email: user?.email ?? "" },
       });
       return;
     }
-
-    router.replace(getPostAuthRoute(onboardingCompleted));
+    router.replace(route);
   }, [isLoading, isProfileReady, onboardingCompleted, router, status, user?.email]);
 
   // A blank, correctly coloured root rather than null: returning null blanks the

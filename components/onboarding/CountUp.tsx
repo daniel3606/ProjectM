@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, useWindowDimensions } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  type StyleProp,
+  type TextStyle,
+} from "react-native";
 import {
   cancelAnimation,
   Easing,
@@ -10,44 +16,49 @@ import {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import Theme from "@/constants/theme";
-import { formatScreenTime } from "@/lib/onboardingTime";
-
-/**
- * Minutes per rendered frame of the count. Fine enough that the number looks
- * continuous, coarse enough that a two-hour count is ~30 renders rather than
- * one per minute.
- */
-const QUANTUM_MINUTES = 5;
 
 const COMPACT_HEIGHT = 700;
 
-interface CountUpDurationProps {
+interface CountUpProps {
   /** The value to arrive at. */
-  minutes: number;
+  value: number;
+  /**
+   * Size of one rendered step. Fine enough that the count looks continuous,
+   * coarse enough that it's tens of renders rather than hundreds.
+   */
+  quantum: number;
+  format: (value: number) => string;
+  /** The settled value, spoken as a sentence. */
+  accessibilityLabel?: string;
   durationMs: number;
   delayMs?: number;
   /** Fired once, when the number has settled on its final value. */
   onSettled?: () => void;
   /** Renders the final value immediately, with no count. */
   immediate?: boolean;
+  style?: StyleProp<TextStyle>;
 }
 
-/** The reclaimed total, counting up to itself. The one number that has to land. */
-export default function CountUpDuration({
-  minutes,
+/** The one number a screen is built around, counting up to itself. */
+export default function CountUp({
+  value,
+  quantum,
+  format,
+  accessibilityLabel,
   durationMs,
   delayMs = 0,
   onSettled,
   immediate = false,
-}: CountUpDurationProps) {
+  style,
+}: CountUpProps) {
   const { height } = useWindowDimensions();
-  const [displayMinutes, setDisplayMinutes] = useState(immediate ? minutes : 0);
+  const [displayValue, setDisplayValue] = useState(immediate ? value : 0);
   const progress = useSharedValue(immediate ? 1 : 0);
 
   const settle = useCallback(() => {
-    setDisplayMinutes(minutes);
+    setDisplayValue(value);
     onSettled?.();
-  }, [minutes, onSettled]);
+  }, [onSettled, value]);
 
   useEffect(() => {
     if (immediate) {
@@ -73,20 +84,21 @@ export default function CountUpDuration({
   }, [delayMs, durationMs, immediate, progress]);
 
   useAnimatedReaction(
-    () =>
-      Math.round((progress.value * minutes) / QUANTUM_MINUTES) * QUANTUM_MINUTES,
+    () => Math.round((progress.value * value) / quantum) * quantum,
     (current, previous) => {
       if (previous === null || current === previous) return;
-      scheduleOnRN(setDisplayMinutes, current);
+      scheduleOnRN(setDisplayValue, current);
     }
   );
 
   return (
     <Text
-      style={[styles.value, height < COMPACT_HEIGHT && styles.valueCompact]}
-      accessibilityLabel={`${formatScreenTime(minutes)} every day`}
+      style={[styles.value, height < COMPACT_HEIGHT && styles.valueCompact, style]}
+      accessibilityLabel={accessibilityLabel}
+      numberOfLines={1}
+      adjustsFontSizeToFit
     >
-      {formatScreenTime(displayMinutes)}
+      {format(displayValue)}
     </Text>
   );
 }

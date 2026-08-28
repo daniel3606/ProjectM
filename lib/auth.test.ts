@@ -5,7 +5,7 @@ import {
     displayNameFromMetadata,
     formatAppleDisplayName,
     getAuthStatus,
-    getPostAuthRoute,
+    resolveAppRoute,
     isAppleAuthCanceled,
     isDuplicateSignUpUser,
     isEmailVerified,
@@ -72,12 +72,24 @@ describe("auth helpers", () => {
     ).toBe("authenticated");
   });
 
-  it("sends authenticated users to onboarding or home", () => {
-    expect(getPostAuthRoute(false)).toBe("/onboarding");
-    expect(getPostAuthRoute(true)).toBe("/(tabs)");
+  it("gates every route behind an account, then splits on onboarding", () => {
+    // No guest mode: an unauthenticated user has one destination.
+    expect(resolveAppRoute("unauthenticated", false)).toBe("/auth");
+    expect(resolveAppRoute("unauthenticated", true)).toBe("/auth");
+
+    expect(resolveAppRoute("needs_verification", false)).toBe("/auth/verify");
+
+    // Onboarding runs after signing up, and only once.
+    expect(resolveAppRoute("authenticated", false)).toBe("/onboarding");
+    expect(resolveAppRoute("authenticated", true)).toBe("/(tabs)");
+  });
+
+  it("treats the gate and its sub-screens as reachable without a session", () => {
     expect(isPublicAuthRoute("/")).toBe(true);
+    expect(isPublicAuthRoute("/auth")).toBe(true);
     expect(isPublicAuthRoute("/auth/verify")).toBe(true);
     expect(isPublicAuthRoute("/(tabs)")).toBe(false);
+    expect(isPublicAuthRoute("/onboarding")).toBe(false);
   });
 
   it("normalizes and validates email/password before requests", () => {

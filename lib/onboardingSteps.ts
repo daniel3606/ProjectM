@@ -9,6 +9,7 @@
 export const ONBOARDING_STEPS = [
   "intro",
   "goal",
+  "age",
   "current-time",
   "target-time",
   "reclaimed",
@@ -16,7 +17,6 @@ export const ONBOARDING_STEPS = [
   "customize",
   "apps",
   "schedule",
-  "account",
   "ready",
 ] as const;
 
@@ -25,6 +25,7 @@ export type OnboardingStepId = (typeof ONBOARDING_STEPS)[number];
 const ROUTES = {
   intro: "/onboarding",
   goal: "/onboarding/goal",
+  age: "/onboarding/age",
   "current-time": "/onboarding/current-time",
   "target-time": "/onboarding/target-time",
   reclaimed: "/onboarding/reclaimed",
@@ -32,7 +33,6 @@ const ROUTES = {
   customize: "/onboarding/customize",
   apps: "/onboarding/apps",
   schedule: "/onboarding/schedule",
-  account: "/onboarding/account",
   ready: "/onboarding/ready",
 } as const satisfies Record<OnboardingStepId, string>;
 
@@ -40,10 +40,10 @@ export type OnboardingRoute = (typeof ROUTES)[OnboardingStepId];
 
 /**
  * The last step that asks the user for something. The progress bar fills to
- * exactly here, so reaching account creation reads as "the setup is done"
+ * exactly here, so reaching the final question reads as "the setup is done"
  * rather than leaving a stub of bar behind.
  */
-const FINAL_INPUT_STEP: OnboardingStepId = "account";
+const FINAL_INPUT_STEP: OnboardingStepId = "schedule";
 
 export function onboardingRoute(step: OnboardingStepId): OnboardingRoute {
   return ROUTES[step];

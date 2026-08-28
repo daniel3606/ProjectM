@@ -7,16 +7,23 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { findSchedulePreset, type SchedulePresetId } from "@/constants/onboarding";
-import { useAuth } from "@/contexts/AuthContext";
+import {
+  findAgeRange,
+  findSchedulePreset,
+  type AgeRangeId,
+  type SchedulePresetId,
+} from "@/constants/onboarding";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useTimedBlockPlans } from "@/contexts/TimedBlockPlansContext";
 import { track } from "@/lib/analytics";
 import {
+  computeLifetimeScreenTime,
   computeReclaimedTime,
   maxTargetMinutes,
   MIN_CURRENT_MINUTES,
+  remainingYearsFrom,
   snapScreenTime,
+  type LifetimeScreenTime,
   type ReclaimedTime,
 } from "@/lib/onboardingTime";
 import { clampScheduleShift, planFromPreset } from "@/lib/onboardingSchedule";
@@ -35,10 +42,13 @@ interface OnboardingContextValue {
   isReady: boolean;
 
   goalIds: string[];
+  ageRangeId: AgeRangeId | null;
   currentScreenTimeMinutes: number | null;
   targetScreenTimeMinutes: number | null;
   /** Derived from current/target; null until both are set. */
   reclaimedTime: ReclaimedTime | null;
+  /** The same habit at the scale of a life; null until the age band is known too. */
+  lifetimeScreenTime: LifetimeScreenTime | null;
 
   distractingApps: ScreenTimeItem[];
   screenTimePermission: AuthorizationStatus;
@@ -47,28 +57,22 @@ interface OnboardingContextValue {
   /** Minutes the chosen preset's window was nudged by, positive = later. */
   scheduleShiftMinutes: number;
 
-  isAuthenticated: boolean;
   isCompleted: boolean;
   hasStartedFirstFocusSession: boolean;
-  /** True once the user has actually attempted to sign up or in from this flow. */
-  signupStarted: boolean;
 
   /** Furthest step reached, used to resume a flow the user closed part-way through. */
   resumeStep: OnboardingStepId | null;
   /** True once the intro's opening sequence has played, so it isn't re-paced on a revisit. */
   hasSeenIntro: boolean;
-  hasSeenGrowthExplainer: boolean;
 
   markStepViewed: (step: OnboardingStepId) => void;
   markIntroSeen: () => void;
   toggleGoal: (goalId: string) => void;
+  setAgeRange: (id: AgeRangeId) => void;
   setCurrentScreenTime: (minutes: number) => void;
   setTargetScreenTime: (minutes: number) => void;
   markReclaimedTimeViewed: () => void;
-  markGrowthExplainerSeen: () => void;
   markCustomizationCompleted: () => void;
-
-  markSignupStarted: () => void;
 
   requestScreenTimePermission: () => Promise<boolean>;
   setDistractingApps: (apps: ScreenTimeItem[]) => void;
@@ -86,13 +90,16 @@ interface OnboardingContextValue {
 const OnboardingContext = createContext<OnboardingContextValue | null>(null);
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { status: authStatus } = useAuth();
   const profile = useMarshmallowProfile();
   const { addPlan } = useTimedBlockPlans();
 
   const [goalIds, setGoalIds, goalsLoaded] = usePersistedState<string[]>(
     "onboarding.goals",
     []
+  );
+  const [rawAgeRangeId, setRawAgeRangeId, ageLoaded] = usePersistedState<string | null>(
+    "onboarding.ageRange",
+    null
   );
   const [currentMinutes, setCurrentMinutes, currentLoaded] = usePersistedState<
     number | null
@@ -114,22 +121,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     null
   );
   const [hasSeenIntro, setHasSeenIntro] = usePersistedState("onboarding.seenIntro", false);
-  const [hasSeenGrowthExplainer, setHasSeenGrowthExplainer] = usePersistedState(
-    "onboarding.seenGrowthExplainer",
-    false
-  );
   const [hasStartedFirstFocusSession, setHasStartedFirstFocusSession] = usePersistedState(
     "onboarding.firstFocusSessionStarted",
     false
   );
-  // Persisted because email signup leaves the flow for verification and comes
-  // back on a fresh mount; without this the return trip can't tell a signup
-  // that just happened from a user who was already logged in.
-  const [signupStarted, setSignupStarted] = usePersistedState(
-    "onboarding.signupStarted",
-    false
-  );
-
   // The OS owns permission state, so it's read rather than stored — a user who
   // revokes access in Settings must not leave us claiming it's still granted.
   const [screenTimePermission, setScreenTimePermission] = useState<AuthorizationStatus>(
@@ -137,8 +132,15 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   );
 
   const resumeStep = isOnboardingStep(rawResumeStep) ? rawResumeStep : null;
+  const ageRange = findAgeRange(rawAgeRangeId);
+  const ageRangeId = ageRange?.id ?? null;
   const isReady =
-    goalsLoaded && currentLoaded && targetLoaded && resumeLoaded && profile.isProfileReady;
+    goalsLoaded &&
+    ageLoaded &&
+    currentLoaded &&
+    targetLoaded &&
+    resumeLoaded &&
+    profile.isProfileReady;
 
   const reclaimedTime = useMemo(
     () =>
@@ -146,6 +148,19 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         ? computeReclaimedTime(currentMinutes, targetMinutes)
         : null,
     [currentMinutes, targetMinutes]
+  );
+
+  const midpointAge = ageRange?.midpointAge ?? null;
+  const lifetimeScreenTime = useMemo(
+    () =>
+      currentMinutes !== null && reclaimedTime !== null && midpointAge !== null
+        ? computeLifetimeScreenTime(
+            currentMinutes,
+            reclaimedTime.dailyMinutes,
+            remainingYearsFrom(midpointAge)
+          )
+        : null,
+    [currentMinutes, midpointAge, reclaimedTime]
   );
 
   // One `onboarding_started` per flow, not per intro render. A resume point
@@ -194,6 +209,14 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     [setGoalIds]
   );
 
+  const setAgeRange = useCallback(
+    (id: AgeRangeId) => {
+      setRawAgeRangeId(id);
+      track("onboarding_age_range_selected", { age_range: id });
+    },
+    [setRawAgeRangeId]
+  );
+
   const setCurrentScreenTime = useCallback(
     (minutes: number) => {
       // Clamped here rather than only in the slider, so a value restored from an
@@ -229,32 +252,22 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     track("onboarding_reclaimed_time_viewed", {
       daily_minutes: reclaimedTime.dailyMinutes,
       weekly_minutes: reclaimedTime.weeklyMinutes,
+      years_reclaimed: lifetimeScreenTime
+        ? Math.round(lifetimeScreenTime.yearsReclaimed * 10) / 10
+        : null,
     });
-  }, [reclaimedTime]);
+  }, [lifetimeScreenTime, reclaimedTime]);
 
   const markIntroSeen = useCallback(() => {
     setHasSeenIntro(true);
   }, [setHasSeenIntro]);
 
-  const markGrowthExplainerSeen = useCallback(() => {
-    // The skip path reports completion too, so without this a revisit counts as
-    // a second viewing of an animation that didn't play.
-    if (hasSeenGrowthExplainer) return;
-    setHasSeenGrowthExplainer(true);
-    track("onboarding_growth_explainer_viewed");
-  }, [hasSeenGrowthExplainer, setHasSeenGrowthExplainer]);
-
   const markCustomizationCompleted = useCallback(() => {
     track("onboarding_customization_completed", {
       color: profile.color,
       named: profile.name.trim().length > 0,
-      accessories: Object.keys(profile.items).length,
     });
-  }, [profile.color, profile.items, profile.name]);
-
-  const markSignupStarted = useCallback(() => {
-    setSignupStarted(true);
-  }, [setSignupStarted]);
+  }, [profile.color, profile.name]);
 
   const requestScreenTimePermission = useCallback(async () => {
     track("screentime_permission_requested");
@@ -333,12 +346,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const completeOnboarding = useCallback(async () => {
     track("onboarding_completed", {
       goal_count: goalIds.length,
+      age_range: ageRangeId,
       current_minutes: currentMinutes,
       target_minutes: targetMinutes,
       reclaimed_minutes: reclaimedTime?.dailyMinutes ?? null,
       schedule_preset: schedulePresetId,
       screentime_permission: screenTimePermission,
-      authenticated: authStatus === "authenticated",
     });
 
     setResumeStep(null);
@@ -348,7 +361,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       targetScreenTimeMinutes: targetMinutes,
     });
   }, [
-    authStatus,
+    ageRangeId,
     currentMinutes,
     goalIds,
     profile,
@@ -369,28 +382,26 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     () => ({
       isReady,
       goalIds,
+      ageRangeId,
       currentScreenTimeMinutes: currentMinutes,
       targetScreenTimeMinutes: targetMinutes,
       reclaimedTime,
+      lifetimeScreenTime,
       distractingApps: profile.distractingApps,
       screenTimePermission,
       schedulePresetId,
       scheduleShiftMinutes,
-      isAuthenticated: authStatus === "authenticated",
       isCompleted: profile.onboardingCompleted,
       hasStartedFirstFocusSession,
-      signupStarted,
       resumeStep,
       hasSeenIntro,
-      hasSeenGrowthExplainer,
       markStepViewed,
       markIntroSeen,
-      markSignupStarted,
       toggleGoal,
+      setAgeRange,
       setCurrentScreenTime,
       setTargetScreenTime,
       markReclaimedTimeViewed,
-      markGrowthExplainerSeen,
       markCustomizationCompleted,
       requestScreenTimePermission,
       setDistractingApps,
@@ -404,28 +415,26 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     [
       isReady,
       goalIds,
+      ageRangeId,
       currentMinutes,
       targetMinutes,
       reclaimedTime,
+      lifetimeScreenTime,
       profile.distractingApps,
       profile.onboardingCompleted,
       screenTimePermission,
       schedulePresetId,
       scheduleShiftMinutes,
-      authStatus,
       hasStartedFirstFocusSession,
-      signupStarted,
       resumeStep,
       hasSeenIntro,
-      hasSeenGrowthExplainer,
       markStepViewed,
       markIntroSeen,
-      markSignupStarted,
       toggleGoal,
+      setAgeRange,
       setCurrentScreenTime,
       setTargetScreenTime,
       markReclaimedTimeViewed,
-      markGrowthExplainerSeen,
       markCustomizationCompleted,
       requestScreenTimePermission,
       setDistractingApps,

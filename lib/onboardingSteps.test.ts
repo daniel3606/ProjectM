@@ -34,7 +34,7 @@ describe("flow order", () => {
 describe("progress", () => {
   it("runs from empty on the intro to full once setup is done", () => {
     expect(stepProgress("intro")).toBe(0);
-    expect(stepProgress("account")).toBe(1);
+    expect(stepProgress("schedule")).toBe(1);
     expect(stepProgress("ready")).toBe(1);
   });
 

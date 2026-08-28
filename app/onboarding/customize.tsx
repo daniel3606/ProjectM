@@ -1,13 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { Keyboard, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, StyleSheet, TextInput, View } from "react-native";
 import {
   Headline,
   MarshmallowStage,
   OnboardingCTA,
   OnboardingLayout,
 } from "@/components/onboarding";
-import { ColorPicker, ItemPicker } from "@/components/ui";
-import { getItemsForSlot } from "@/constants/items";
+import { ColorPicker } from "@/components/ui";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
 import Theme from "@/constants/theme";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
@@ -17,11 +16,10 @@ import { useOnboardingStep } from "@/lib/useOnboardingStep";
 
 type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
 
-const FACE_ITEMS = getItemsForSlot("face");
-
 /**
- * Three choices, no more. The point of this screen is attachment, not
- * configuration — the full customization system lives on the Customize tab.
+ * A colour and a name, no more. The point of this screen is attachment, not
+ * configuration — accessories and the rest of the wardrobe live on the
+ * Customize tab, where nobody is mid-flow and in a hurry.
  */
 export default function OnboardingCustomizeStep() {
   const profile = useMarshmallowProfile();
@@ -45,14 +43,6 @@ export default function OnboardingCustomizeStep() {
     [acknowledgeChange, profile]
   );
 
-  const handleFaceItem = useCallback(
-    (itemId: string) => {
-      acknowledgeChange();
-      profile.toggleItem("face", itemId);
-    },
-    [acknowledgeChange, profile]
-  );
-
   const handleContinue = useCallback(() => {
     Keyboard.dismiss();
     const trimmed = name.trim();
@@ -60,10 +50,6 @@ export default function OnboardingCustomizeStep() {
     markCustomizationCompleted();
     goNext();
   }, [goNext, markCustomizationCompleted, name, profile]);
-
-  const equippedFace = profile.items.face;
-  const faceCaption =
-    FACE_ITEMS.find((item) => item.id === equippedFace)?.name ?? "No accessory";
 
   return (
     <OnboardingLayout
@@ -92,15 +78,6 @@ export default function OnboardingCustomizeStep() {
         layout="row"
       />
 
-      <View style={styles.accessories}>
-        <ItemPicker
-          items={FACE_ITEMS}
-          selectedId={equippedFace}
-          onSelect={handleFaceItem}
-        />
-        <Text style={styles.caption}>{faceCaption}</Text>
-      </View>
-
       <TextInput
         style={styles.nameInput}
         placeholder="Name your Marshmallow"
@@ -124,19 +101,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 28,
   },
-  accessories: {
-    marginTop: 24,
-    alignItems: "center",
-  },
-  caption: {
-    marginTop: 8,
-    fontFamily: Theme.fonts.medium,
-    fontSize: 13,
-    color: Theme.colors.gray,
-    textAlign: "center",
-  },
   nameInput: {
-    marginTop: 28,
+    marginTop: 32,
     marginBottom: 20,
     paddingVertical: 14,
     paddingHorizontal: 18,

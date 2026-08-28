@@ -42,6 +42,7 @@ export default function AuthProviders({ onAttempt, style }: AuthProvidersProps) 
   const [emailMode, setEmailMode] = useState<EmailAuthMode>("signup");
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [pending, setPending] = useState<AuthMethod | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -56,7 +57,9 @@ export default function AuthProviders({ onAttempt, style }: AuthProvidersProps) 
   // A session can arrive while the sheet is still up (email sign-in, or a
   // provider round trip), and the form behind it is no longer meaningful.
   useEffect(() => {
-    if (user) sheetRef.current?.dismiss();
+    if (!user) return;
+    sheetRef.current?.dismiss();
+    setError(null);
   }, [user]);
 
   const runProvider = useCallback(
@@ -64,8 +67,14 @@ export default function AuthProviders({ onAttempt, style }: AuthProvidersProps) 
       if (isAuthBusy) return;
       onAttempt?.(method);
       setPending(method);
+      setError(null);
       try {
-        await (method === "apple" ? signInWithApple() : signInWithGoogle());
+        const result = await (method === "apple" ? signInWithApple() : signInWithGoogle());
+        // Backing out of the provider sheet is a decision, not a failure, so
+        // it passes without a message. Anything else has to be said out loud:
+        // the sheet closing on its own is otherwise indistinguishable from a
+        // tap that did nothing.
+        if (result.error && !result.canceled) setError(result.error);
       } finally {
         setPending(null);
       }
@@ -93,6 +102,12 @@ export default function AuthProviders({ onAttempt, style }: AuthProvidersProps) 
   return (
     <>
       <View style={[styles.providers, style]}>
+        {error ? (
+          <Text style={styles.error} testID="auth-provider-error">
+            {error}
+          </Text>
+        ) : null}
+
         {Platform.OS === "ios" && appleAvailable ? (
           <View
             pointerEvents={isAuthBusy ? "none" : "auto"}
@@ -176,6 +191,13 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     paddingVertical: 10,
     marginTop: 4,
+  },
+  error: {
+    marginBottom: 12,
+    color: Theme.colors.danger,
+    fontSize: 14,
+    fontFamily: Theme.fonts.regular,
+    textAlign: "center",
   },
   signInText: {
     fontFamily: Theme.fonts.regular,

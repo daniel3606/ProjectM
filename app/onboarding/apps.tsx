@@ -8,6 +8,7 @@ import {
   Supporting,
 } from "@/components/onboarding";
 import { Button, Card } from "@/components/ui";
+import { MIN_DISTRACTING_APPS } from "@/constants/onboarding";
 import Theme from "@/constants/theme";
 import { useOnboarding } from "@/contexts/OnboardingContext";
 import { hapticLight } from "@/lib/haptics";
@@ -73,19 +74,15 @@ export default function OnboardingAppsStep() {
 
   const appCount = distractingApps.filter((item) => item.type === "application").length;
   const groupCount = distractingApps.length - appCount;
+  const shortfall = MIN_DISTRACTING_APPS - distractingApps.length;
+  const hasEnough = shortfall <= 0;
 
   if (isApproved) {
     return (
       <OnboardingLayout
         progress={progress}
         onBack={goBack}
-        footer={
-          <OnboardingCTA
-            label="Continue"
-            onPress={goNext}
-            disabled={distractingApps.length === 0}
-          />
-        }
+        footer={<OnboardingCTA label="Continue" onPress={goNext} disabled={!hasEnough} />}
       >
         <Headline style={styles.headline}>Choose what{"\n"}distracts you.</Headline>
 
@@ -97,12 +94,15 @@ export default function OnboardingAppsStep() {
                   {describeSelection(appCount, groupCount)}
                 </Text>
                 <Text style={styles.selectionNote}>
-                  These stay closed during Focus Sessions.
+                  {hasEnough
+                    ? "These stay closed during Focus Sessions."
+                    : describeShortfall(shortfall)}
                 </Text>
               </>
             ) : (
               <Text style={styles.selectionNote}>
-                Pick the apps you lose the most time to.
+                Pick at least {MIN_DISTRACTING_APPS} of the apps you lose the most
+                time to.
               </Text>
             )}
 
@@ -110,7 +110,7 @@ export default function OnboardingAppsStep() {
               variant="outline"
               onPress={openPicker}
               loading={isWorking}
-              label={distractingApps.length > 0 ? "Edit Selection" : "Choose Apps"}
+              label={selectionButtonLabel(distractingApps.length, hasEnough)}
               style={styles.selectionButton}
             />
           </Card>
@@ -147,7 +147,7 @@ export default function OnboardingAppsStep() {
       <View style={styles.body}>
         <Supporting>
           Marshmallow uses Screen Time access to block the apps you choose during
-          Focus Sessions.
+          Focus Sessions. Pick at least {MIN_DISTRACTING_APPS}.
         </Supporting>
 
         {isDenied ? (
@@ -185,6 +185,18 @@ function describeSelection(appCount: number, groupCount: number): string {
     parts.push(`${groupCount} categor${groupCount === 1 ? "y" : "ies"}`);
   }
   return `${parts.join(" and ")} selected`;
+}
+
+/** Says what is still missing, rather than only that the button is off. */
+function describeShortfall(shortfall: number): string {
+  return shortfall === 1
+    ? "Add one more to continue."
+    : `Add ${shortfall} more to continue.`;
+}
+
+function selectionButtonLabel(selectedCount: number, hasEnough: boolean): string {
+  if (selectedCount === 0) return "Choose Apps";
+  return hasEnough ? "Edit Selection" : "Add More";
 }
 
 const styles = StyleSheet.create({

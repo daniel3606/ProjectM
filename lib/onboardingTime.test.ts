@@ -1,14 +1,20 @@
 /** @jest-environment node */
 
+import { AGE_RANGES } from "@/constants/onboarding";
 import {
+  computeLifetimeScreenTime,
   computeReclaimedTime,
   describeWeekly,
   describeYearly,
+  describeYears,
   formatScreenTime,
+  formatYears,
+  LIFE_EXPECTANCY_YEARS,
   maxTargetMinutes,
   MAX_SCREEN_TIME_MINUTES,
   MIN_CURRENT_MINUTES,
   MIN_SCREEN_TIME_MINUTES,
+  remainingYearsFrom,
   SCREEN_TIME_STEP_MINUTES,
   snapScreenTime,
   suggestTargetMinutes,
@@ -86,5 +92,56 @@ describe("reclaimed time", () => {
 
   it("keeps the yearly figure vague enough to be honest", () => {
     expect(describeYearly(170)).toBe("Around 1,030 hours a year.");
+  });
+});
+
+describe("lifetime cost", () => {
+  it("counts the years left from the middle of the band, not its edges", () => {
+    expect(remainingYearsFrom(30)).toBe(LIFE_EXPECTANCY_YEARS - 30);
+  });
+
+  it("still offers a horizon to someone past the life expectancy it assumes", () => {
+    expect(remainingYearsFrom(95)).toBeGreaterThan(0);
+  });
+
+  it("gives every age band a horizon", () => {
+    for (const range of AGE_RANGES) {
+      expect(remainingYearsFrom(range.midpointAge)).toBeGreaterThan(0);
+    }
+  });
+
+  it("restates a daily habit as days a year and years of a life", () => {
+    // 5h a day for the 50 years a 30-year-old has left.
+    const lifetime = computeLifetimeScreenTime(300, 165, 50);
+    expect(lifetime.daysPerYear).toBe(76);
+    expect(lifetime.yearsLost).toBeCloseTo(10.42, 2);
+    expect(lifetime.yearsReclaimed).toBeCloseTo(5.73, 2);
+  });
+
+  it("never promises back more life than the habit was costing", () => {
+    const lifetime = computeLifetimeScreenTime(120, 600, 50);
+    expect(lifetime.yearsReclaimed).toBeCloseTo(lifetime.yearsLost, 5);
+  });
+
+  it("has nothing to reclaim for someone who reports no screen time", () => {
+    expect(computeLifetimeScreenTime(0, 0, 50)).toEqual({
+      daysPerYear: 0,
+      remainingYears: 50,
+      yearsLost: 0,
+      yearsReclaimed: 0,
+    });
+  });
+
+  it("carries a decimal only while it still means something", () => {
+    expect(formatYears(5.73)).toBe("5.7");
+    expect(formatYears(6)).toBe("6");
+    expect(formatYears(10.42)).toBe("10");
+    expect(formatYears(21.6)).toBe("22");
+  });
+
+  it("reads the singular out loud correctly", () => {
+    expect(describeYears(1)).toBe("1 year");
+    expect(describeYears(1.4)).toBe("1.4 years");
+    expect(describeYears(12)).toBe("12 years");
   });
 });

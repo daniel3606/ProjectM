@@ -4,7 +4,6 @@ import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 import { Screen, Button } from "@/components/ui";
-import AuthProviders from "@/components/AuthProviders";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
@@ -46,7 +45,7 @@ export default function SettingsScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace("/");
+    router.replace("/auth");
   };
 
   return (
@@ -127,21 +126,12 @@ export default function SettingsScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          {user ? (
-            <Button
-              label="Sign Out"
-              variant="outline"
-              onPress={handleSignOut}
-              style={styles.signOutBtn}
-            />
-          ) : (
-            <View style={styles.guestCta}>
-              <Text style={styles.guestCtaText}>
-                Sign up to sync your progress and add friends
-              </Text>
-              <AuthProviders style={styles.guestProviders} />
-            </View>
-          )}
+          <Button
+            label="Sign Out"
+            variant="outline"
+            onPress={handleSignOut}
+            style={styles.signOutBtn}
+          />
         </View>
       </Screen>
     </>
@@ -302,18 +292,5 @@ const styles = StyleSheet.create({
   signOutBtn: {
     alignSelf: "center",
     minWidth: 160,
-  },
-  guestCta: {
-    gap: 12,
-  },
-  guestCtaText: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.gray,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  guestProviders: {
-    width: "100%",
   },
 });

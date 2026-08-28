@@ -7,6 +7,7 @@ import { OnboardingProvider } from "@/contexts/OnboardingContext";
 import { StatsProvider } from "@/contexts/StatsContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
+import { isPublicAuthRoute, resolveAppRoute } from "@/lib/auth";
 import { requestNotificationPermissions } from "@/lib/notifications";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
@@ -22,17 +23,24 @@ SplashScreen.preventAutoHideAsync();
  * `dataGeneration`, which remounts the subtree so the previous user's state
  * is dropped rather than left on screen until a hydrate replaces it.
  *
- * Keyed on the counter rather than the user id on purpose: a guest signing up
- * is adopting the marshmallow they just made, and must not be reset.
+ * Keyed on the counter rather than the user id so that only a sign-out clears
+ * state. Signing in must not, or the profile fetched for the new session would
+ * be torn down by the very remount that observed it.
  */
 function AccountScope({ children }: { children: React.ReactNode }) {
   const { dataGeneration } = useAuth();
   return <React.Fragment key={dataGeneration}>{children}</React.Fragment>;
 }
 
+/**
+ * Keeps the session and the route in agreement. Losing a session — signing
+ * out, or a refresh token that has expired while the app was closed — must
+ * take the user off whatever screen they were on, since none of it is theirs
+ * to see any more.
+ */
 function AuthNavigationGuard() {
   const { status, user, isLoading } = useAuth();
-  const { isProfileReady } = useMarshmallowProfile();
+  const { isProfileReady, onboardingCompleted } = useMarshmallowProfile();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -43,14 +51,36 @@ function AuthNavigationGuard() {
   }, [isLoading, isProfileReady]);
 
   useEffect(() => {
-    if (isLoading || !isProfileReady) return;
+    if (isLoading || status === "loading" || !isProfileReady) return;
+
+    if (status === "unauthenticated" && !isPublicAuthRoute(pathname)) {
+      router.replace("/auth");
+      return;
+    }
+
     if (status === "needs_verification" && !pathname.startsWith("/auth/")) {
       router.replace({
         pathname: "/auth/verify",
         params: { email: user?.email ?? "" },
       });
+      return;
     }
-  }, [isLoading, isProfileReady, status, pathname, user?.email, router]);
+
+    // Signing in succeeds without moving anyone: the auth screens have no idea
+    // where a session belongs. Sending them on from here keeps that decision in
+    // one place, and covers arriving with a session already restored.
+    if (status === "authenticated" && isPublicAuthRoute(pathname)) {
+      router.replace(resolveAppRoute(status, onboardingCompleted));
+    }
+  }, [
+    isLoading,
+    isProfileReady,
+    onboardingCompleted,
+    pathname,
+    router,
+    status,
+    user?.email,
+  ]);
 
   return null;
 }
@@ -86,6 +116,11 @@ export default function Layout() {
                           <AuthNavigationGuard />
                           <Stack>
                             <Stack.Screen name="index" options={{ headerShown: false }} />
+
+                            <Stack.Screen
+                              name="auth/index"
+                              options={{ headerShown: false, animation: "fade" }}
+                            />
 
                             <Stack.Screen
                               name="auth/verify"

@@ -16,6 +16,7 @@ export async function signInWithGoogleOAuth(): Promise<SocialAuthResult> {
   });
 
   if (error) {
+    console.warn(`[auth] google authorize failed: ${error.message}`);
     return { error: mapAuthErrorMessage(error.message), canceled: false };
   }
 
@@ -33,6 +34,7 @@ export async function signInWithGoogleOAuth(): Promise<SocialAuthResult> {
   }
 
   if (result.type !== "success" || !result.url) {
+    console.warn(`[auth] google session ended as "${result.type}" without a callback`);
     return {
       error: "Google sign-in did not complete. Please try again.",
       canceled: false,
@@ -40,6 +42,10 @@ export async function signInWithGoogleOAuth(): Promise<SocialAuthResult> {
   }
 
   const callback = await completeAuthFromUrl(result.url);
+  if (callback.error) {
+    // The URL itself is never logged: it carries the single-use auth code.
+    console.warn(`[auth] google callback rejected: ${callback.error}`);
+  }
   if (callback.canceled) {
     return { error: null, canceled: true };
   }
