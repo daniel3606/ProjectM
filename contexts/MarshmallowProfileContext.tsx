@@ -21,6 +21,8 @@ interface MarshmallowProfileContextValue {
   /** Equips `itemId` in its slot, or clears the slot if it's already equipped there. */
   toggleItem: (slot: ItemSlot, itemId: string) => void;
   setOnboardingPurpose: (purpose: string) => void;
+  /** The screen-time band the user picked during onboarding; Stats reads it as their starting point. */
+  onboardingScreenTime: string | null;
   setOnboardingScreenTime: (screenTime: string) => void;
   /** Apps chosen during onboarding for quick-add on focus blocks. */
   distractingApps: ScreenTimeItem[];
@@ -202,6 +204,7 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       setColor,
       toggleItem,
       setOnboardingPurpose,
+      onboardingScreenTime,
       setOnboardingScreenTime,
       distractingApps,
       setDistractingApps,
@@ -217,6 +220,7 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       setColor,
       toggleItem,
       setOnboardingPurpose,
+      onboardingScreenTime,
       setOnboardingScreenTime,
       distractingApps,
       setDistractingApps,

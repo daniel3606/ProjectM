@@ -19,6 +19,18 @@ const Colors = {
     warning: '#FF9500',
     info: '#5856D6',
 
+    // Calm progress/regress pair for Stats. The system green/red read as alerts
+    // next to the warm palette, which is the wrong tone for a trend line.
+    positive: '#5C8C6E',
+    positiveSoft: '#E7F0E9',
+    attention: '#B5766B',
+    attentionSoft: '#F6E7E3',
+
+    /** Hairline between sections, lighter than a card border. */
+    divider: '#E8DCCC',
+    /** Unfilled part of a bar, meter, or chart column. */
+    track: '#EFE4D6',
+
     card: '#FFF5EA',
     cardBorder: '#CCC2B7',
     cardActiveTint: '#FFF8F0',

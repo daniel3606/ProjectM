@@ -2,6 +2,14 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 
+/**
+ * Whether Settings keeps its own tab. Flip to false to move it behind the
+ * profile/gear entry point: the route stays mounted and `router.push
+ * ("/(tabs)/settings")` keeps working, it just leaves the bar. Nothing in
+ * Stats depends on this either way.
+ */
+const SETTINGS_IN_TAB_BAR = true;
+
 export default function TabLayout() {
   return (
     <Tabs
@@ -43,9 +51,21 @@ export default function TabLayout() {
       <Tabs.Screen
         name="timed-block"
         options={{
-          title: "Timed Block",
+          // Shortened from "Timed Block": six tabs leave ~67pt each, which
+          // truncated the longer label.
+          title: "Blocks",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="hourglass-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="stats"
+        options={{
+          title: "Stats",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="stats-chart-outline" size={size} color={color} />
           ),
         }}
       />
@@ -62,6 +82,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: "Settings",
+          href: SETTINGS_IN_TAB_BAR ? undefined : null,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings-outline" size={size} color={color} />
           ),
