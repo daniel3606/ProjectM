@@ -150,7 +150,7 @@ export default function Layout() {
                         />
 
                         <Stack.Screen
-                          name="profile"
+                          name="settings"
                           options={{
                             headerShown: false,
                             presentation: "card",
