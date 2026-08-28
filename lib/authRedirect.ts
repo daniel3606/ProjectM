@@ -86,7 +86,12 @@ export async function completeAuthFromUrl(
 
   if (params.code) {
     const { error } = await supabase.auth.exchangeCodeForSession(params.code);
-    if (error) return { error: mapAuthErrorMessage(error.message), nextRoute: null };
+    if (error) {
+      // The mapped message is deliberately vague, which is useless when the
+      // exchange is what broke. The code itself is never logged.
+      console.warn(`[auth] code exchange failed: ${error.message}`);
+      return { error: mapAuthErrorMessage(error.message), nextRoute: null };
+    }
     return { error: null, nextRoute: "/" };
   }
 
@@ -108,5 +113,6 @@ export async function completeAuthFromUrl(
     return { error: null, nextRoute: "/" };
   }
 
+  console.warn(`[auth] callback had no usable params; keys=${Object.keys(params).join(",") || "none"}`);
   return { error: "Missing confirmation parameters.", nextRoute: null };
 }

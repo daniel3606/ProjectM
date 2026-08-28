@@ -219,7 +219,7 @@ export default function TimedBlockScreen() {
 
   const handleAddPlan = useCallback(() => {
     if (!canAddPlan) {
-      router.push("/onboarding-premium");
+      router.push("/premium");
       return;
     }
     setEditingPlan(null);

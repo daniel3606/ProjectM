@@ -86,7 +86,7 @@ export default function StatsScreen() {
 
   const handleUnlock = useCallback(() => {
     trackStats(STATS_EVENTS.premiumCtaPressed, { period, source: "stats" });
-    router.push("/onboarding-premium");
+    router.push("/premium");
   }, [period, router]);
 
   const handleSeeAllApps = useCallback(() => {

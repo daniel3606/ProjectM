@@ -51,6 +51,8 @@ interface FocusSessionSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   currentSizeCm: number;
   onStartSession: (config: FocusSessionConfig) => void;
+  /** Duration the sheet opens on. Lowered for a user's first session so it asks less of them. */
+  defaultDurationMinutes?: number;
   /** Opens the paywall when a PRO-only control is tapped. */
   onUpgrade: () => void;
 }
@@ -59,6 +61,7 @@ export default function FocusSessionSheet({
   sheetRef,
   currentSizeCm,
   onStartSession,
+  defaultDurationMinutes = 30,
   onUpgrade,
 }: FocusSessionSheetProps) {
   const insets = useSafeAreaInsets();
@@ -69,7 +72,15 @@ export default function FocusSessionSheet({
   } = useMarshmallowProfile();
   const { isPremium } = useSubscription();
 
-  const [totalMinutes, setTotalMinutes] = useState(30);
+  const [totalMinutes, setTotalMinutes] = useState(defaultDurationMinutes);
+  // The caller's default can arrive after mount (it depends on persisted state),
+  // so adopt it until the user has set a duration themselves.
+  const durationTouchedRef = useRef(false);
+  useEffect(() => {
+    if (durationTouchedRef.current) return;
+    setTotalMinutes(defaultDurationMinutes);
+  }, [defaultDurationMinutes]);
+
   const [isHardMode, setIsHardMode] = useState(false);
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
   const [blockMode, setBlockMode] = useState<BlockMode>("block");
@@ -129,11 +140,15 @@ export default function FocusSessionSheet({
     if (index !== 0) return;
     try {
       const items = await ScreenTime.getSelectedItems();
-      setSelectedApps((prev) => (prev.length > 0 ? prev : items));
+      // Falling back to the onboarding choices keeps a first session from
+      // opening on an empty selection with a disabled Start button.
+      setSelectedApps((prev) =>
+        prev.length > 0 ? prev : items.length > 0 ? items : distractingApps
+      );
     } catch {
       // Silently fail; the user can still pick apps from the Blocked Apps sheet.
     }
-  }, []);
+  }, [distractingApps]);
 
   // Losing premium (a lapsed subscription) must not leave a PRO-only setting
   // switched on behind the user's back.
@@ -154,14 +169,14 @@ export default function FocusSessionSheet({
     [isPremium, onUpgrade]
   );
 
-  const handleDecrease = useCallback(
-    () => setTotalMinutes((prev) => stepDuration(prev, -1)),
-    []
-  );
-  const handleIncrease = useCallback(
-    () => setTotalMinutes((prev) => stepDuration(prev, 1)),
-    []
-  );
+  const handleDecrease = useCallback(() => {
+    durationTouchedRef.current = true;
+    setTotalMinutes((prev) => stepDuration(prev, -1));
+  }, []);
+  const handleIncrease = useCallback(() => {
+    durationTouchedRef.current = true;
+    setTotalMinutes((prev) => stepDuration(prev, 1));
+  }, []);
 
   const handleConfirmApps = useCallback((apps: ScreenTimeItem[], mode: BlockMode) => {
     setSelectedApps(apps);

@@ -117,22 +117,51 @@ export async function ensureAppProfile(user: User): Promise<void> {
   await supabase.from("profiles").update(update).eq("id", user.id);
 }
 
-/** Persist onboarding answers and/or completion onto the profile. */
-export async function syncOnboarding(update: {
-  purpose?: string | null;
-  screenTime?: string | null;
-  completed?: boolean;
-}): Promise<void> {
+/** What the onboarding flow learned about the user, pushed once at completion. */
+export interface OnboardingAnswers {
+  goals?: string[];
+  currentScreenTimeMinutes?: number | null;
+  targetScreenTimeMinutes?: number | null;
+}
+
+/**
+ * Persist onboarding answers and/or completion onto the profile.
+ *
+ * Called once, when onboarding finishes — partial answers stay on the device
+ * until then, so an abandoned flow leaves no half-formed preferences behind.
+ *
+ * Unlike the other writes here, this one reports whether it landed. Completion
+ * is the fact that decides whether someone is ever asked to set the app up
+ * again, and a write that fails quietly turns that into a loop.
+ */
+export async function syncOnboarding(
+  update: OnboardingAnswers & { completed?: boolean }
+): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
-  if (!userId) return;
+  if (!userId) return { error: "No signed-in account to save onboarding to." };
 
   const payload: ProfileUpdate = {};
-  if (update.purpose !== undefined) payload.onboarding_purpose = update.purpose;
-  if (update.screenTime !== undefined) payload.onboarding_screen_time = update.screenTime;
+  if (update.goals !== undefined) {
+    payload.onboarding_goals = update.goals;
+    // Legacy single-purpose column, kept readable for anything still reading it.
+    payload.onboarding_purpose = update.goals[0] ?? null;
+  }
+  if (update.currentScreenTimeMinutes !== undefined) {
+    payload.onboarding_current_minutes = update.currentScreenTimeMinutes;
+    payload.onboarding_screen_time =
+      update.currentScreenTimeMinutes === null
+        ? null
+        : String(update.currentScreenTimeMinutes);
+  }
+  if (update.targetScreenTimeMinutes !== undefined) {
+    payload.onboarding_target_minutes = update.targetScreenTimeMinutes;
+  }
   if (update.completed !== undefined) payload.onboarding_completed = update.completed;
-  if (Object.keys(payload).length === 0) return;
+  if (Object.keys(payload).length === 0) return { error: null };
 
-  await supabase.from("profiles").update(payload).eq("id", userId);
+  const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
+  if (error) console.warn(`[sync] onboarding write failed: ${error.message}`);
+  return { error: error?.message ?? null };
 }
 
 /** Fetch completed sessions from Supabase (for hydrating local history on login). */

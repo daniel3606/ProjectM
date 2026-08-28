@@ -45,7 +45,7 @@ export default function SettingsScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    router.replace("/");
+    router.replace("/auth");
   };
 
   return (
@@ -113,7 +113,7 @@ export default function SettingsScreen() {
               icon="star-outline"
               label="Subscription"
               value={isPremium ? "Premium" : "Free"}
-              onPress={() => router.push("/onboarding-premium")}
+              onPress={() => router.push("/premium")}
             />
             <SettingsRow
               icon="color-palette-outline"
@@ -126,25 +126,12 @@ export default function SettingsScreen() {
 
         {/* Actions */}
         <View style={styles.actions}>
-          {user ? (
-            <Button
-              label="Sign Out"
-              variant="outline"
-              onPress={handleSignOut}
-              style={styles.signOutBtn}
-            />
-          ) : (
-            <View style={styles.guestCta}>
-              <Text style={styles.guestCtaText}>
-                Sign up to sync your progress and add friends
-              </Text>
-              <Button
-                label="Sign Up"
-                onPress={() => router.replace("/")}
-                style={styles.signUpBtn}
-              />
-            </View>
-          )}
+          <Button
+            label="Sign Out"
+            variant="outline"
+            onPress={handleSignOut}
+            style={styles.signOutBtn}
+          />
         </View>
       </Screen>
     </>
@@ -304,20 +291,6 @@ const styles = StyleSheet.create({
   },
   signOutBtn: {
     alignSelf: "center",
-    minWidth: 160,
-  },
-  guestCta: {
-    alignItems: "center",
-    gap: 12,
-  },
-  guestCtaText: {
-    fontSize: 15,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.gray,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  signUpBtn: {
     minWidth: 160,
   },
 });

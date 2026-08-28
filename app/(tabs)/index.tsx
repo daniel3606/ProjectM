@@ -5,6 +5,7 @@ import GrowthResultModal from "@/components/GrowthResultModal";
 import NameGateModal from "@/components/NameGateModal";
 import SettingsButton from "@/components/SettingsButton";
 import { GrowthScene } from "@/components/growth";
+import { FirstSessionCoachMark } from "@/components/onboarding";
 import { Button, Card, Screen } from "@/components/ui";
 import { computeMarshmallowSizeCm, formatTimeRemaining } from "@/constants/marshmallow";
 import { BREAK_LENGTH_MINUTES } from "@/lib/focusBreaks";
@@ -14,6 +15,7 @@ import {
   type FocusSessionConfig,
 } from "@/contexts/FocusSessionContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { useOnboarding } from "@/contexts/OnboardingContext";
 import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 import * as ScreenTime from "@/modules/screen-time";
@@ -22,6 +24,9 @@ import { BottomSheetModal, useBottomSheetModal } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
+
+/** Short enough that a first session is an easy yes, long enough to be worth running. */
+const FIRST_SESSION_MINUTES = 15;
 
 interface HomeScreenProps {
   /**
@@ -36,6 +41,7 @@ interface HomeScreenProps {
 export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const router = useRouter();
   const profile = useMarshmallowProfile();
+  const { hasStartedFirstFocusSession, markFirstFocusSessionStarted } = useOnboarding();
 
   const {
     activeSession,
@@ -61,6 +67,16 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const focusSheetRef = useRef<BottomSheetModal>(null);
   const { dismissAll } = useBottomSheetModal();
 
+  // The activation goal is a real session, not arriving here, so the hint only
+  // exists for someone who has never run one. `history` keeps it away from
+  // people who focused before this flag existed.
+  const [isCoachMarkDismissed, setIsCoachMarkDismissed] = useState(false);
+  const showCoachMark =
+    !hasStartedFirstFocusSession &&
+    !isCoachMarkDismissed &&
+    !isFocusActive &&
+    history.length === 0;
+
   const {
     editBlockSheetRef,
     isEditGateVisible,
@@ -85,7 +101,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   // paywall rendering underneath, so the tap looks like it did nothing.
   const handleUpgrade = useCallback(() => {
     dismissAll();
-    router.push("/onboarding-premium");
+    router.push("/premium");
   }, [dismissAll, router]);
 
   const handleOpenFocusSheet = useCallback(async () => {
@@ -99,12 +115,13 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     try {
       await ScreenTime.applyBlockMode(config.blockMode ?? "block", config.appIds ?? []);
       startSession(config);
+      markFirstFocusSessionStarted();
     } catch (error) {
       Alert.alert("Error", `Failed to start focus session: ${error}`);
     } finally {
       setIsLoading(false);
     }
-  }, [startSession]);
+  }, [markFirstFocusSessionStarted, startSession]);
 
   const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
 
@@ -240,6 +257,13 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         </Card>
       )}
 
+      {/* ── First-session hint ──────────────────────────────────────── */}
+      {showCoachMark && (
+        <View style={styles.coachMark}>
+          <FirstSessionCoachMark onDismiss={() => setIsCoachMarkDismissed(true)} />
+        </View>
+      )}
+
       {/* ── Start / End Focus button ──────────────────────────────────── */}
       <Button
         onPress={isFocusActive ? handleStopFocus : handleOpenFocusSheet}
@@ -263,6 +287,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
           styles.focusButton,
           isFocusActive && styles.focusButtonActiveSpacing,
           isFocusActive && styles.focusButtonActive,
+          showCoachMark && styles.focusButtonHinted,
         ]}
       />
 
@@ -271,6 +296,9 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         sheetRef={focusSheetRef}
         currentSizeCm={actualSizeCm}
         onStartSession={handleStartSession}
+        defaultDurationMinutes={
+          hasStartedFirstFocusSession ? undefined : FIRST_SESSION_MINUTES
+        }
         onUpgrade={handleUpgrade}
       />
 
@@ -350,6 +378,14 @@ const styles = StyleSheet.create({
   },
   focusButtonActiveSpacing: {
     marginTop: Theme.spacing.xl,
+  },
+  focusButtonHinted: {
+    marginTop: Theme.spacing.md,
+  },
+
+  /* First-session hint, sitting where the button's top margin would be */
+  coachMark: {
+    marginTop: Theme.spacing.xxl,
   },
 
   /* Quick Block timer */

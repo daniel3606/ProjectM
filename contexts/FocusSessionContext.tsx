@@ -173,19 +173,42 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     ScreenTime.setMarshmallowSizeCm(computeMarshmallowSizeCm(history));
   }, [history]);
 
-  // Hydrate session history from Supabase on login
+  // Hydrate session history from Supabase for whoever is signed in.
+  //
+  // An empty result leaves local history alone: that is a brand-new account
+  // adopting the marshmallow made before signing up, not an account whose
+  // progress should be erased. A previous user's history can't be here to
+  // leak — signing out clears it (see `clearUserScopedState`).
+  //
+  // Read from Supabase rather than useAuth: lib/sync takes its CompletedSession
+  // type from this file, so importing AuthContext here would close an import
+  // cycle and leave its hooks undefined at module init.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          const remoteSessions = await fetchRemoteSessions(session.user.id);
-          if (remoteSessions.length > 0) {
-            setHistory(remoteSessions);
-          }
-        }
-      }
-    );
-    return () => subscription.unsubscribe();
+    let cancelled = false;
+
+    const hydrate = async (userId: string) => {
+      const remoteSessions = await fetchRemoteSessions(userId).catch(() => []);
+      if (cancelled || remoteSessions.length === 0) return;
+      setHistory(remoteSessions);
+    };
+
+    // A session restored at launch arrives as INITIAL_SESSION, and a remount
+    // after sign-out has already missed whatever event fired. Neither reaches
+    // the SIGNED_IN listener below, so ask for the session directly too.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!cancelled && session?.user) void hydrate(session.user.id);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) void hydrate(session.user.id);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, [setHistory]);
 
   const startSession = useCallback(

@@ -4,6 +4,34 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const KEY_PREFIX = "marshmallow.";
 
 /**
+ * Keys that describe this device rather than the person signed in on it.
+ * Everything else under `marshmallow.` is one account's data — progress,
+ * appearance, entitlements — and must not follow a sign-out into the next
+ * account. New keys are user-scoped unless they are listed here.
+ *
+ * Having watched the opening animation belongs to whoever is holding the
+ * phone. Having finished onboarding does not: an account owns its own setup,
+ * so that flag leaves with the account that earned it.
+ */
+const DEVICE_SCOPED_KEYS = new Set(["onboarding.seenIntro"]);
+
+/** Exported for tests: decides what `clearUserScopedState` removes. */
+export function isUserScopedKey(storageKey: string): boolean {
+  if (!storageKey.startsWith(KEY_PREFIX)) return false;
+  return !DEVICE_SCOPED_KEYS.has(storageKey.slice(KEY_PREFIX.length));
+}
+
+/**
+ * Drops the signed-in user's persisted state. The prefix check keeps this off
+ * Supabase's own session keys, which live under their own namespace.
+ */
+export async function clearUserScopedState(): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys();
+  const owned = keys.filter(isUserScopedKey);
+  if (owned.length > 0) await AsyncStorage.multiRemove(owned);
+}
+
+/**
  * Like useState, but persisted to AsyncStorage under `marshmallow.<key>`.
  * Skips writing until the initial load finishes, so the default value
  * doesn't clobber whatever was already stored.

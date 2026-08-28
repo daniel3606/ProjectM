@@ -51,12 +51,30 @@ export function getAuthStatus(args: {
   return "authenticated";
 }
 
-export function getPostAuthRoute(onboardingCompleted: boolean): "/(tabs)" | "/custominit" {
-  return onboardingCompleted ? "/(tabs)" : "/custominit";
+export type AppRoute = "/auth" | "/auth/verify" | "/onboarding" | "/(tabs)";
+
+/**
+ * Where a person belongs, given who they are and how far they have got.
+ *
+ * An account is a gate rather than a step inside the flow: there is no guest
+ * mode, so signing in is the first thing that happens and onboarding runs
+ * afterwards, only for an account that has not finished it. Returning users
+ * therefore go straight to the app and never see onboarding again.
+ *
+ * Callers must wait for a settled status; "loading" has no route of its own.
+ */
+export function resolveAppRoute(
+  status: Exclude<AuthStatus, "loading">,
+  onboardingCompleted: boolean
+): AppRoute {
+  if (status === "unauthenticated") return "/auth";
+  if (status === "needs_verification") return "/auth/verify";
+  return onboardingCompleted ? "/(tabs)" : "/onboarding";
 }
 
+/** Routes reachable without a session: the entry router and the auth screens. */
 export function isPublicAuthRoute(pathname: string): boolean {
-  return pathname === "/" || pathname.startsWith("/auth/");
+  return pathname === "/" || pathname === "/auth" || pathname.startsWith("/auth/");
 }
 
 export interface SignInResult {
