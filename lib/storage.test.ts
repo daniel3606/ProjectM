@@ -11,8 +11,11 @@ describe("isUserScopedKey", () => {
     expect(isUserScopedKey("marshmallow.timedBlockPlans")).toBe(true);
   });
 
-  it("leaves the two device-level flags alone, so signing out isn't a re-onboard", () => {
-    expect(isUserScopedKey("marshmallow.onboarding.completed")).toBe(false);
+  it("claims onboarding completion, so the next account sets up its own marshmallow", () => {
+    expect(isUserScopedKey("marshmallow.onboarding.completedBy")).toBe(true);
+  });
+
+  it("leaves the opening animation flag alone, so it isn't re-paced per account", () => {
     expect(isUserScopedKey("marshmallow.onboarding.seenIntro")).toBe(false);
   });
 

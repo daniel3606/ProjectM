@@ -9,10 +9,11 @@ const KEY_PREFIX = "marshmallow.";
  * appearance, entitlements — and must not follow a sign-out into the next
  * account. New keys are user-scoped unless they are listed here.
  *
- * Onboarding completion stays so that signing out drops you at a fresh
- * marshmallow rather than replaying the whole flow.
+ * Having watched the opening animation belongs to whoever is holding the
+ * phone. Having finished onboarding does not: an account owns its own setup,
+ * so that flag leaves with the account that earned it.
  */
-const DEVICE_SCOPED_KEYS = new Set(["onboarding.completed", "onboarding.seenIntro"]);
+const DEVICE_SCOPED_KEYS = new Set(["onboarding.seenIntro"]);
 
 /** Exported for tests: decides what `clearUserScopedState` removes. */
 export function isUserScopedKey(storageKey: string): boolean {

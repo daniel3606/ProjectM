@@ -129,12 +129,16 @@ export interface OnboardingAnswers {
  *
  * Called once, when onboarding finishes — partial answers stay on the device
  * until then, so an abandoned flow leaves no half-formed preferences behind.
+ *
+ * Unlike the other writes here, this one reports whether it landed. Completion
+ * is the fact that decides whether someone is ever asked to set the app up
+ * again, and a write that fails quietly turns that into a loop.
  */
 export async function syncOnboarding(
   update: OnboardingAnswers & { completed?: boolean }
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const userId = await getAuthUserId();
-  if (!userId) return;
+  if (!userId) return { error: "No signed-in account to save onboarding to." };
 
   const payload: ProfileUpdate = {};
   if (update.goals !== undefined) {
@@ -153,9 +157,11 @@ export async function syncOnboarding(
     payload.onboarding_target_minutes = update.targetScreenTimeMinutes;
   }
   if (update.completed !== undefined) payload.onboarding_completed = update.completed;
-  if (Object.keys(payload).length === 0) return;
+  if (Object.keys(payload).length === 0) return { error: null };
 
-  await supabase.from("profiles").update(payload).eq("id", userId);
+  const { error } = await supabase.from("profiles").update(payload).eq("id", userId);
+  if (error) console.warn(`[sync] onboarding write failed: ${error.message}`);
+  return { error: error?.message ?? null };
 }
 
 /** Fetch completed sessions from Supabase (for hydrating local history on login). */

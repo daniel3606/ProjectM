@@ -64,10 +64,15 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     DEFAULT_COLOR
   );
   const [items, setItems] = usePersistedState<EquippedItems>("profile.items", DEFAULT_ITEMS);
-  const [onboardingCompleted, setOnboardingCompleted, onboardingLoaded] = usePersistedState(
-    "onboarding.completed",
-    false
-  );
+  /**
+   * Which account set Marshmallow up on this device, rather than whether
+   * anyone did. Onboarding belongs to an account, and a bare flag can't tell
+   * the person who finished it from the next person to sign in here.
+   */
+  const [completedByUserId, setCompletedByUserId, onboardingLoaded] = usePersistedState<
+    string | null
+  >("onboarding.completedBy", null);
+  const [remoteCompleted, setRemoteCompleted] = useState(false);
   const [onboardingScreenTime, setOnboardingScreenTime] = usePersistedState<string | null>(
     "onboarding.screenTime",
     null
@@ -88,6 +93,7 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     if (authLoading) return;
 
     if (!userId) {
+      setRemoteCompleted(false);
       setHydratedUserId("guest");
       return;
     }
@@ -98,13 +104,15 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
       .then((remote) => {
         if (cancelled) return;
 
+        setRemoteCompleted(remote?.onboarding_completed ?? false);
+
         if (remote) {
-          // A remote profile only outranks local state once its own onboarding
-          // is finished. Before that the row is a freshly created default, and
-          // its `display_name` is the person's name from their auth provider
-          // (see `ensureAppProfile`) rather than a marshmallow's — hydrating
-          // from it would rename the marshmallow the user just made and
-          // repaint it, moments after we asked them to save it.
+          // Appearance is only worth taking from an account that finished
+          // onboarding. Before that the row is a freshly created default whose
+          // `display_name` is the person's name from their auth provider (see
+          // `ensureAppProfile`) rather than a marshmallow's — hydrating from it
+          // would rename the marshmallow the user just made and repaint it,
+          // moments after we asked them to save it.
           if (remote.onboarding_completed) {
             if (remote.display_name) setRawName(remote.display_name);
             if (remote.marshmallow_color) {
@@ -113,9 +121,6 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
             if (remote.equipped_items && typeof remote.equipped_items === "object") {
               setItems(remote.equipped_items as EquippedItems);
             }
-            // Promote only. A row that hasn't caught up yet must not push a
-            // finished user back into onboarding.
-            setOnboardingCompleted(true);
           }
         }
 
@@ -128,14 +133,33 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     return () => {
       cancelled = true;
     };
-  }, [
-    authLoading,
-    userId,
-    setRawName,
-    setRawColor,
-    setItems,
-    setOnboardingCompleted,
-  ]);
+  }, [authLoading, userId, setRawName, setRawColor, setItems]);
+
+  /**
+   * Onboarding is finished for this account if either side says so. The device
+   * knows the moment it happens; the profile is what a second device reads.
+   * Neither can overrule the other, so a write that didn't land can't put
+   * someone back through a flow they've already done.
+   */
+  const onboardingCompleted = remoteCompleted || (userId !== null && completedByUserId === userId);
+
+  // Completion is written from the last screen of the flow, where a dropped
+  // connection is easy to come by, and it's the one answer that has to survive:
+  // without it a new device would ask this account to set up all over again.
+  // Push it again if the profile is still behind what this device recorded.
+  const repairedUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId || hydratedUserId !== userId) return;
+    if (remoteCompleted || completedByUserId !== userId) return;
+    if (repairedUserIdRef.current === userId) return;
+
+    repairedUserIdRef.current = userId;
+    syncOnboarding({ completed: true })
+      .then(({ error }) => {
+        if (!error) setRemoteCompleted(true);
+      })
+      .catch(() => {});
+  }, [completedByUserId, hydratedUserId, remoteCompleted, userId]);
 
   // Anything customized before signing in never reached the server, because
   // there was no account to attach it to yet. This is the catch-up write, once
@@ -210,13 +234,17 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
 
   const completeOnboarding = useCallback(
     async (answers: OnboardingAnswers = {}) => {
-      setOnboardingCompleted(true);
+      // Recorded against the account before the write, so this device honours
+      // it immediately and keeps honouring it if the write never lands.
+      if (userId) setCompletedByUserId(userId);
       if (answers.currentScreenTimeMinutes != null) {
         setOnboardingScreenTime(String(answers.currentScreenTimeMinutes));
       }
-      await syncOnboarding({ ...answers, completed: true });
+
+      const { error } = await syncOnboarding({ ...answers, completed: true });
+      if (!error) setRemoteCompleted(true);
     },
-    [setOnboardingCompleted, setOnboardingScreenTime]
+    [setCompletedByUserId, setOnboardingScreenTime, userId]
   );
 
   const value = useMemo(
