@@ -12,7 +12,7 @@ import { track } from "@/lib/analytics";
 import {
   DEFAULT_CURRENT_MINUTES,
   MAX_SCREEN_TIME_MINUTES,
-  MIN_SCREEN_TIME_MINUTES,
+  MIN_CURRENT_MINUTES,
   SCREEN_TIME_STEP_MINUTES,
   formatScreenTime,
 } from "@/lib/onboardingTime";
@@ -51,7 +51,7 @@ export default function OnboardingCurrentTimeStep() {
         <MetricValue>{formatScreenTime(minutes)}</MetricValue>
 
         <TimeSlider
-          minMinutes={MIN_SCREEN_TIME_MINUTES}
+          minMinutes={MIN_CURRENT_MINUTES}
           maxMinutes={MAX_SCREEN_TIME_MINUTES}
           stepMinutes={SCREEN_TIME_STEP_MINUTES}
           value={minutes}

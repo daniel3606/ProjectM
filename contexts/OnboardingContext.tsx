@@ -15,6 +15,7 @@ import { track } from "@/lib/analytics";
 import {
   computeReclaimedTime,
   maxTargetMinutes,
+  MIN_CURRENT_MINUTES,
   snapScreenTime,
   type ReclaimedTime,
 } from "@/lib/onboardingTime";
@@ -184,7 +185,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const setCurrentScreenTime = useCallback(
     (minutes: number) => {
-      const snapped = snapScreenTime(minutes);
+      // Clamped here rather than only in the slider, so a value restored from an
+      // older build can't land on the floor and leave nothing to reclaim.
+      const snapped = Math.max(MIN_CURRENT_MINUTES, snapScreenTime(minutes));
       setCurrentMinutes(snapped);
       // A goal above the new current usage would reclaim nothing, so pull it
       // back into range instead of letting the next screen open on a

@@ -7,7 +7,9 @@ import {
   formatScreenTime,
   maxTargetMinutes,
   MAX_SCREEN_TIME_MINUTES,
+  MIN_CURRENT_MINUTES,
   MIN_SCREEN_TIME_MINUTES,
+  SCREEN_TIME_STEP_MINUTES,
   snapScreenTime,
   suggestTargetMinutes,
 } from "@/lib/onboardingTime";
@@ -42,6 +44,17 @@ describe("goal ceiling", () => {
     }
   });
 
+  it("leaves something to reclaim at every current usage the flow can produce", () => {
+    for (
+      let current = MIN_CURRENT_MINUTES;
+      current <= MAX_SCREEN_TIME_MINUTES;
+      current += SCREEN_TIME_STEP_MINUTES
+    ) {
+      const worstGoal = maxTargetMinutes(current);
+      expect(computeReclaimedTime(current, worstGoal).dailyMinutes).toBeGreaterThan(0);
+    }
+  });
+
   it("suggests an ambitious but reachable cut", () => {
     expect(suggestTargetMinutes(380)).toBe(210);
   });
@@ -64,6 +77,11 @@ describe("reclaimed time", () => {
     expect(describeWeekly(170)).toBe("Nearly 20 hours every week.");
     expect(describeWeekly(180)).toBe("21 hours every week.");
     expect(describeWeekly(175)).toBe("Over 20 hours every week.");
+  });
+
+  it("never rounds a sub-hour week up into an hour it isn't", () => {
+    expect(describeWeekly(0)).toBe("0m every week.");
+    expect(describeWeekly(5)).toBe("35m every week.");
   });
 
   it("keeps the yearly figure vague enough to be honest", () => {

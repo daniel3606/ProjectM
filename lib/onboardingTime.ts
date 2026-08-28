@@ -10,6 +10,13 @@ export const MIN_SCREEN_TIME_MINUTES = 30;
 export const MAX_SCREEN_TIME_MINUTES = 12 * 60;
 export const SCREEN_TIME_STEP_MINUTES = 15;
 
+/**
+ * Current usage stops a step above the floor so there is always room for a goal
+ * underneath it. Sitting on the floor itself collapses the goal ceiling onto the
+ * current value, and then the reclaimed screen has nothing to report.
+ */
+export const MIN_CURRENT_MINUTES = MIN_SCREEN_TIME_MINUTES + SCREEN_TIME_STEP_MINUTES;
+
 /** Default anchor on the current-usage screen: a plausible middle, not a judgement. */
 export const DEFAULT_CURRENT_MINUTES = 5 * 60;
 
@@ -92,8 +99,14 @@ function pluralHours(count: number): string {
  * "Nearly 20 hours" when it's just short, "Over 20 hours" when it's just past.
  */
 export function describeWeekly(dailyMinutes: number): string {
-  const weeklyHours = (dailyMinutes * DAYS_PER_WEEK) / 60;
-  const rounded = Math.max(1, Math.round(weeklyHours));
+  const weeklyMinutes = Math.max(0, dailyMinutes) * DAYS_PER_WEEK;
+  const weeklyHours = weeklyMinutes / 60;
+
+  // Under an hour there's no hour count to round to, and rounding up to one
+  // would promise time the user isn't actually getting back.
+  if (weeklyHours < 1) return `${formatScreenTime(weeklyMinutes)} every week.`;
+
+  const rounded = Math.round(weeklyHours);
   const drift = weeklyHours - rounded;
 
   if (Math.abs(drift) <= ROUNDING_TOLERANCE_HOURS) {
