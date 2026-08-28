@@ -50,6 +50,8 @@ interface OnboardingContextValue {
   isAuthenticated: boolean;
   isCompleted: boolean;
   hasStartedFirstFocusSession: boolean;
+  /** True once the user has actually attempted to sign up or in from this flow. */
+  signupStarted: boolean;
 
   /** Furthest step reached, used to resume a flow the user closed part-way through. */
   resumeStep: OnboardingStepId | null;
@@ -65,6 +67,8 @@ interface OnboardingContextValue {
   markReclaimedTimeViewed: () => void;
   markGrowthExplainerSeen: () => void;
   markCustomizationCompleted: () => void;
+
+  markSignupStarted: () => void;
 
   requestScreenTimePermission: () => Promise<boolean>;
   setDistractingApps: (apps: ScreenTimeItem[]) => void;
@@ -116,6 +120,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   );
   const [hasStartedFirstFocusSession, setHasStartedFirstFocusSession] = usePersistedState(
     "onboarding.firstFocusSessionStarted",
+    false
+  );
+  // Persisted because email signup leaves the flow for verification and comes
+  // back on a fresh mount; without this the return trip can't tell a signup
+  // that just happened from a user who was already logged in.
+  const [signupStarted, setSignupStarted] = usePersistedState(
+    "onboarding.signupStarted",
     false
   );
 
@@ -209,8 +220,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     [currentMinutes, setTargetMinutes]
   );
 
+  // Navigating back onto the reclaimed screen replays its sequence, which would
+  // otherwise report a second view and inflate the funnel.
+  const reclaimedReportedRef = useRef(false);
   const markReclaimedTimeViewed = useCallback(() => {
-    if (!reclaimedTime) return;
+    if (!reclaimedTime || reclaimedReportedRef.current) return;
+    reclaimedReportedRef.current = true;
     track("onboarding_reclaimed_time_viewed", {
       daily_minutes: reclaimedTime.dailyMinutes,
       weekly_minutes: reclaimedTime.weeklyMinutes,
@@ -222,9 +237,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, [setHasSeenIntro]);
 
   const markGrowthExplainerSeen = useCallback(() => {
+    // The skip path reports completion too, so without this a revisit counts as
+    // a second viewing of an animation that didn't play.
+    if (hasSeenGrowthExplainer) return;
     setHasSeenGrowthExplainer(true);
     track("onboarding_growth_explainer_viewed");
-  }, [setHasSeenGrowthExplainer]);
+  }, [hasSeenGrowthExplainer, setHasSeenGrowthExplainer]);
 
   const markCustomizationCompleted = useCallback(() => {
     track("onboarding_customization_completed", {
@@ -233,6 +251,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       accessories: Object.keys(profile.items).length,
     });
   }, [profile.color, profile.items, profile.name]);
+
+  const markSignupStarted = useCallback(() => {
+    setSignupStarted(true);
+  }, [setSignupStarted]);
 
   const requestScreenTimePermission = useCallback(async () => {
     track("screentime_permission_requested");
@@ -357,11 +379,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       isAuthenticated: authStatus === "authenticated",
       isCompleted: profile.onboardingCompleted,
       hasStartedFirstFocusSession,
+      signupStarted,
       resumeStep,
       hasSeenIntro,
       hasSeenGrowthExplainer,
       markStepViewed,
       markIntroSeen,
+      markSignupStarted,
       toggleGoal,
       setCurrentScreenTime,
       setTargetScreenTime,
@@ -390,11 +414,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       scheduleShiftMinutes,
       authStatus,
       hasStartedFirstFocusSession,
+      signupStarted,
       resumeStep,
       hasSeenIntro,
       hasSeenGrowthExplainer,
       markStepViewed,
       markIntroSeen,
+      markSignupStarted,
       toggleGoal,
       setCurrentScreenTime,
       setTargetScreenTime,

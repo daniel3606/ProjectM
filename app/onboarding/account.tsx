@@ -30,7 +30,7 @@ export default function OnboardingAccountStep() {
   const router = useRouter();
   const profile = useMarshmallowProfile();
   const { signInWithApple, signInWithGoogle, isAuthBusy } = useAuth();
-  const { isAuthenticated } = useOnboarding();
+  const { isAuthenticated, signupStarted, markSignupStarted } = useOnboarding();
   const { progress, goBack, goNext } = useOnboardingStep("account");
 
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -54,15 +54,18 @@ export default function OnboardingAccountStep() {
   useEffect(() => {
     if (!isAuthenticated || advancedRef.current) return;
     advancedRef.current = true;
-    track("signup_completed");
+    // Only an attempt made from this flow counts as a completion. Someone who
+    // was already signed in and is passing back through has not just signed up.
+    if (signupStarted) track("signup_completed");
     sheetRef.current?.dismiss();
     goNext();
-  }, [goNext, isAuthenticated]);
+  }, [goNext, isAuthenticated, signupStarted]);
 
   const runProvider = useCallback(
     async (provider: Exclude<Provider, "email">) => {
       if (isAuthBusy) return;
       track("signup_started", { method: provider });
+      markSignupStarted();
       setPending(provider);
       try {
         await (provider === "apple" ? signInWithApple() : signInWithGoogle());
@@ -70,14 +73,18 @@ export default function OnboardingAccountStep() {
         setPending(null);
       }
     },
-    [isAuthBusy, signInWithApple, signInWithGoogle]
+    [isAuthBusy, markSignupStarted, signInWithApple, signInWithGoogle]
   );
 
-  const openEmail = useCallback((mode: EmailAuthMode) => {
-    track("signup_started", { method: "email", mode });
-    setEmailMode(mode);
-    sheetRef.current?.present();
-  }, []);
+  const openEmail = useCallback(
+    (mode: EmailAuthMode) => {
+      track("signup_started", { method: "email", mode });
+      markSignupStarted();
+      setEmailMode(mode);
+      sheetRef.current?.present();
+    },
+    [markSignupStarted]
+  );
 
   const handleNeedsVerification = useCallback(
     (email: string) => {
