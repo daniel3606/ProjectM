@@ -12,8 +12,12 @@ import { useOnboarding } from "@/contexts/OnboardingContext";
 import { hapticEmphasis } from "@/lib/haptics";
 import { useOnboardingStep } from "@/lib/useOnboardingStep";
 
-const COPY_AT_MS = 380;
-const HAND_OFF_AT_MS = 1250;
+/**
+ * The line needs to hold for about a second after it lands, or the beat reads
+ * as a flicker on the way somewhere else rather than a moment of its own.
+ */
+const COPY_AT_MS = 520;
+const HAND_OFF_AT_MS = 1750;
 
 /**
  * A beat between setup and the app itself, rather than a jump cut into Home.
