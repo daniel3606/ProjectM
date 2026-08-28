@@ -43,9 +43,19 @@ function formatMinuteLabel(minute: number): string {
   return String(minute).padStart(2, "0");
 }
 
+/** Prefill for a new plan, e.g. the window a Stats recommendation suggested. */
+export interface TimedBlockPlanDraft {
+  label: string;
+  startHour: number;
+  endHour: number;
+  daysOfWeek: number[];
+}
+
 interface TimedBlockPlanSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   editingPlan: TimedBlockPlan | null;
+  /** Applied only when creating; `editingPlan` always wins. */
+  draft?: TimedBlockPlanDraft | null;
   onSave: (plan: Omit<TimedBlockPlan, "id">) => void;
   onUpdate: (id: string, plan: Omit<TimedBlockPlan, "id">) => void;
   onDelete: (id: string) => void;
@@ -72,6 +82,7 @@ function selectionFromPlan(plan: TimedBlockPlan): ScreenTimeItem[] {
 export default function TimedBlockPlanSheet({
   sheetRef,
   editingPlan,
+  draft,
   onSave,
   onUpdate,
   onDelete,
@@ -97,11 +108,23 @@ export default function TimedBlockPlanSheet({
       setEndMinute(editingPlan.endMinute);
       setFocusMode(editingPlan.focusMode);
       setSelectedApps(selectionFromPlan(editingPlan));
-    } else {
-      resetForm();
+      return;
+    }
+
+    resetForm();
+
+    if (draft) {
+      setLabel(draft.label);
+      setDaysOfWeek(draft.daysOfWeek);
+      setStartHour(draft.startHour);
+      setStartMinute(0);
+      // A window ending at midnight is stored as hour 0, matching how the
+      // schedule maths already treats an overnight end.
+      setEndHour(draft.endHour % 24);
+      setEndMinute(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingPlan]);
+  }, [editingPlan, draft]);
 
   const snapPoints = useMemo(() => ["85%"], []);
   const totalMinutes = useMemo(() => {

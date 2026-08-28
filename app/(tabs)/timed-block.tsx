@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import Theme from "@/constants/theme";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
@@ -18,17 +18,55 @@ import {
   formatTimeRemaining,
   getGrowthForDuration,
 } from "@/constants/marshmallow";
-import TimedBlockPlanSheet from "@/components/TimedBlockPlanSheet";
+import TimedBlockPlanSheet, {
+  type TimedBlockPlanDraft,
+} from "@/components/TimedBlockPlanSheet";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import NameGateModal from "@/components/NameGateModal";
 import EditBlockSheet from "@/components/EditBlockSheet";
 import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard, Button } from "@/components/ui";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
+import { STATS_EVENTS, trackStats } from "@/lib/stats/analytics";
 
 const SWITCH_TRACK_COLOR = {
   false: Theme.colors.cardBorder,
   true: Theme.colors.secondary,
 } as const;
+
+interface PlanDraftParams {
+  draftLabel?: string;
+  draftStartHour?: string;
+  draftEndHour?: string;
+  draftDays?: string;
+  draftSource?: string;
+}
+
+/**
+ * Reads the prefill a Stats recommendation navigated here with. Returns null
+ * for a plain visit, so the sheet only opens when a draft was actually passed.
+ */
+function draftFromParams(params: PlanDraftParams): TimedBlockPlanDraft | null {
+  const { draftLabel, draftStartHour, draftEndHour, draftDays } = params;
+  if (!draftLabel || draftStartHour === undefined || draftEndHour === undefined) {
+    return null;
+  }
+
+  const startHour = Number(draftStartHour);
+  const endHour = Number(draftEndHour);
+  if (!Number.isFinite(startHour) || !Number.isFinite(endHour)) return null;
+
+  const daysOfWeek = (draftDays ?? "")
+    .split(",")
+    .map(Number)
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+
+  return {
+    label: draftLabel,
+    startHour,
+    endHour,
+    daysOfWeek: daysOfWeek.length > 0 ? daysOfWeek : [new Date().getDay()],
+  };
+}
 
 interface PlanCardProps {
   plan: TimedBlockPlan;
@@ -117,6 +155,11 @@ export default function TimedBlockScreen() {
   const [editingPlan, setEditingPlan] = useState<TimedBlockPlan | null>(null);
   const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
 
+  const params = useLocalSearchParams() as PlanDraftParams;
+  const [draft, setDraft] = useState<TimedBlockPlanDraft | null>(null);
+  const draftSourceRef = useRef<string | null>(null);
+  const handledDraftRef = useRef<string | null>(null);
+
   const {
     editBlockSheetRef,
     isEditGateVisible,
@@ -125,6 +168,36 @@ export default function TimedBlockScreen() {
     confirmEditGate,
     saveEditedBlock,
   } = useEditBlockFlow();
+
+  // Opens the sheet prefilled when Stats sends the user here with a suggested
+  // window. Keyed on the params so returning to the tab doesn't reopen it.
+  useEffect(() => {
+    const key = `${params.draftLabel ?? ""}-${params.draftStartHour ?? ""}-${params.draftSource ?? ""}`;
+    if (handledDraftRef.current === key) return;
+
+    const next = draftFromParams(params);
+    if (!next) return;
+
+    handledDraftRef.current = key;
+    draftSourceRef.current = params.draftSource ?? null;
+    setEditingPlan(null);
+    setDraft(next);
+    planSheetRef.current?.present();
+  }, [params]);
+
+  const handleSavePlan = useCallback(
+    (plan: Omit<TimedBlockPlan, "id">) => {
+      addPlan(plan);
+      if (draftSourceRef.current === "stats-recommendation") {
+        trackStats(STATS_EVENTS.scheduleCreatedFromInsight, {
+          source: draftSourceRef.current,
+        });
+      }
+      draftSourceRef.current = null;
+      setDraft(null);
+    },
+    [addPlan]
+  );
 
   useEffect(() => {
     if (!activeSession) return;
@@ -150,10 +223,12 @@ export default function TimedBlockScreen() {
       return;
     }
     setEditingPlan(null);
+    setDraft(null);
     planSheetRef.current?.present();
   }, [canAddPlan, router]);
 
   const handleEditPlan = useCallback((plan: TimedBlockPlan) => {
+    setDraft(null);
     setEditingPlan(plan);
     planSheetRef.current?.present();
   }, []);
@@ -266,7 +341,8 @@ export default function TimedBlockScreen() {
       <TimedBlockPlanSheet
         sheetRef={planSheetRef}
         editingPlan={editingPlan}
-        onSave={addPlan}
+        draft={draft}
+        onSave={handleSavePlan}
         onUpdate={updatePlan}
         onDelete={removePlan}
       />

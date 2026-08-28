@@ -3,7 +3,7 @@ import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import FocusSessionSheet from "@/components/FocusSessionSheet";
 import GrowthResultModal from "@/components/GrowthResultModal";
 import NameGateModal from "@/components/NameGateModal";
-import ProfileAvatarButton from "@/components/ProfileAvatarButton";
+import SettingsButton from "@/components/SettingsButton";
 import { GrowthScene } from "@/components/growth";
 import { Button, Card, Screen } from "@/components/ui";
 import { computeMarshmallowSizeCm, formatTimeRemaining } from "@/constants/marshmallow";
@@ -131,7 +131,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Marshmallow</Text>
-        <ProfileAvatarButton onPress={() => router.push("/profile")} />
+        <SettingsButton onPress={() => router.push("/settings")} />
       </View>
 
       {/* ── Growth scene: scale world, ruler and size readout ───────── */}

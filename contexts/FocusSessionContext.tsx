@@ -18,6 +18,7 @@ import {
 import { syncCompletedSession, fetchRemoteSessions } from "@/lib/sync";
 import { supabase } from "@/lib/supabase";
 import * as ScreenTime from "@/modules/screen-time";
+import type { SessionAttempt } from "@/lib/stats/types";
 import type { BlockMode } from "@/modules/screen-time";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
@@ -59,12 +60,20 @@ export interface PendingGrowthResult {
 
 const MAX_HISTORY = 50;
 
+/**
+ * Attempts feed Stats, which looks back further than the growth history does
+ * and needs the blocks that were ended early as much as the ones that weren't.
+ */
+const MAX_ATTEMPTS = 400;
+
 interface FocusSessionContextValue {
   activeSession: ActiveSession | null;
   /** False until the persisted session has been read. Gate anything that would
    *  otherwise treat "not loaded yet" as "no block running". */
   isSessionLoaded: boolean;
   history: CompletedSession[];
+  /** Every block the user started, completed or not. Powers Stats. */
+  attempts: SessionAttempt[];
   pendingGrowthResult: PendingGrowthResult | null;
   /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
   startSession: (config: FocusSessionConfig, startedAt?: number) => void;
@@ -91,6 +100,10 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
   );
   const [history, setHistory] = usePersistedState<CompletedSession[]>(
     "focusSession.history",
+    []
+  );
+  const [attempts, setAttempts] = usePersistedState<SessionAttempt[]>(
+    "focusSession.attempts",
     []
   );
   const [pendingGrowthResult, setPendingGrowthResult] =
@@ -301,14 +314,44 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
 
     setActiveSession((current) => {
       if (current) {
+        const endedAt = Date.now();
         const endsAt = current.startedAt + current.durationMinutes * 60_000;
-        const ranFullDuration = Date.now() >= endsAt;
+        const ranFullDuration = endedAt >= endsAt;
+
+        // Logged whatever the outcome — Stats needs the abandoned blocks to
+        // report a completion rate at all, and the minutes served before an
+        // early stop were still minutes the user spent focused.
+        const focusedMinutes = ranFullDuration
+          ? current.durationMinutes
+          : Math.max(
+              0,
+              Math.min(
+                current.durationMinutes,
+                Math.round((endedAt - current.startedAt) / 60_000)
+              )
+            );
+        setAttempts((prev) =>
+          [
+            ...prev,
+            {
+              startedAt: current.startedAt,
+              endedAt,
+              durationMinutes: current.durationMinutes,
+              focusedMinutes,
+              focusMode: current.focusMode,
+              completed: ranFullDuration,
+              planId: current.planId,
+              planLabel: current.label,
+              appIds: current.appIds,
+            } satisfies SessionAttempt,
+          ].slice(-MAX_ATTEMPTS)
+        );
 
         // Ended early (cancelled, or the underlying plan changed mid-window):
         // no growth, and it doesn't count as a completed session.
         if (ranFullDuration) {
           const { startedAt, ...config } = current;
-          const completed: CompletedSession = { ...config, completedAt: Date.now() };
+          const completed: CompletedSession = { ...config, completedAt: endedAt };
           setHistory((prev) =>
             [completed, ...prev].slice(0, MAX_HISTORY)
           );
@@ -324,7 +367,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       }
       return null;
     });
-  }, [setActiveSession, setHistory, setPendingGrowthResult]);
+  }, [setActiveSession, setAttempts, setHistory, setPendingGrowthResult]);
 
   // Auto-dismisses the active session (and unblocks apps) the moment its
   // duration elapses, whether it was started manually or by a Timed Block
@@ -393,6 +436,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       activeSession,
       isSessionLoaded: activeSessionLoaded,
       history,
+      attempts,
       pendingGrowthResult,
       startSession,
       stopSession,
@@ -407,6 +451,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       activeSession,
       activeSessionLoaded,
       history,
+      attempts,
       pendingGrowthResult,
       startSession,
       stopSession,
