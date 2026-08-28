@@ -263,7 +263,8 @@ public class ScreenTimeModule: Module {
                         daysOfWeek: daysOfWeek,
                         appIds: appIds,
                         durationMinutes: durationMinutes,
-                        expectedGrowthCm: raw["expectedGrowthCm"] as? Double
+                        expectedGrowthCm: raw["expectedGrowthCm"] as? Double,
+                        focusMode: raw["focusMode"] as? String
                     )
                 )
 
@@ -429,7 +430,20 @@ public class ScreenTimeModule: Module {
                 let endsAt = startedAt.addingTimeInterval(Double(durationMinutes) * 60)
 
                 Task {
-                    for activity in Activity<BlockAttributes>.activities {
+                    // The TimedBlockMonitor extension raises this same activity
+                    // for a scheduled block it started while the app was
+                    // killed. Adopting that block calls in here, so leave a
+                    // matching activity alone instead of restarting it.
+                    let existing = Activity<BlockAttributes>.activities
+                    if existing.contains(where: {
+                        $0.attributes.label == label
+                            && abs($0.content.state.endsAt.timeIntervalSince(endsAt)) < 1
+                    }) {
+                        promise.resolve(true)
+                        return
+                    }
+
+                    for activity in existing {
                         await activity.end(nil, dismissalPolicy: .immediate)
                     }
 

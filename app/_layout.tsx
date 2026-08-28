@@ -2,10 +2,7 @@ import Fonts from "@/constants/fonts";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
 import { FriendsProvider } from "@/contexts/FriendsContext";
-import {
-  MarshmallowProfileProvider,
-  useMarshmallowProfile,
-} from "@/contexts/MarshmallowProfileContext";
+import { MarshmallowProfileProvider, useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { TimedBlockPlansProvider } from "@/contexts/TimedBlockPlansContext";
 import { requestNotificationPermissions } from "@/lib/notifications";
@@ -63,17 +60,14 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <AuthProvider>
         <BottomSheetModalProvider>
-          <SubscriptionProvider>
-            <MarshmallowProfileProvider>
+          <MarshmallowProfileProvider>
+            <SubscriptionProvider>
               <FocusSessionProvider>
                 <TimedBlockPlansProvider>
                   <FriendsProvider>
                     <AuthNavigationGuard />
                     <Stack>
-                      <Stack.Screen
-                        name="index"
-                        options={{ headerShown: false }}
-                      />
+                      <Stack.Screen name="index" options={{ headerShown: false }} />
 
                       <Stack.Screen
                         name="auth/verify"
@@ -164,8 +158,8 @@ export default function Layout() {
                   </FriendsProvider>
                 </TimedBlockPlansProvider>
               </FocusSessionProvider>
-            </MarshmallowProfileProvider>
-          </SubscriptionProvider>
+            </SubscriptionProvider>
+          </MarshmallowProfileProvider>
         </BottomSheetModalProvider>
       </AuthProvider>
     </GestureHandlerRootView>
