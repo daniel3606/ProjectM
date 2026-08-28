@@ -8,6 +8,12 @@ export type AuthorizationStatus =
   | "unavailable"
   | "unknown";
 
+/**
+ * How a block reads its item list: "block" shields exactly those items,
+ * "allowOnly" shields everything except them.
+ */
+export type BlockMode = "block" | "allowOnly";
+
 export interface ScreenTimeItem {
   id: string;
   type: "application" | "category" | "webDomain";
@@ -28,6 +34,8 @@ export interface NativeSchedulablePlan {
   appIds: string[];
   /** Growth this plan pays out on completion, so the widget can preview it for extension-started blocks. */
   expectedGrowthCm: number;
+  /** Shown on the Live Activity the monitor extension raises for this plan. */
+  focusMode: FocusMode;
 }
 
 export interface ActiveNativeBlock {
@@ -112,6 +120,30 @@ export async function blockAll(): Promise<void> {
 export async function applyBlocking(itemIds: string[]): Promise<void> {
   if (MOCK_MODE) return;
   await getNativeModule().applyBlocking(itemIds);
+}
+
+/**
+ * Inverse of `applyBlocking`: shields every app category and web domain
+ * *except* the ones named, leaving those as the only things still reachable.
+ * A no-op guard lives on the caller — allow-only with an empty list would
+ * shield the whole device.
+ */
+export async function applyAllowOnly(itemIds: string[]): Promise<void> {
+  if (MOCK_MODE) return;
+  await getNativeModule().applyAllowOnly(itemIds);
+}
+
+/** Applies `itemIds` under whichever policy `mode` names. */
+export async function applyBlockMode(mode: BlockMode, itemIds: string[]): Promise<void> {
+  if (mode === "allowOnly") {
+    await applyAllowOnly(itemIds);
+    return;
+  }
+  if (itemIds.length > 0) {
+    await applyBlocking(itemIds);
+    return;
+  }
+  await blockAll();
 }
 
 export async function clearBlocking(): Promise<void> {
@@ -200,9 +232,10 @@ export interface BlockLiveActivityParams {
 
 /**
  * Shows the Lock Screen / Dynamic Island Live Activity for the running block.
- * Used for both Quick Blocks and Timed Blocks; a Timed Block that the
- * TimedBlockMonitor extension started while the app was killed only gets one
- * once the app next opens, since extensions can't request Live Activities.
+ * Used for both Quick Blocks and scheduled blocks. The TimedBlockMonitor
+ * extension raises the same activity when it starts a block while the app is
+ * killed, so calling this on adoption leaves that one in place rather than
+ * restarting it.
  */
 export async function startBlockLiveActivity(
   params: BlockLiveActivityParams

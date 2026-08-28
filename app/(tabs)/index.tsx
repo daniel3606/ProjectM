@@ -3,11 +3,12 @@ import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import FocusSessionSheet from "@/components/FocusSessionSheet";
 import GrowthResultModal from "@/components/GrowthResultModal";
 import NameGateModal from "@/components/NameGateModal";
-import ProfileAvatarButton from "@/components/ProfileAvatarButton";
+import SettingsButton from "@/components/SettingsButton";
 import { GrowthScene } from "@/components/growth";
 import { FirstSessionCoachMark } from "@/components/onboarding";
 import { Button, Card, Screen } from "@/components/ui";
 import { computeMarshmallowSizeCm, formatTimeRemaining } from "@/constants/marshmallow";
+import { BREAK_LENGTH_MINUTES } from "@/lib/focusBreaks";
 import Theme from "@/constants/theme";
 import {
   useFocusSession,
@@ -19,7 +20,7 @@ import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 import * as ScreenTime from "@/modules/screen-time";
 import { Ionicons } from "@expo/vector-icons";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, useBottomSheetModal } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
@@ -49,6 +50,10 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     startSession,
     stopSession,
     clearPendingGrowthResult,
+    isOnBreak,
+    breakAvailability,
+    startBreak,
+    endBreak,
   } = useFocusSession();
 
   const actualSizeCm = useMemo(() => computeMarshmallowSizeCm(history), [history]);
@@ -60,6 +65,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const isTimedBlockActive = isFocusActive && !!activeSession?.planId;
   const [isLoading, setIsLoading] = useState(false);
   const focusSheetRef = useRef<BottomSheetModal>(null);
+  const { dismissAll } = useBottomSheetModal();
 
   // The activation goal is a real session, not arriving here, so the hint only
   // exists for someone who has never run one. `history` keeps it away from
@@ -90,6 +96,14 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
     return () => clearInterval(interval);
   }, [activeSession]);
 
+  // The paywall is a route, but the PRO controls that lead to it live inside
+  // stacked bottom sheets — pushing without dismissing them first leaves the
+  // paywall rendering underneath, so the tap looks like it did nothing.
+  const handleUpgrade = useCallback(() => {
+    dismissAll();
+    router.push("/premium");
+  }, [dismissAll, router]);
+
   const handleOpenFocusSheet = useCallback(async () => {
     const authorized = await ensureScreenTimeAuthorized();
     if (!authorized) return;
@@ -99,12 +113,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   const handleStartSession = useCallback(async (config: FocusSessionConfig) => {
     setIsLoading(true);
     try {
-      const appIds = config.appIds ?? [];
-      if (appIds.length > 0) {
-        await ScreenTime.applyBlocking(appIds);
-      } else {
-        await ScreenTime.blockAll();
-      }
+      await ScreenTime.applyBlockMode(config.blockMode ?? "block", config.appIds ?? []);
       startSession(config);
       markFirstFocusSessionStarted();
     } catch (error) {
@@ -116,9 +125,18 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
   const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
 
+  const isHardModeActive = !!activeSession?.isHardMode;
+
   const handleStopFocus = useCallback(() => {
+    if (isHardModeActive) {
+      Alert.alert(
+        "Hard Mode",
+        "This block runs to the end. That was the deal when you started it."
+      );
+      return;
+    }
     setIsEndConfirmVisible(true);
-  }, []);
+  }, [isHardModeActive]);
 
   const handleConfirmStopFocus = useCallback(() => {
     setIsEndConfirmVisible(false);
@@ -130,7 +148,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
       {/* ── Header ──────────────────────────────────────────────────── */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Marshmallow</Text>
-        <ProfileAvatarButton onPress={() => router.push("/profile")} />
+        <SettingsButton onPress={() => router.push("/settings")} />
       </View>
 
       {/* ── Growth scene: scale world, ruler and size readout ───────── */}
@@ -153,14 +171,56 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
             {activeSession?.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
             {activeSession?.expectedGrowthCm}cm
           </Text>
-          <Button
-            variant="outline"
-            onPress={openEditGate}
-            icon="create-outline"
-            iconSize={16}
-            label="Edit Block"
-            style={styles.quickBlockEditButton}
-          />
+          {isOnBreak ? (
+            <>
+              <Text style={styles.breakNotice}>
+                On a break — apps are open until the timer catches up.
+              </Text>
+              <Button
+                variant="outline"
+                onPress={endBreak}
+                icon="play-outline"
+                iconSize={16}
+                label="Resume Block"
+                style={styles.quickBlockEditButton}
+              />
+            </>
+          ) : (
+            breakAvailability &&
+            breakAvailability.breaksRemaining > 0 && (
+              <>
+                <Text style={styles.breakNotice}>
+                  {breakAvailability.breaksRemaining} break
+                  {breakAvailability.breaksRemaining === 1 ? "" : "s"} left ·{" "}
+                  {BREAK_LENGTH_MINUTES}m each
+                </Text>
+                <Button
+                  variant="outline"
+                  onPress={startBreak}
+                  disabled={!breakAvailability.canTakeBreak}
+                  icon="cafe-outline"
+                  iconSize={16}
+                  label={
+                    breakAvailability.canTakeBreak
+                      ? `Take a ${BREAK_LENGTH_MINUTES}m Break`
+                      : "Break not available yet"
+                  }
+                  style={styles.quickBlockEditButton}
+                />
+              </>
+            )
+          )}
+
+          {!isHardModeActive && (
+            <Button
+              variant="outline"
+              onPress={openEditGate}
+              icon="create-outline"
+              iconSize={16}
+              label="Edit Block"
+              style={styles.quickBlockEditButton}
+            />
+          )}
         </Card>
       )}
 
@@ -208,9 +268,21 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
       <Button
         onPress={isFocusActive ? handleStopFocus : handleOpenFocusSheet}
         loading={isLoading}
-        icon={isFocusActive ? "stop-circle-outline" : "timer-outline"}
+        icon={
+          isHardModeActive
+            ? "lock-closed-outline"
+            : isFocusActive
+              ? "stop-circle-outline"
+              : "timer-outline"
+        }
         iconSize={22}
-        label={isFocusActive ? "End Focus Session" : "Start Focus Session"}
+        label={
+          isHardModeActive
+            ? "Hard Mode — Runs to the End"
+            : isFocusActive
+              ? "End Focus Session"
+              : "Start Focus Session"
+        }
         style={[
           styles.focusButton,
           isFocusActive && styles.focusButtonActiveSpacing,
@@ -227,6 +299,7 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         defaultDurationMinutes={
           hasStartedFirstFocusSession ? undefined : FIRST_SESSION_MINUTES
         }
+        onUpgrade={handleUpgrade}
       />
 
       <EndSessionConfirmModal
@@ -342,6 +415,13 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.textSecondary,
     marginTop: 4,
+  },
+  breakNotice: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.textSecondary,
+    textAlign: "center",
+    marginTop: 12,
   },
   quickBlockEditButton: {
     marginTop: 14,

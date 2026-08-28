@@ -142,6 +142,46 @@ public class ScreenTimeModule: Module {
             promise.resolve(nil)
         }
 
+        // Async: shields everything EXCEPT the items whose IDs are in `itemIds`.
+        // Mirror image of applyBlocking, used by the sheet's "Allow Only" mode.
+        AsyncFunction("applyAllowOnly") { (itemIds: [String], promise: Promise) in
+            self.loadSelection()
+
+            let allItems = self.serializeSelection()
+            var allowedApps = Set<ApplicationToken>()
+            var allowedWebs = Set<WebDomainToken>()
+
+            let selectedIds = Set(itemIds)
+            let appArray    = Array(self.currentSelection.applicationTokens)
+            let webArray    = Array(self.currentSelection.webDomainTokens)
+
+            for item in allItems {
+                guard let id    = item["id"]    as? String, selectedIds.contains(id),
+                      let type  = item["type"]  as? String,
+                      let index = item["index"] as? Int else { continue }
+
+                switch type {
+                case "application" where index < appArray.count:
+                    allowedApps.insert(appArray[index])
+                case "webDomain" where index < webArray.count:
+                    allowedWebs.insert(webArray[index])
+                // Allowing a whole category would defeat the point of the mode,
+                // so categories in the selection are ignored here.
+                default: break
+                }
+            }
+
+            // `.all(except:)` shields every category and carves the allowed
+            // tokens back out. `shield.applications` must be nil, or it would
+            // re-shield the very apps being allowed through.
+            self.store.shield.applications = nil
+            self.store.shield.applicationCategories = .all(except: allowedApps)
+            self.store.shield.webDomains = nil
+            self.store.shield.webDomainCategories = .all(except: allowedWebs)
+
+            promise.resolve(nil)
+        }
+
         // Async: shields every item in the current selection
         AsyncFunction("blockAll") { (promise: Promise) in
             self.loadSelection()
@@ -223,7 +263,8 @@ public class ScreenTimeModule: Module {
                         daysOfWeek: daysOfWeek,
                         appIds: appIds,
                         durationMinutes: durationMinutes,
-                        expectedGrowthCm: raw["expectedGrowthCm"] as? Double
+                        expectedGrowthCm: raw["expectedGrowthCm"] as? Double,
+                        focusMode: raw["focusMode"] as? String
                     )
                 )
 
@@ -389,7 +430,20 @@ public class ScreenTimeModule: Module {
                 let endsAt = startedAt.addingTimeInterval(Double(durationMinutes) * 60)
 
                 Task {
-                    for activity in Activity<BlockAttributes>.activities {
+                    // The TimedBlockMonitor extension raises this same activity
+                    // for a scheduled block it started while the app was
+                    // killed. Adopting that block calls in here, so leave a
+                    // matching activity alone instead of restarting it.
+                    let existing = Activity<BlockAttributes>.activities
+                    if existing.contains(where: {
+                        $0.attributes.label == label
+                            && abs($0.content.state.endsAt.timeIntervalSince(endsAt)) < 1
+                    }) {
+                        promise.resolve(true)
+                        return
+                    }
+
+                    for activity in existing {
                         await activity.end(nil, dismissalPolicy: .immediate)
                     }
 

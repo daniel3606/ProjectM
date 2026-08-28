@@ -9,7 +9,7 @@ import { Screen, HeroTitle, HeroSubtitle } from "@/components/ui";
 
 const PREMIUM_FEATURES = [
   { icon: "lock-closed", label: "Deep Focus mode with 1.5x growth" },
-  { icon: "infinite", label: "Unlimited timed blocks" },
+  { icon: "infinite", label: "Unlimited scheduled blocks" },
   { icon: "stats-chart", label: "Detailed screen time insights" },
   { icon: "people", label: "Compete with friends on leaderboards" },
 ] as const;

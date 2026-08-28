@@ -58,8 +58,10 @@ struct StoredPlan: Codable {
     let daysOfWeek: [Int] // 0 = Sunday ... 6 = Saturday, matches JS Date#getDay()
     let appIds: [String]
     let durationMinutes: Int
-    // Optional so plans persisted before this field existed still decode.
+    // Optional so plans persisted before these fields existed still decode.
     let expectedGrowthCm: Double?
+    /// "flexible" or "deep"; shown on the Live Activity the monitor raises.
+    let focusMode: String?
 }
 
 // The subset of a plan that actually determines its DeviceActivitySchedule.
