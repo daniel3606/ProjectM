@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
 import { resolveEquippedEmoji, type EquippedItems, type ItemSlot } from "@/constants/items";
 import { useAuth } from "@/contexts/AuthContext";
@@ -74,14 +82,24 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
         if (cancelled) return;
 
         if (remote) {
-          if (remote.display_name) setRawName(remote.display_name);
-          if (remote.marshmallow_color) {
-            setRawColor(remote.marshmallow_color as MarshmallowColorHex);
+          // A remote profile only outranks local state once its own onboarding
+          // is finished. Before that the row is a freshly created default, and
+          // its `display_name` is the person's name from their auth provider
+          // (see `ensureAppProfile`) rather than a marshmallow's — hydrating
+          // from it would rename the marshmallow the user just made and
+          // repaint it, moments after we asked them to save it.
+          if (remote.onboarding_completed) {
+            if (remote.display_name) setRawName(remote.display_name);
+            if (remote.marshmallow_color) {
+              setRawColor(remote.marshmallow_color as MarshmallowColorHex);
+            }
+            if (remote.equipped_items && typeof remote.equipped_items === "object") {
+              setItems(remote.equipped_items as EquippedItems);
+            }
+            // Promote only. A row that hasn't caught up yet must not push a
+            // finished user back into onboarding.
+            setOnboardingCompleted(true);
           }
-          if (remote.equipped_items && typeof remote.equipped_items === "object") {
-            setItems(remote.equipped_items as EquippedItems);
-          }
-          setOnboardingCompleted(!!remote.onboarding_completed);
         }
 
         setHydratedUserId(userId);
@@ -101,6 +119,20 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     setItems,
     setOnboardingCompleted,
   ]);
+
+  // Anything customized before signing in never reached the server, because
+  // there was no account to attach it to yet. This is the catch-up write, once
+  // per account, and only while onboarding is unfinished — after that the
+  // remote profile is authoritative and this would fight the hydrate above.
+  const caughtUpUserIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId || hydratedUserId !== userId) return;
+    if (onboardingCompleted) return;
+    if (caughtUpUserIdRef.current === userId) return;
+
+    caughtUpUserIdRef.current = userId;
+    syncProfile(name, color, items).catch(() => {});
+  }, [color, hydratedUserId, items, name, onboardingCompleted, userId]);
 
   // Keeps the widget's marshmallow appearance in sync, whether it changed
   // locally or was just hydrated from the remote profile.
