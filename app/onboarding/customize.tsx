@@ -61,10 +61,6 @@ export default function OnboardingCustomizeStep() {
     goNext();
   }, [goNext, markCustomizationCompleted, name, profile]);
 
-  // The name is only committed on Continue, but the character wears it while
-  // it's being typed — that response is most of what makes this screen work.
-  const previewName = name.trim() || profile.name;
-
   const equippedFace = profile.items.face;
   const faceCaption =
     FACE_ITEMS.find((item) => item.id === equippedFace)?.name ?? "No accessory";
@@ -82,7 +78,7 @@ export default function OnboardingCustomizeStep() {
       <View style={styles.stage}>
         <MarshmallowStage
           color={profile.color}
-          name={previewName}
+          name={profile.name}
           items={profile.items}
           scale={0.82}
           pulseToken={pulseToken}
