@@ -5,7 +5,10 @@ import { INITIAL_MARSHMALLOW_SIZE_CM } from "@/constants/marshmallow";
 import { getObjectAspectRatio } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
+  MIN_PINNED_SCALE,
   WORLD_PX_PER_DECADE,
+  pinProgress,
+  pinnedOffsetPx,
   sizeToWorldX,
   visualScaleForSize,
   worldXToSize,
@@ -97,5 +100,51 @@ describe("size ↔ world round-trip", () => {
       expect(next).toBeGreaterThan(previous);
       previous = next;
     }
+  });
+});
+
+describe("marshmallow pin", () => {
+  /** Offsets the marshmallow reaches when the camera scrubs up to bigger objects. */
+  const upwardDrifts = [-1, -20, -116, -400, -2000, -20000];
+
+  it("leaves the drift toward smaller objects alone", () => {
+    for (const drift of [0, 1, 40, 300, 5000]) {
+      expect(pinnedOffsetPx(drift)).toBe(drift);
+      expect(pinProgress(drift)).toBe(0);
+    }
+  });
+
+  it("holds the middle of the scene however far the camera runs", () => {
+    for (const drift of upwardDrifts) {
+      expect(pinnedOffsetPx(drift)).toBe(0);
+    }
+  });
+
+  it("rises into the comparison pose rather than jumping into it", () => {
+    // The lift is what the pin actually animates, so it has to ease in: a step
+    // would snap the marshmallow up to the object ground line.
+    expect(pinProgress(-1)).toBeLessThan(0.05);
+    expect(pinProgress(-116)).toBeGreaterThan(0.5);
+    expect(pinProgress(-20000)).toBeCloseTo(1, 5);
+
+    let previous = 0;
+    for (const drift of upwardDrifts) {
+      const progress = pinProgress(drift);
+      expect(progress).toBeGreaterThan(previous);
+      previous = progress;
+    }
+  });
+
+  it("draws the pinned marshmallow at its true ratio against the object in focus", () => {
+    // A 10cm marshmallow beside a 22cm cake reads as under half its height,
+    // which the object floor would have flattened to a quarter.
+    expect(visualScaleForSize(10, 22, MIN_PINNED_SCALE)).toBeCloseTo(10 / 22, 5);
+    expect(visualScaleForSize(4, 45, MIN_PINNED_SCALE)).toBeCloseTo(4 / 45, 5);
+  });
+
+  it("keeps the pinned marshmallow visible against the largest objects", () => {
+    const scale = visualScaleForSize(2, 170, MIN_PINNED_SCALE);
+    expect(scale).toBe(MIN_PINNED_SCALE);
+    expect(FOCUS_HEIGHT_PX * scale).toBeGreaterThanOrEqual(8);
   });
 });

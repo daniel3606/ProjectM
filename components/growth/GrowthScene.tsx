@@ -125,9 +125,10 @@ interface GrowthSceneProps {
  *   point. Growth moves its world position, the camera follows, and the world
  *   sweeps left behind it.
  * - Preview mode: the pan gesture writes the camera directly and the
- *   marshmallow drifts and rescales exactly like any other object, because it
- *   is governed by the same law. Nothing needs to be blended between the two
- *   states, and the marshmallow cannot jump.
+ *   marshmallow drifts and rescales under the same law as every other object.
+ *   Nothing needs to be blended between the two states, and the marshmallow
+ *   cannot jump. Dragged toward bigger objects it holds the middle rather than
+ *   leaving the scene, so there is always something to compare against.
  */
 export default function GrowthScene({
   sizeCm,
