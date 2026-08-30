@@ -23,6 +23,10 @@ const MOUTH_LIFT = -3;
 /** Layout height of the body, and therefore of the whole character. */
 export const MARSHMALLOW_BODY_HEIGHT = 222;
 
+/** Body width and corner radius, exported so a silhouette can match the shape. */
+export const MARSHMALLOW_BODY_WIDTH = 200;
+export const MARSHMALLOW_BODY_RADIUS = 70;
+
 /**
  * Minor size-driven scale applied inside the character. Exported so callers
  * that place the character in a scaled scene can work out its drawn height.
@@ -163,9 +167,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.06)",
   },
   body: {
-    width: 200,
+    width: MARSHMALLOW_BODY_WIDTH,
     height: MARSHMALLOW_BODY_HEIGHT,
-    borderRadius: 70,
+    borderRadius: MARSHMALLOW_BODY_RADIUS,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000",
