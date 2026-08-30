@@ -12,8 +12,12 @@ import {
 } from "@/components/MarshmallowCharacter";
 import {
   FOCUS_HEIGHT_PX,
+  MARSHMALLOW_FOREGROUND_DROP_PX,
   MARSHMALLOW_GROUND_Y,
   MARSHMALLOW_PINNED_SIZE_CM,
+  NO_SCALE_FLOOR,
+  pinProgress,
+  pinnedOffsetPx,
   visualScaleForSize,
   worldXToSize,
 } from "@/lib/growthWorld";
@@ -45,9 +49,9 @@ interface GhostMarshmallowProps {
 
 /**
  * An outline standing where the marshmallow will be once the running block
- * pays out. It obeys the same position and scale law as every other inhabitant
- * of the world, so scrubbing the scene moves it exactly like the real
- * marshmallow and the gap between the two stays honest at any camera position.
+ * pays out. It follows the same law as the marshmallow, pin included, so
+ * scrubbing the scene moves the two together and the gap between them stays
+ * honest at any camera position.
  */
 export default function GhostMarshmallow({
   cameraX,
@@ -56,15 +60,26 @@ export default function GhostMarshmallow({
   color,
 }: GhostMarshmallowProps) {
   const animatedStyle = useAnimatedStyle(() => {
-    const offset = worldX.value - cameraX.value;
+    const drift = worldX.value - cameraX.value;
+    const offset = pinnedOffsetPx(drift);
+    const pin = pinProgress(drift);
     const scale =
       BASE_SCALE *
-      visualScaleForSize(worldXToSize(worldX.value), worldXToSize(cameraX.value));
+      visualScaleForSize(
+        worldXToSize(worldX.value),
+        worldXToSize(cameraX.value),
+        NO_SCALE_FLOOR,
+      );
 
     return {
       opacity: presence.value * GHOST_OPACITY,
-      // The translation precedes the scales so it stays in unscaled pixels.
-      transform: [{ translateX: offset }, { scaleX: scale }, { scaleY: scale }],
+      // The translations precede the scales so they stay in unscaled pixels.
+      transform: [
+        { translateX: offset },
+        { translateY: -MARSHMALLOW_FOREGROUND_DROP_PX * pin },
+        { scaleX: scale },
+        { scaleY: scale },
+      ],
     };
   });
 

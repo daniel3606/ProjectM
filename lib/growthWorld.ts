@@ -52,6 +52,11 @@ export const FOCUS_HEIGHT_PX = 162;
  */
 export const VISUAL_GAMMA = 1;
 
+/**
+ * Floor for anything that leaves the screen anyway, so a far-off object is
+ * never drawn as a speck. The pinned marshmallow passes {@link NO_SCALE_FLOOR}
+ * instead, because there being a speck is the whole comparison.
+ */
 const VISUAL_SCALE_MIN = 0.24;
 const VISUAL_SCALE_MAX = 1.62;
 
@@ -60,14 +65,21 @@ const VISUAL_SCALE_MAX = 1.62;
  * `cameraCm`. Derived from the real size ratio rather than from pixel offset,
  * so objects still read as the right size after a pair has been opened.
  *
- * The clamps only engage well off screen, so on-screen comparisons are never
- * distorted by them.
+ * For comparison objects the clamps only engage well off screen, so on-screen
+ * comparisons are never distorted by them. The pinned marshmallow stays on
+ * screen far past that point, which is why it can pass its own floor.
+ *
+ * @param minScale Smallest scale to draw at. Defaults to the object floor.
  */
-export function visualScaleForSize(objectCm: number, cameraCm: number): number {
+export function visualScaleForSize(
+  objectCm: number,
+  cameraCm: number,
+  minScale: number = VISUAL_SCALE_MIN,
+): number {
   "worklet";
   const ratio = Math.max(objectCm, 0.01) / Math.max(cameraCm, 0.01);
   const raw = Math.pow(ratio, VISUAL_GAMMA);
-  return Math.min(Math.max(raw, VISUAL_SCALE_MIN), VISUAL_SCALE_MAX);
+  return Math.min(Math.max(raw, minScale), VISUAL_SCALE_MAX);
 }
 
 /** Extra pixels between neighbouring sprite edges, so they don't kiss. */
@@ -192,10 +204,14 @@ export const SCENE_HEIGHT = 272;
 export const GROUND_Y = 56;
 
 /**
- * Marshmallow stands a little lower than the comparison objects so its feet
- * read as in front of them on the same ground plane.
+ * How far below the object ground line the marshmallow stands, which reads as
+ * it being in front of the objects rather than among them. The pin undoes it:
+ * a marshmallow being compared to an object belongs on that object's line.
  */
-export const MARSHMALLOW_GROUND_Y = GROUND_Y - 50;
+export const MARSHMALLOW_FOREGROUND_DROP_PX = 50;
+
+/** Ground line the marshmallow stands on when it holds the focal point. */
+export const MARSHMALLOW_GROUND_Y = GROUND_Y - MARSHMALLOW_FOREGROUND_DROP_PX;
 
 /** Gap between an object's crown and the caption sitting above it. */
 export const OBJECT_LABEL_GAP = 8;
@@ -207,6 +223,48 @@ export const OBJECT_LABEL_GAP = 8;
  * the illusion the moving world is meant to replace.
  */
 export const MARSHMALLOW_PINNED_SIZE_CM = 3;
+
+// ── Pinning ──────────────────────────────────────────────────────────────────
+
+/**
+ * Camera travel over which the marshmallow eases from standing in the
+ * foreground into the comparison pose, up on the object ground line.
+ */
+export const PIN_RAMP_PX = 116;
+
+/**
+ * The pinned marshmallow is never floored. It holds the middle of the scene at
+ * any camera position, so nothing has to keep it on screen, and beside
+ * something a hundred times its size it should dwindle to almost nothing. That
+ * is the comparison, not a failure of it.
+ */
+export const NO_SCALE_FLOOR = 0;
+
+/**
+ * The marshmallow's screen offset, given the offset the world law alone asks
+ * for.
+ *
+ * Scrubbing down to smaller objects is unchanged: the marshmallow drifts off
+ * to the right and grows as it goes, like any other inhabitant. Scrubbing up
+ * is where the comparison lives, so it holds the middle of the scene and
+ * shrinks in place, standing against whatever the camera has moved on to.
+ */
+export function pinnedOffsetPx(offsetPx: number): number {
+  "worklet";
+  return Math.max(offsetPx, 0);
+}
+
+/**
+ * 0 with the marshmallow in the foreground, 1 once it is fully in the
+ * comparison pose. Eased over {@link PIN_RAMP_PX} rather than switched, so it
+ * rises to the object ground line instead of jumping there the moment the
+ * camera passes it.
+ */
+export function pinProgress(offsetPx: number): number {
+  "worklet";
+  if (offsetPx >= 0) return 0;
+  return 1 - Math.exp(offsetPx / PIN_RAMP_PX);
+}
 
 // ── Depth / occlusion ────────────────────────────────────────────────────────
 
