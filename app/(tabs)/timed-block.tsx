@@ -5,7 +5,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Theme from "@/constants/theme";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
-import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import {
   useTimedBlockPlans,
@@ -15,17 +14,12 @@ import {
   formatClockTime,
   formatDaysOfWeek,
   formatDuration,
-  formatTimeRemaining,
   getGrowthForDuration,
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet, {
   type TimedBlockPlanDraft,
 } from "@/components/TimedBlockPlanSheet";
-import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
-import NameGateModal from "@/components/NameGateModal";
-import EditBlockSheet from "@/components/EditBlockSheet";
-import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard, Button } from "@/components/ui";
-import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
+import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard } from "@/components/ui";
 import { STATS_EVENTS, trackStats } from "@/lib/stats/analytics";
 
 const SWITCH_TRACK_COLOR = {
@@ -70,11 +64,18 @@ function draftFromParams(params: PlanDraftParams): TimedBlockPlanDraft | null {
 
 interface PlanCardProps {
   plan: TimedBlockPlan;
+  /** True for the plan whose block is running right now. */
+  isActive: boolean;
   onEdit: (plan: TimedBlockPlan) => void;
   onToggle: (id: string, enabled: boolean) => void;
 }
 
-const PlanCard = React.memo(function PlanCard({ plan, onEdit, onToggle }: PlanCardProps) {
+const PlanCard = React.memo(function PlanCard({
+  plan,
+  isActive,
+  onEdit,
+  onToggle,
+}: PlanCardProps) {
   const handleLongPress = useCallback(() => onEdit(plan), [onEdit, plan]);
   const handleToggle = useCallback(
     (value: boolean) => onToggle(plan.id, value),
@@ -84,15 +85,22 @@ const PlanCard = React.memo(function PlanCard({ plan, onEdit, onToggle }: PlanCa
   return (
     <SelectableCard
       onLongPress={handleLongPress}
-      style={styles.planCard}
+      style={[styles.planCard, isActive && styles.planCardActive]}
       testID={`plan-card-${plan.id}`}
     >
       <View style={[styles.planBody, !plan.enabled && styles.planBodyOff]}>
         <View style={styles.planTopRow}>
           <View style={styles.planInfo}>
-            <Text style={styles.planLabel} numberOfLines={1}>
-              {plan.label}
-            </Text>
+            <View style={styles.planLabelRow}>
+              <Text style={styles.planLabel} numberOfLines={1}>
+                {plan.label}
+              </Text>
+              {isActive && (
+                <View style={styles.activePill} testID={`plan-active-${plan.id}`}>
+                  <Text style={styles.activePillText}>Active now</Text>
+                </View>
+              )}
+            </View>
             <Text style={styles.planTime}>
               {formatClockTime(plan.startHour, plan.startMinute)} –{" "}
               {formatClockTime(plan.endHour, plan.endMinute)}
@@ -145,29 +153,17 @@ function PlanStat({
 
 export default function TimedBlockScreen() {
   const router = useRouter();
-  const { activeSession, stopSession } = useFocusSession();
-  const profile = useMarshmallowProfile();
+  const { activeSession } = useFocusSession();
   const { plans, planLimit, canAddPlan, addPlan, updatePlan, removePlan, setPlanEnabled } =
     useTimedBlockPlans();
   const { isPremium } = useSubscription();
   const planSheetRef = useRef<BottomSheetModal>(null);
-  const [remainingMs, setRemainingMs] = useState(0);
   const [editingPlan, setEditingPlan] = useState<TimedBlockPlan | null>(null);
-  const [isEndConfirmVisible, setIsEndConfirmVisible] = useState(false);
 
   const params = useLocalSearchParams() as PlanDraftParams;
   const [draft, setDraft] = useState<TimedBlockPlanDraft | null>(null);
   const draftSourceRef = useRef<string | null>(null);
   const handledDraftRef = useRef<string | null>(null);
-
-  const {
-    editBlockSheetRef,
-    isEditGateVisible,
-    openEditGate,
-    cancelEditGate,
-    confirmEditGate,
-    saveEditedBlock,
-  } = useEditBlockFlow();
 
   // Opens the sheet prefilled when Stats sends the user here with a suggested
   // window. Keyed on the params so returning to the tab doesn't reopen it.
@@ -198,24 +194,6 @@ export default function TimedBlockScreen() {
     },
     [addPlan]
   );
-
-  useEffect(() => {
-    if (!activeSession) return;
-    const endsAt = activeSession.startedAt + activeSession.durationMinutes * 60_000;
-    const tick = () => setRemainingMs(Math.max(0, endsAt - Date.now()));
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [activeSession]);
-
-  const handleEndBlock = useCallback(() => {
-    setIsEndConfirmVisible(true);
-  }, []);
-
-  const handleConfirmEndBlock = useCallback(() => {
-    setIsEndConfirmVisible(false);
-    stopSession();
-  }, [stopSession]);
 
   const handleAddPlan = useCallback(() => {
     if (!canAddPlan) {
@@ -256,38 +234,11 @@ export default function TimedBlockScreen() {
         </Pressable>
       </View>
 
-      {activeSession?.planId && (
-        <Card style={styles.activeCard}>
-          <Text style={styles.activeLabel}>Block in progress</Text>
-          <Text style={styles.activeTime}>{formatTimeRemaining(remainingMs)}</Text>
-          <Text style={styles.activeDesc}>
-            {activeSession.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
-            {activeSession.expectedGrowthCm}cm
-          </Text>
-          <View style={styles.activeCardActions}>
-            <Button
-              variant="outline"
-              onPress={openEditGate}
-              icon="create-outline"
-              iconSize={16}
-              label="Edit Block"
-              style={styles.actionButton}
-            />
-            <Button
-              variant="danger"
-              onPress={handleEndBlock}
-              icon="stop-circle-outline"
-              iconSize={18}
-              label="End Block"
-              style={styles.actionButton}
-            />
-          </View>
-        </Card>
-      )}
-
+      {/* A running plan says so on its own card. A Quick Block has no card
+          here to mark, so it still needs a line pointing at Home. */}
       {activeSession && !activeSession.planId && (
-        <Card style={styles.quickBlockNoticeCard}>
-          <Text style={styles.quickBlockNoticeText}>
+        <Card style={styles.noticeCard}>
+          <Text style={styles.noticeText}>
             A Quick Block is active — manage it from Home
           </Text>
         </Card>
@@ -300,6 +251,7 @@ export default function TimedBlockScreen() {
           <PlanCard
             key={plan.id}
             plan={plan}
+            isActive={activeSession?.planId === plan.id}
             onEdit={handleEditPlan}
             onToggle={setPlanEnabled}
           />
@@ -346,31 +298,6 @@ export default function TimedBlockScreen() {
         onUpdate={updatePlan}
         onDelete={removePlan}
       />
-
-      <EndSessionConfirmModal
-        visible={isEndConfirmVisible}
-        marshmallowName={profile.name}
-        onConfirm={handleConfirmEndBlock}
-        onCancel={() => setIsEndConfirmVisible(false)}
-      />
-
-      <NameGateModal
-        visible={isEditGateVisible}
-        marshmallowName={profile.name}
-        title="Edit Block?"
-        subtitle="Type in your marshmallow's name to edit this block"
-        confirmLabel="Edit Block"
-        confirmVariant="primary"
-        onConfirm={confirmEditGate}
-        onCancel={cancelEditGate}
-      />
-
-      <EditBlockSheet
-        sheetRef={editBlockSheetRef}
-        session={activeSession}
-        onSave={saveEditedBlock}
-        onCancelBlock={handleEndBlock}
-      />
     </Screen>
   );
 }
@@ -389,48 +316,13 @@ const styles = StyleSheet.create({
   subtitle: {
     maxWidth: 260,
   },
-  activeCard: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.secondary,
-    padding: 20,
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  activeLabel: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  activeTime: {
-    fontSize: 36,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
-    marginTop: 6,
-  },
-  activeDesc: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  activeCardActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 16,
-  },
-  actionButton: {
-    flex: 1,
-  },
-  quickBlockNoticeCard: {
+  noticeCard: {
     borderRadius: 20,
     padding: 16,
     alignItems: "center",
     marginBottom: 24,
   },
-  quickBlockNoticeText: {
+  noticeText: {
     fontSize: 13,
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.textSecondary,
@@ -446,6 +338,28 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Theme.spacing.xl,
     marginBottom: Theme.spacing.lg,
+  },
+  planCardActive: {
+    borderWidth: 1.5,
+    borderColor: Theme.colors.secondary,
+  },
+  planLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Theme.spacing.sm,
+  },
+  activePill: {
+    backgroundColor: Theme.colors.secondary,
+    borderRadius: Theme.radius.pill,
+    paddingHorizontal: Theme.spacing.sm,
+    paddingVertical: 3,
+  },
+  activePillText: {
+    fontSize: 10,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.white,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   planBody: {
     gap: Theme.spacing.xs,
@@ -466,6 +380,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: Theme.fonts.semibold,
     color: Theme.colors.text,
+    // Truncate the name rather than pushing the "Active now" pill off the card.
+    flexShrink: 1,
   },
   planTime: {
     fontSize: 22,

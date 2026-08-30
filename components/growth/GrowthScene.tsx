@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
@@ -31,6 +31,7 @@ import {
 } from "@/lib/growthWorld";
 import ComparisonWorld from "@/components/growth/ComparisonWorld";
 import EdgeFade from "@/components/growth/EdgeFade";
+import GhostMarshmallow from "@/components/growth/GhostMarshmallow";
 import GrowthRuler from "@/components/growth/GrowthRuler";
 import MarshmallowActor from "@/components/growth/MarshmallowActor";
 import SizeIndicator from "@/components/growth/SizeIndicator";
@@ -47,6 +48,13 @@ const PULSE_STRETCH_MS = 170;
 const PULSE_SETTLE_SPRING = { damping: 7, stiffness: 190, mass: 0.7 } as const;
 const RETURN_FADE_MS = 420;
 const PREVIEW_FADE_IN_MS = 160;
+const GHOST_FADE_MS = 320;
+/**
+ * The silhouette outlives the growth sweep it is the target of, so the
+ * marshmallow is seen arriving at it rather than passing through a gap where
+ * it used to be. A block cancelled early has no sweep, and just dissolves.
+ */
+const GHOST_HOLD_MS = GROWTH_SWEEP_MS;
 
 /** Slightly snappier than the default so the fling settles within the world. */
 const DECAY_DECELERATION = 0.994;
@@ -96,6 +104,11 @@ interface GrowthSceneProps {
   color: string;
   name: string;
   isBlocking?: boolean;
+  /**
+   * Size the marshmallow will reach once the running block pays out. When set,
+   * a silhouette marks that spot so the growth being worked toward is visible.
+   */
+  projectedSizeCm?: number;
   items?: EquippedItems;
   hapticsEnabled?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -121,6 +134,7 @@ export default function GrowthScene({
   color,
   name,
   isBlocking,
+  projectedSizeCm,
   items,
   hapticsEnabled = true,
   style,
@@ -143,7 +157,48 @@ export default function GrowthScene({
   const isUserMotion = useSharedValue(0);
   const lastDetentIndex = useSharedValue(Math.round(initialWorldX / DETENT_PX));
 
+  /** Where the running block's payout would put the marshmallow. */
+  const ghostWorldX = useSharedValue(initialWorldX);
+  const ghostPresence = useSharedValue(0);
+  const [isGhostMounted, setIsGhostMounted] = useState(projectedSizeCm != null);
+
   const mountedAtRef = useRef(Date.now());
+
+  // The silhouette slides out from the marshmallow when a block starts, so it
+  // reads as where this block leads rather than as something that was always
+  // there, and it stays put while the growth result waits to be dismissed.
+  useEffect(() => {
+    if (projectedSizeCm == null) {
+      ghostPresence.value = withDelay(
+        GHOST_HOLD_MS,
+        withTiming(0, { duration: GHOST_FADE_MS }, (finished) => {
+          "worklet";
+          if (finished) scheduleOnRN(setIsGhostMounted, false);
+        }),
+      );
+      return;
+    }
+
+    const target = sizeToWorldX(projectedSizeCm);
+    const isAppearing = ghostPresence.value === 0;
+    if (isAppearing) {
+      ghostWorldX.value = marshmallowWorldX.value;
+    }
+
+    // A block restored at launch has no journey to animate — the scene is
+    // still snapping the marshmallow into place behind it.
+    if (Date.now() - mountedAtRef.current < HYDRATION_WINDOW_MS) {
+      ghostWorldX.value = target;
+    } else {
+      ghostWorldX.value = withTiming(target, {
+        duration: GROWTH_SWEEP_MS,
+        easing: CAMERA_EASING,
+      });
+    }
+
+    ghostPresence.value = withTiming(1, { duration: GHOST_FADE_MS });
+    setIsGhostMounted(true);
+  }, [projectedSizeCm, ghostPresence, ghostWorldX, marshmallowWorldX]);
 
   // The real size only has to reach the UI thread; every decision about what
   // to animate is made there, so it can read the interaction state without
@@ -311,6 +366,15 @@ export default function GrowthScene({
               actualSizeCm={sizeCm}
             />
 
+            {isGhostMounted && (
+              <GhostMarshmallow
+                cameraX={cameraX}
+                worldX={ghostWorldX}
+                presence={ghostPresence}
+                color={color}
+              />
+            )}
+
             <MarshmallowActor
               cameraX={cameraX}
               marshmallowWorldX={marshmallowWorldX}
@@ -338,6 +402,9 @@ export default function GrowthScene({
         cameraX={cameraX}
         previewProgress={previewProgress}
         actualSizeCm={sizeCm}
+        pendingGrowthCm={
+          projectedSizeCm != null ? projectedSizeCm - sizeCm : undefined
+        }
       />
     </View>
   );

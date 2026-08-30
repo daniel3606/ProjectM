@@ -1,3 +1,4 @@
+import { ActiveBlockControls, ActiveBlockStatus } from "@/components/ActiveBlockPanel";
 import EditBlockSheet from "@/components/EditBlockSheet";
 import EndSessionConfirmModal from "@/components/EndSessionConfirmModal";
 import FocusSessionSheet from "@/components/FocusSessionSheet";
@@ -6,8 +7,8 @@ import NameGateModal from "@/components/NameGateModal";
 import SettingsButton from "@/components/SettingsButton";
 import { GrowthScene } from "@/components/growth";
 import { FirstSessionCoachMark } from "@/components/onboarding";
-import { Button, Card, Screen } from "@/components/ui";
-import { computeMarshmallowSizeCm, formatTimeRemaining } from "@/constants/marshmallow";
+import { Button, Screen } from "@/components/ui";
+import { computeMarshmallowSizeCm } from "@/constants/marshmallow";
 import Theme from "@/constants/theme";
 import {
   useFocusSession,
@@ -15,11 +16,9 @@ import {
 } from "@/contexts/FocusSessionContext";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useOnboarding } from "@/contexts/OnboardingContext";
-import { BREAK_LENGTH_MINUTES } from "@/lib/focusBreaks";
 import { ensureScreenTimeAuthorized } from "@/lib/screenTimeAuth";
 import { useEditBlockFlow } from "@/lib/useEditBlockFlow";
 import * as ScreenTime from "@/modules/screen-time";
-import { Ionicons } from "@expo/vector-icons";
 import { BottomSheetModal, useBottomSheetModal } from "@gorhom/bottom-sheet";
 import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -57,12 +56,29 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
   } = useFocusSession();
 
   const actualSizeCm = useMemo(() => computeMarshmallowSizeCm(history), [history]);
+
+  // The scene holds the pre-growth size for as long as a result popup is
+  // waiting to be dismissed, so the marshmallow grows *after* the user has
+  // read the popup instead of behind it. Growth is additive and rounded to the
+  // same 0.1cm, so subtracting it reproduces the earlier size exactly.
+  const displayedSizeCm = pendingGrowthResult
+    ? actualSizeCm - pendingGrowthResult.growthCm
+    : actualSizeCm;
+
+  // Growth still owed to the marshmallow, either because the block is running
+  // or because its payout is waiting behind the popup. Either way the
+  // silhouette stands where that growth lands, so the marshmallow visibly
+  // grows into it once the popup is dismissed.
+  const owedGrowthCm =
+    activeSession?.expectedGrowthCm ?? pendingGrowthResult?.growthCm;
+  const projectedSizeCm =
+    owedGrowthCm != null ? displayedSizeCm + owedGrowthCm : undefined;
+
   const isFocusActive = !!activeSession;
   // A session started by a Timed Block plan carries `planId`; one started
-  // manually from this screen ("Quick Block") never does. The two get
-  // distinct UI here — see the Start/End Focus button section below.
+  // manually from this screen ("Quick Block") never does. Both run the same
+  // UI now — the only difference is the name over the countdown.
   const isQuickBlockActive = isFocusActive && !activeSession?.planId;
-  const isTimedBlockActive = isFocusActive && !!activeSession?.planId;
   const [isLoading, setIsLoading] = useState(false);
   const focusSheetRef = useRef<BottomSheetModal>(null);
   const { dismissAll } = useBottomSheetModal();
@@ -151,10 +167,21 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         <SettingsButton onPress={() => router.push("/settings")} />
       </View>
 
+      {/* ── Time left on the running block ──────────────────────────── */}
+      {activeSession && (
+        <ActiveBlockStatus
+          label={isQuickBlockActive ? "Quick Block" : activeSession.label ?? "Scheduled Block"}
+          remainingMs={remainingMs}
+          focusMode={activeSession.focusMode}
+          isOnBreak={isOnBreak}
+        />
+      )}
+
       {/* ── Growth scene: scale world, ruler and size readout ───────── */}
-      <View style={styles.growthSlot}>
+      <View style={[styles.growthSlot, isFocusActive && styles.growthSlotBlocking]}>
         <GrowthScene
-          sizeCm={actualSizeCm}
+          sizeCm={displayedSizeCm}
+          projectedSizeCm={projectedSizeCm}
           color={profile.color}
           name={profile.name}
           items={profile.items}
@@ -163,134 +190,37 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
         />
       </View>
 
-      {/* ── Quick Block timer ───────────────────────────────────────── */}
-      {isQuickBlockActive && (
-        <Card style={styles.quickBlockCard}>
-          <Text style={styles.quickBlockLabel}>Quick Block Active</Text>
-          <Text style={styles.quickBlockTime}>{formatTimeRemaining(remainingMs)}</Text>
-          <Text style={styles.quickBlockDesc}>
-            {activeSession?.focusMode === "deep" ? "Deep Focus" : "Flexible"} · +
-            {activeSession?.expectedGrowthCm}cm
-          </Text>
-          {isOnBreak ? (
-            <>
-              <Text style={styles.breakNotice}>
-                On a break — apps are open until the timer catches up.
-              </Text>
-              <Button
-                variant="outline"
-                onPress={endBreak}
-                icon="play-outline"
-                iconSize={16}
-                label="Resume Block"
-                style={styles.quickBlockEditButton}
-              />
-            </>
-          ) : (
-            breakAvailability &&
-            breakAvailability.breaksRemaining > 0 && (
-              <>
-                <Text style={styles.breakNotice}>
-                  {breakAvailability.breaksRemaining} break
-                  {breakAvailability.breaksRemaining === 1 ? "" : "s"} left ·{" "}
-                  {BREAK_LENGTH_MINUTES}m each
-                </Text>
-                <Button
-                  variant="outline"
-                  onPress={startBreak}
-                  disabled={!breakAvailability.canTakeBreak}
-                  icon="cafe-outline"
-                  iconSize={16}
-                  label={
-                    breakAvailability.canTakeBreak
-                      ? `Take a ${BREAK_LENGTH_MINUTES}m Break`
-                      : "Break not available yet"
-                  }
-                  style={styles.quickBlockEditButton}
-                />
-              </>
-            )
+      {/* ── Running block: break, then the quiet way out ─────────────── */}
+      {isFocusActive ? (
+        <ActiveBlockControls
+          isOnBreak={isOnBreak}
+          breakAvailability={breakAvailability}
+          isHardMode={isHardModeActive}
+          onStartBreak={startBreak}
+          onEndBreak={endBreak}
+          onEdit={openEditGate}
+          onEnd={handleStopFocus}
+        />
+      ) : (
+        <>
+          {/* ── First-session hint ──────────────────────────────────── */}
+          {showCoachMark && (
+            <View style={styles.coachMark}>
+              <FirstSessionCoachMark onDismiss={() => setIsCoachMarkDismissed(true)} />
+            </View>
           )}
 
-          {!isHardModeActive && (
-            <Button
-              variant="outline"
-              onPress={openEditGate}
-              icon="create-outline"
-              iconSize={16}
-              label="Edit Block"
-              style={styles.quickBlockEditButton}
-            />
-          )}
-        </Card>
-      )}
-
-      {/* ── Timed Block indicator ───────────────────────────────────── */}
-      {isTimedBlockActive && (
-        <Card style={styles.timedBlockCard}>
-          <Ionicons
-            name="hourglass-outline"
-            size={24}
-            color={Theme.colors.secondary}
+          {/* ── Start Focus button ──────────────────────────────────── */}
+          <Button
+            onPress={handleOpenFocusSheet}
+            loading={isLoading}
+            icon="timer-outline"
+            iconSize={22}
+            label="Start Focus Session"
+            style={[styles.focusButton, showCoachMark && styles.focusButtonHinted]}
           />
-          <Text style={styles.timedBlockTitle}>Timed Block Active</Text>
-          <Text style={styles.timedBlockDesc}>
-            {activeSession?.label ?? "A scheduled block"} is blocking your apps
-          </Text>
-          <View style={styles.timedBlockActions}>
-            <Button
-              variant="outline"
-              onPress={openEditGate}
-              icon="create-outline"
-              iconSize={16}
-              label="Edit Block"
-              style={styles.timedBlockButton}
-            />
-            <Button
-              variant="outline"
-              onPress={() => router.push("/timed-block")}
-              icon="time-outline"
-              iconSize={16}
-              label="View Time Left"
-              style={styles.timedBlockButton}
-            />
-          </View>
-        </Card>
+        </>
       )}
-
-      {/* ── First-session hint ──────────────────────────────────────── */}
-      {showCoachMark && (
-        <View style={styles.coachMark}>
-          <FirstSessionCoachMark onDismiss={() => setIsCoachMarkDismissed(true)} />
-        </View>
-      )}
-
-      {/* ── Start / End Focus button ──────────────────────────────────── */}
-      <Button
-        onPress={isFocusActive ? handleStopFocus : handleOpenFocusSheet}
-        loading={isLoading}
-        icon={
-          isHardModeActive
-            ? "lock-closed-outline"
-            : isFocusActive
-              ? "stop-circle-outline"
-              : "timer-outline"
-        }
-        iconSize={22}
-        label={
-          isHardModeActive
-            ? "Hard Mode — Runs to the End"
-            : isFocusActive
-              ? "End Focus Session"
-              : "Start Focus Session"
-        }
-        style={[
-          styles.focusButton,
-          isFocusActive && styles.focusButtonActiveSpacing,
-          isFocusActive && styles.focusButtonActive,
-          showCoachMark && styles.focusButtonHinted,
-        ]}
-      />
 
       {/* ── Focus session settings sheet ──────────────────────────── */}
       <FocusSessionSheet
@@ -368,6 +298,16 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
     paddingTop: Theme.spacing.xl + Theme.spacing.lg,
     marginHorizontal: -Theme.spacing.xxl,
+    // Left shrinkable on purpose. The scene inside is a fixed height, so on a
+    // screen too short for everything it overflows and the controls draw over
+    // its readout — ugly, but every control stays reachable. Pinning the slot
+    // instead would push "End block" off the bottom, and that is the only way
+    // out of a running block.
+  },
+  /* Sits the scene clear of the countdown, which is the tallest thing on the
+     screen while a block runs. */
+  growthSlotBlocking: {
+    paddingTop: Theme.spacing.xxxl,
   },
 
   /* Focus button */
@@ -377,12 +317,6 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.xxxl,
     marginBottom: 48,
   },
-  focusButtonActive: {
-    backgroundColor: Theme.colors.danger,
-  },
-  focusButtonActiveSpacing: {
-    marginTop: Theme.spacing.xl,
-  },
   focusButtonHinted: {
     marginTop: Theme.spacing.md,
   },
@@ -390,73 +324,5 @@ const styles = StyleSheet.create({
   /* First-session hint, sitting where the button's top margin would be */
   coachMark: {
     marginTop: Theme.spacing.xxl,
-  },
-
-  /* Quick Block timer */
-  quickBlockCard: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.secondary,
-    padding: 20,
-    alignItems: "center",
-    marginTop: 28,
-  },
-  quickBlockLabel: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.semibold,
-    color: Theme.colors.secondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  quickBlockTime: {
-    fontSize: 36,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
-    marginTop: 6,
-  },
-  quickBlockDesc: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    marginTop: 4,
-  },
-  breakNotice: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    textAlign: "center",
-    marginTop: 12,
-  },
-  quickBlockEditButton: {
-    marginTop: 14,
-  },
-
-  /* Timed Block indicator */
-  timedBlockCard: {
-    borderRadius: 20,
-    padding: 20,
-    alignItems: "center",
-    marginTop: 28,
-  },
-  timedBlockTitle: {
-    fontSize: 17,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
-    marginTop: 8,
-  },
-  timedBlockDesc: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-    marginTop: 4,
-    textAlign: "center",
-  },
-  timedBlockActions: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
-  },
-  timedBlockButton: {
-    flex: 1,
   },
 });

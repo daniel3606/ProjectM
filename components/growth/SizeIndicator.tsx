@@ -1,15 +1,14 @@
+import { getStageForSize, isObjectRevealed } from "@/constants/growthStages";
+import Theme from "@/constants/theme";
+import { worldXToSize } from "@/lib/growthWorld";
 import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import Animated, {
+import {
   useAnimatedReaction,
-  useAnimatedStyle,
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import Theme from "@/constants/theme";
-import { getStageForSize, isObjectRevealed } from "@/constants/growthStages";
-import { worldXToSize } from "@/lib/growthWorld";
 
 /**
  * Text content cannot be animated on the UI thread, so this is the one place
@@ -33,6 +32,11 @@ interface SizeIndicatorProps {
   previewProgress: SharedValue<number>;
   /** The marshmallow's real stored size, used to gate undiscovered copy. */
   actualSizeCm: number;
+  /**
+   * Growth a running block will pay out, shown between the number and the
+   * unit as "3.5 (+2.0) cm" — the same readout the home screen widget gives.
+   */
+  pendingGrowthCm?: number;
 }
 
 /**
@@ -45,6 +49,7 @@ export default function SizeIndicator({
   cameraX,
   previewProgress,
   actualSizeCm,
+  pendingGrowthCm,
 }: SizeIndicatorProps) {
   const [displayCm, setDisplayCm] = useState(actualSizeCm);
   const lastPushedCm = useSharedValue(actualSizeCm);
@@ -70,29 +75,44 @@ export default function SizeIndicator({
     },
   );
 
-  const previewStyle = useAnimatedStyle(() => ({
-    opacity: previewProgress.value,
-  }));
+  // The bracket next to the number belongs to the marshmallow either way, so
+  // it swaps content rather than appearing and disappearing: pending growth
+  // while the camera is home, the size being left behind while it is away.
+  // Each has to be unmounted rather than faded, since an invisible node still
+  // holds its width and would leave a gap before the unit.
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  useAnimatedReaction(
+    () => previewProgress.value > 0,
+    (previewing, wasPreviewing) => {
+      if (wasPreviewing === null || previewing === wasPreviewing) return;
+      scheduleOnRN(setIsPreviewing, previewing);
+    },
+  );
 
   const stage = getStageForSize(displayCm);
   const isRevealed = isObjectRevealed(actualSizeCm, stage.sizeCm);
+
+  // Scrubbed back onto its own size, the bracket would just repeat the number.
+  const showsOwnSize = formatCm(displayCm) !== formatCm(actualSizeCm);
 
   return (
     <View style={styles.container}>
       <View style={styles.sizeRow}>
         <Text style={styles.size}>{formatCm(displayCm)}</Text>
+        {isPreviewing
+          ? showsOwnSize && (
+              <Text style={styles.originalSize}>({formatCm(actualSizeCm)})</Text>
+            )
+          : pendingGrowthCm != null &&
+            pendingGrowthCm > 0 && (
+              <Text style={styles.growth}>(+{formatCm(pendingGrowthCm)})</Text>
+            )}
         <Text style={styles.unit}>cm</Text>
       </View>
 
       <Text style={styles.message} numberOfLines={2}>
         {isRevealed ? stage.message : "Not there yet — keep focusing."}
       </Text>
-
-      <Animated.View style={[styles.previewHint, previewStyle]}>
-        <Text style={styles.previewHintText}>
-          You are {formatCm(actualSizeCm)}cm · release to go back
-        </Text>
-      </Animated.View>
     </View>
   );
 }
@@ -111,6 +131,20 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
   },
+  growth: {
+    fontSize: 24,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.success,
+    marginLeft: 4,
+  },
+  /** The size being scrubbed away from. Carries the number's own colour so it
+      reads as a fact about the marshmallow rather than as a gain. */
+  originalSize: {
+    fontSize: 24,
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.text,
+    marginLeft: 4,
+  },
   unit: {
     fontSize: 24,
     fontFamily: Theme.fonts.semibold,
@@ -123,19 +157,5 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     textAlign: "center",
     marginTop: Theme.spacing.xxs,
-  },
-  previewHint: {
-    marginTop: Theme.spacing.sm,
-    paddingHorizontal: Theme.spacing.md,
-    paddingVertical: Theme.spacing.xxs,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.card,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-  },
-  previewHintText: {
-    fontSize: 12,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.secondary,
   },
 });
