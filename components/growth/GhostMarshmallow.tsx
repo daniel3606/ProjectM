@@ -15,7 +15,7 @@ import {
   MARSHMALLOW_FOREGROUND_DROP_PX,
   MARSHMALLOW_GROUND_Y,
   MARSHMALLOW_PINNED_SIZE_CM,
-  MIN_PINNED_SCALE,
+  NO_SCALE_FLOOR,
   pinProgress,
   pinnedOffsetPx,
   visualScaleForSize,
@@ -68,7 +68,7 @@ export default function GhostMarshmallow({
       visualScaleForSize(
         worldXToSize(worldX.value),
         worldXToSize(cameraX.value),
-        MIN_PINNED_SCALE,
+        NO_SCALE_FLOOR,
       );
 
     return {

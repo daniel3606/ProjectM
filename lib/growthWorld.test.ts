@@ -5,7 +5,7 @@ import { INITIAL_MARSHMALLOW_SIZE_CM } from "@/constants/marshmallow";
 import { getObjectAspectRatio } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
-  MIN_PINNED_SCALE,
+  NO_SCALE_FLOOR,
   WORLD_PX_PER_DECADE,
   pinProgress,
   pinnedOffsetPx,
@@ -138,13 +138,21 @@ describe("marshmallow pin", () => {
   it("draws the pinned marshmallow at its true ratio against the object in focus", () => {
     // A 10cm marshmallow beside a 22cm cake reads as under half its height,
     // which the object floor would have flattened to a quarter.
-    expect(visualScaleForSize(10, 22, MIN_PINNED_SCALE)).toBeCloseTo(10 / 22, 5);
-    expect(visualScaleForSize(4, 45, MIN_PINNED_SCALE)).toBeCloseTo(4 / 45, 5);
+    expect(visualScaleForSize(10, 22, NO_SCALE_FLOOR)).toBeCloseTo(10 / 22, 5);
+    expect(visualScaleForSize(4, 45, NO_SCALE_FLOOR)).toBeCloseTo(4 / 45, 5);
   });
 
-  it("keeps the pinned marshmallow visible against the largest objects", () => {
-    const scale = visualScaleForSize(2, 170, MIN_PINNED_SCALE);
-    expect(scale).toBe(MIN_PINNED_SCALE);
-    expect(FOCUS_HEIGHT_PX * scale).toBeGreaterThanOrEqual(8);
+  it("keeps shrinking the pinned marshmallow all the way to nearly nothing", () => {
+    // No floor: against a person a 2cm marshmallow is about two pixels, and
+    // every step of the way there is a further step down.
+    let previous = visualScaleForSize(2, 2, NO_SCALE_FLOOR);
+    for (const cameraCm of [5, 22, 70, 170]) {
+      const scale = visualScaleForSize(2, cameraCm, NO_SCALE_FLOOR);
+      expect(scale).toBeCloseTo(2 / cameraCm, 5);
+      expect(scale).toBeLessThan(previous);
+      previous = scale;
+    }
+    expect(FOCUS_HEIGHT_PX * previous).toBeLessThan(3);
+    expect(previous).toBeGreaterThan(0);
   });
 });

@@ -54,8 +54,8 @@ export const VISUAL_GAMMA = 1;
 
 /**
  * Floor for anything that leaves the screen anyway, so a far-off object is
- * never drawn as a speck. The pinned marshmallow passes {@link MIN_PINNED_SCALE}
- * instead, because there being tiny is the whole comparison.
+ * never drawn as a speck. The pinned marshmallow passes {@link NO_SCALE_FLOOR}
+ * instead, because there being a speck is the whole comparison.
  */
 const VISUAL_SCALE_MIN = 0.24;
 const VISUAL_SCALE_MAX = 1.62;
@@ -67,7 +67,9 @@ const VISUAL_SCALE_MAX = 1.62;
  *
  * For comparison objects the clamps only engage well off screen, so on-screen
  * comparisons are never distorted by them. The pinned marshmallow stays on
- * screen far past that point, which is why it passes its own floor.
+ * screen far past that point, which is why it can pass its own floor.
+ *
+ * @param minScale Smallest scale to draw at. Defaults to the object floor.
  */
 export function visualScaleForSize(
   objectCm: number,
@@ -231,13 +233,12 @@ export const MARSHMALLOW_PINNED_SIZE_CM = 3;
 export const PIN_RAMP_PX = 116;
 
 /**
- * Smallest the marshmallow is drawn while pinned, in pixels of height. Against
- * a 170cm object the true ratio is under two pixels, which is a comparison
- * nobody can see.
+ * The pinned marshmallow is never floored. It holds the middle of the scene at
+ * any camera position, so nothing has to keep it on screen, and beside
+ * something a hundred times its size it should dwindle to almost nothing. That
+ * is the comparison, not a failure of it.
  */
-const MIN_PINNED_HEIGHT_PX = 12;
-
-export const MIN_PINNED_SCALE = MIN_PINNED_HEIGHT_PX / FOCUS_HEIGHT_PX;
+export const NO_SCALE_FLOOR = 0;
 
 /**
  * The marshmallow's screen offset, given the offset the world law alone asks
