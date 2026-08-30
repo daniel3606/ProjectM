@@ -25,7 +25,7 @@ import Theme from "@/constants/theme";
  * mid-launch with the marshmallow already where iOS left it, and the only
  * thing that changes is that it starts breathing.
  */
-const SPLASH_IMAGE_WIDTH = 240;
+const SPLASH_IMAGE_WIDTH = 280;
 const ART_BODY_HEIGHT_RATIO = 800 / 1024;
 const CHARACTER_HEIGHT = SPLASH_IMAGE_WIDTH * ART_BODY_HEIGHT_RATIO;
 
