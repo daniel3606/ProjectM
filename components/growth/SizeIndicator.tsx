@@ -33,6 +33,11 @@ interface SizeIndicatorProps {
   previewProgress: SharedValue<number>;
   /** The marshmallow's real stored size, used to gate undiscovered copy. */
   actualSizeCm: number;
+  /**
+   * Growth a running block will pay out, shown between the number and the
+   * unit as "3.5 (+2.0) cm" — the same readout the home screen widget gives.
+   */
+  pendingGrowthCm?: number;
 }
 
 /**
@@ -45,6 +50,7 @@ export default function SizeIndicator({
   cameraX,
   previewProgress,
   actualSizeCm,
+  pendingGrowthCm,
 }: SizeIndicatorProps) {
   const [displayCm, setDisplayCm] = useState(actualSizeCm);
   const lastPushedCm = useSharedValue(actualSizeCm);
@@ -74,6 +80,19 @@ export default function SizeIndicator({
     opacity: previewProgress.value,
   }));
 
+  // The growth belongs to the marshmallow's own size, so it leaves while the
+  // camera is parked on some other object. It has to be unmounted rather than
+  // faded: an invisible node still holds its width, which would leave a gap
+  // between the number and the unit for the whole scrub.
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  useAnimatedReaction(
+    () => previewProgress.value > 0,
+    (previewing, wasPreviewing) => {
+      if (wasPreviewing === null || previewing === wasPreviewing) return;
+      scheduleOnRN(setIsPreviewing, previewing);
+    },
+  );
+
   const stage = getStageForSize(displayCm);
   const isRevealed = isObjectRevealed(actualSizeCm, stage.sizeCm);
 
@@ -81,6 +100,9 @@ export default function SizeIndicator({
     <View style={styles.container}>
       <View style={styles.sizeRow}>
         <Text style={styles.size}>{formatCm(displayCm)}</Text>
+        {pendingGrowthCm != null && pendingGrowthCm > 0 && !isPreviewing && (
+          <Text style={styles.growth}>(+{formatCm(pendingGrowthCm)})</Text>
+        )}
         <Text style={styles.unit}>cm</Text>
       </View>
 
@@ -110,6 +132,12 @@ const styles = StyleSheet.create({
     fontSize: 50,
     fontFamily: Theme.fonts.bold,
     color: Theme.colors.text,
+  },
+  growth: {
+    fontSize: 24,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.success,
+    marginLeft: 4,
   },
   unit: {
     fontSize: 24,
