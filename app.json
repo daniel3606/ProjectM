@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "marshmallow",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.dllim.marshmallow",
@@ -33,11 +33,11 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "imageWidth": 240,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#FFF2E5",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#FFF2E5"
           }
         }
       ],
@@ -45,7 +45,8 @@
       "./plugins/withFamilyControls",
       "./plugins/withTimedBlockMonitor",
       "./plugins/withMarshmallowWidget",
-      "./plugins/withQuickBlockLiveActivity"
+      "./plugins/withQuickBlockLiveActivity",
+      "./plugins/withShieldUI"
     ],
     "experiments": {
       "typedRoutes": true,
