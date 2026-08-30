@@ -234,14 +234,12 @@ export default function TimedBlockScreen() {
         </Pressable>
       </View>
 
-      {/* The countdown and the controls for a running block live on Home now,
-          so this tab only has to say which block that is. */}
-      {activeSession && (
+      {/* A running plan says so on its own card. A Quick Block has no card
+          here to mark, so it still needs a line pointing at Home. */}
+      {activeSession && !activeSession.planId && (
         <Card style={styles.noticeCard}>
           <Text style={styles.noticeText}>
-            {activeSession.planId
-              ? "A scheduled block is running — the time left and its controls are on Home"
-              : "A Quick Block is active — manage it from Home"}
+            A Quick Block is active — manage it from Home
           </Text>
         </Card>
       )}
