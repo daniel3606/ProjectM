@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -88,6 +89,52 @@ export default function EmailAuthSheet({
   );
 }
 
+/**
+ * Password field with an eye toggle.
+ *
+ * Masked by default; people mistype long passwords on a phone keyboard often
+ * enough that hiding the text with no way to check it costs more than it buys.
+ */
+function PasswordInput({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  placeholder: string;
+}) {
+  const [visible, setVisible] = useState(false);
+
+  return (
+    <View style={styles.passwordRow}>
+      <BottomSheetTextInput
+        style={[styles.input, styles.passwordInput]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={Theme.colors.gray}
+        secureTextEntry={!visible}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
+      <Pressable
+        onPress={() => setVisible((shown) => !shown)}
+        style={styles.passwordToggle}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={visible ? "Hide password" : "Show password"}
+      >
+        <Ionicons
+          name={visible ? "eye-off-outline" : "eye-outline"}
+          size={22}
+          color={Theme.colors.gray}
+        />
+      </Pressable>
+    </View>
+  );
+}
+
 function SignInForm({
   onNeedsVerification,
 }: {
@@ -136,13 +183,10 @@ function SignInForm({
       />
 
       <Text style={styles.label}>Password</Text>
-      <BottomSheetTextInput
-        style={styles.input}
+      <PasswordInput
         value={password}
         onChangeText={setPassword}
         placeholder="Password"
-        placeholderTextColor={Theme.colors.gray}
-        secureTextEntry
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -210,23 +254,17 @@ function SignUpForm({
       />
 
       <Text style={styles.label}>Password</Text>
-      <BottomSheetTextInput
-        style={styles.input}
+      <PasswordInput
         value={password}
         onChangeText={setPassword}
         placeholder="Password"
-        placeholderTextColor={Theme.colors.gray}
-        secureTextEntry
       />
 
       <Text style={styles.label}>Confirm password</Text>
-      <BottomSheetTextInput
-        style={styles.input}
+      <PasswordInput
         value={confirmPassword}
         onChangeText={setConfirmPassword}
         placeholder="Confirm password"
-        placeholderTextColor={Theme.colors.gray}
-        secureTextEntry
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -283,6 +321,22 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.text,
+  },
+  passwordRow: {
+    justifyContent: "center",
+  },
+  passwordInput: {
+    // Room for the eye button so long passwords don't run under it.
+    paddingRight: 52,
+  },
+  passwordToggle: {
+    position: "absolute",
+    right: 6,
+    top: 6,
+    bottom: 0,
+    width: 46,
+    alignItems: "center",
+    justifyContent: "center",
   },
   error: {
     marginTop: 10,
