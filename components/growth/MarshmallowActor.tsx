@@ -13,7 +13,8 @@ import {
   FOCUS_HEIGHT_PX,
   MARSHMALLOW_GROUND_Y,
   MARSHMALLOW_PINNED_SIZE_CM,
-  screenOffsetToScale,
+  visualScaleForSize,
+  worldXToSize,
 } from "@/lib/growthWorld";
 
 const DRAWN_HEIGHT =
@@ -66,7 +67,12 @@ export default function MarshmallowActor({
 }: MarshmallowActorProps) {
   const animatedStyle = useAnimatedStyle(() => {
     const offset = marshmallowWorldX.value - cameraX.value;
-    const scale = BASE_SCALE * screenOffsetToScale(offset);
+    const scale =
+      BASE_SCALE *
+      visualScaleForSize(
+        worldXToSize(marshmallowWorldX.value),
+        worldXToSize(cameraX.value),
+      );
 
     const pulse = growthPulse.value;
     const hop = -PULSE_HOP_PX * Math.max(pulse, 0);

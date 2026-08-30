@@ -17,7 +17,7 @@ export function formatDuration(totalMinutes: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-export const INITIAL_MARSHMALLOW_SIZE_CM = 3;
+export const INITIAL_MARSHMALLOW_SIZE_CM = 2.5;
 
 /** The marshmallow's real size, derived from completed session history. */
 export function computeMarshmallowSizeCm(sessions: { expectedGrowthCm: number }[]): number {

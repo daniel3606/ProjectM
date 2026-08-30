@@ -52,6 +52,33 @@ export function getNextStage(sizeCm: number): GrowthStage | null {
   return null;
 }
 
+/**
+ * How many unreached stages still show their artwork. Reached objects are
+ * always visible; this is the window of targets sitting in front of the
+ * marshmallow so the next couple of sizes are real rather than a mystery box.
+ */
+export const REVEALED_AHEAD_COUNT = 2;
+
+/**
+ * Whether this object's artwork should be shown rather than a placeholder.
+ *
+ * Everything the marshmallow has already reached is visible, plus the next
+ * {@link REVEALED_AHEAD_COUNT} stages — two targets ahead, and nothing
+ * beyond that spoils the surprise.
+ */
+export function isObjectRevealed(sizeCm: number, objectSizeCm: number): boolean {
+  if (objectSizeCm <= sizeCm) return true;
+
+  let ahead = 0;
+  for (const stage of GROWTH_STAGES) {
+    if (stage.sizeCm <= sizeCm) continue;
+    ahead += 1;
+    if (stage.sizeCm === objectSizeCm) return ahead <= REVEALED_AHEAD_COUNT;
+    if (ahead >= REVEALED_AHEAD_COUNT) return false;
+  }
+  return false;
+}
+
 /** All stages have a comparison object image. */
 export const OBJECT_STAGES = GROWTH_STAGES;
 

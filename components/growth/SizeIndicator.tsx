@@ -8,7 +8,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import Theme from "@/constants/theme";
-import { getStageForSize } from "@/constants/growthStages";
+import { getStageForSize, isObjectRevealed } from "@/constants/growthStages";
 import { worldXToSize } from "@/lib/growthWorld";
 
 /**
@@ -75,7 +75,7 @@ export default function SizeIndicator({
   }));
 
   const stage = getStageForSize(displayCm);
-  const isDiscovered = stage.sizeCm <= actualSizeCm;
+  const isRevealed = isObjectRevealed(actualSizeCm, stage.sizeCm);
 
   return (
     <View style={styles.container}>
@@ -85,7 +85,7 @@ export default function SizeIndicator({
       </View>
 
       <Text style={styles.message} numberOfLines={2}>
-        {isDiscovered ? stage.message : "Not there yet — keep focusing."}
+        {isRevealed ? stage.message : "Not there yet — keep focusing."}
       </Text>
 
       <Animated.View style={[styles.previewHint, previewStyle]}>

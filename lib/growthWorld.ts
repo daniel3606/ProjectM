@@ -1,74 +1,187 @@
 import { OBJECT_STAGES, type GrowthStage } from "@/constants/growthStages";
+import { getObjectAspectRatio } from "@/constants/objectImages";
 
 /**
  * Geometry for the growth scene.
  *
  * The scene is a horizontal "scale world" viewed through a camera. Every
  * inhabitant (comparison objects and the marshmallow alike) owns a world
- * position derived only from its real-world height, and the camera decides
- * what part of that world lands on screen:
+ * position derived from its real-world height, and the camera decides what
+ * part of that world lands on screen:
  *
  *     worldX  = sizeToWorldX(heightCm)
  *     screenX = worldX - cameraX
  *
- * Nothing here knows about React, so all of it is safe to call from a
- * worklet on the UI thread or from JS during render.
+ * Placement starts from a logarithmic map so a doubling of size is the same
+ * travel everywhere, then opens any consecutive pair that would otherwise
+ * overlap. Nothing here knows about React, so all of it is safe to call from
+ * a worklet on the UI thread or from JS during render.
  */
 
 // ── World mapping ────────────────────────────────────────────────────────────
 
 /**
- * Pixels of world per tenfold increase in size. This is *the* tuning knob:
- * raising it spreads objects apart (fewer on screen, more travel per cm of
- * growth), lowering it packs more of the size range into one screenful.
+ * Pixels of world per tenfold increase in size — the *natural* spacing,
+ * before any pair is opened to keep sprites apart. Raising it spreads
+ * objects; lowering it packs more of the range onto one screen.
  *
- * The mapping is logarithmic rather than linear because the range spans two
- * decades (2cm to 170cm) — at any linear scale that made early growth
- * legible, a person would sit kilometres off screen. Log also means a fixed
- * drag distance always changes size by a fixed *ratio*, so scrubbing feels
- * identical whether the marshmallow is a grape or a chair.
+ * 1600 is set by blueberry (2cm) and grape (3cm), the widest ratio in the
+ * set: their midpoint keeps both on a compact phone. Later pairs are closer
+ * in ratio and would stack on this scale, so they are opened in
+ * {@link buildStageWorldXs} rather than by stretching the whole decade.
  */
-export const WORLD_PX_PER_DECADE = 2500;
+export const WORLD_PX_PER_DECADE = 1600;
 
-/** World position of an object of the given real height. */
-export function sizeToWorldX(heightCm: number): number {
-  "worklet";
-  return Math.log10(Math.max(heightCm, 0.01)) * WORLD_PX_PER_DECADE;
-}
-
-/** Inverse of {@link sizeToWorldX} — the real height the camera is looking at. */
-export function worldXToSize(worldX: number): number {
-  "worklet";
-  return Math.pow(10, worldX / WORLD_PX_PER_DECADE);
-}
+/**
+ * On-screen height of something exactly the size the camera is centred on.
+ * Sprite footprints (and therefore the minimum gap between objects) are
+ * derived from this.
+ */
+export const FOCUS_HEIGHT_PX = 162;
 
 // ── Visual scale ─────────────────────────────────────────────────────────────
 
 /**
- * How much of a real size ratio survives into on-screen size. 1.0 would be
- * literal (a 10cm object drawn twice as tall as a 5cm one); values below 1
- * compress the extremes so nothing becomes absurd near the edges of the
- * viewport while a doubling still reads as clearly, obviously bigger.
+ * How much of a real size ratio survives into on-screen size. 1.0 is
+ * literal — a 6cm tangerine is drawn 20% taller than a 5cm egg when both
+ * are on screen. Values below 1 used to compress that (0.72 turned 20%
+ * into 14%), which made neighbouring objects look the same height.
+ *
+ * Far-off extremes are handled by the clamps below, not by gamma, so a
+ * person does not fill the scene when the camera is still on a grape.
  */
-export const VISUAL_GAMMA = 0.72;
+export const VISUAL_GAMMA = 1;
 
 const VISUAL_SCALE_MIN = 0.24;
 const VISUAL_SCALE_MAX = 1.62;
 
 /**
- * Visual scale of anything sitting `offsetPx` from the centre of the screen,
- * where 1 means "the same on-screen height as whatever the camera is centred
- * on". Because the world is logarithmic, horizontal offset *is* the size
- * ratio, so this single expression scales comparison objects and the
- * marshmallow identically and keeps them in one coordinate system.
+ * On-screen scale of something of `objectCm` when the camera is looking at
+ * `cameraCm`. Derived from the real size ratio rather than from pixel offset,
+ * so objects still read as the right size after a pair has been opened.
  *
  * The clamps only engage well off screen, so on-screen comparisons are never
  * distorted by them.
  */
-export function screenOffsetToScale(offsetPx: number): number {
+export function visualScaleForSize(objectCm: number, cameraCm: number): number {
   "worklet";
-  const raw = Math.pow(10, (VISUAL_GAMMA * offsetPx) / WORLD_PX_PER_DECADE);
+  const ratio = Math.max(objectCm, 0.01) / Math.max(cameraCm, 0.01);
+  const raw = Math.pow(ratio, VISUAL_GAMMA);
   return Math.min(Math.max(raw, VISUAL_SCALE_MIN), VISUAL_SCALE_MAX);
+}
+
+/** Extra pixels between neighbouring sprite edges, so they don't kiss. */
+const SPRITE_EDGE_GAP_PX = 32;
+
+function logSpacingPx(fromCm: number, toCm: number): number {
+  return Math.log10(toCm / fromCm) * WORLD_PX_PER_DECADE;
+}
+
+function spriteFootprintPx(stageId: string): number {
+  return FOCUS_HEIGHT_PX * getObjectAspectRatio(stageId);
+}
+
+function scaledHalfWidthPx(stage: GrowthStage, cameraCm: number): number {
+  return (spriteFootprintPx(stage.id) * visualScaleForSize(stage.sizeCm, cameraCm)) / 2;
+}
+
+/**
+ * World distance between two neighbouring stages: whatever the log map
+ * asks for, but never less than the two sprites at the size they actually
+ * draw. The squeeze is worst when the camera sits on the smaller object —
+ * that one is at full size and the larger neighbour is scaled up — so the
+ * gap is measured there (and checked at the larger object too).
+ */
+function gapBetweenStages(previous: GrowthStage, next: GrowthStage): number {
+  const natural = logSpacingPx(previous.sizeCm, next.sizeCm);
+  const atPrevious =
+    scaledHalfWidthPx(previous, previous.sizeCm) +
+    scaledHalfWidthPx(next, previous.sizeCm) +
+    SPRITE_EDGE_GAP_PX;
+  const atNext =
+    scaledHalfWidthPx(previous, next.sizeCm) +
+    scaledHalfWidthPx(next, next.sizeCm) +
+    SPRITE_EDGE_GAP_PX;
+  return Math.max(natural, atPrevious, atNext);
+}
+
+const STAGE_COUNT = OBJECT_STAGES.length;
+const STAGE_CMS: number[] = OBJECT_STAGES.map((stage) => stage.sizeCm);
+
+function buildStageWorldXs(): number[] {
+  const xs: number[] = [
+    Math.log10(OBJECT_STAGES[0].sizeCm) * WORLD_PX_PER_DECADE,
+  ];
+  for (let i = 1; i < STAGE_COUNT; i++) {
+    xs.push(xs[i - 1] + gapBetweenStages(OBJECT_STAGES[i - 1], OBJECT_STAGES[i]));
+  }
+  return xs;
+}
+
+const STAGE_XS: number[] = buildStageWorldXs();
+
+/**
+ * World position of an object of the given real height. Between stages this
+ * interpolates in log-size, so equal ratios still cover equal travel inside
+ * a pair; across a pair that had to be opened, that travel is simply longer.
+ */
+export function sizeToWorldX(heightCm: number): number {
+  "worklet";
+  const height = Math.max(heightCm, 0.01);
+
+  if (height <= STAGE_CMS[0]) {
+    const rate =
+      (STAGE_XS[1] - STAGE_XS[0]) / Math.log10(STAGE_CMS[1] / STAGE_CMS[0]);
+    return STAGE_XS[0] + Math.log10(height / STAGE_CMS[0]) * rate;
+  }
+
+  if (height >= STAGE_CMS[STAGE_COUNT - 1]) {
+    const last = STAGE_COUNT - 1;
+    const rate =
+      (STAGE_XS[last] - STAGE_XS[last - 1]) /
+      Math.log10(STAGE_CMS[last] / STAGE_CMS[last - 1]);
+    return STAGE_XS[last] + Math.log10(height / STAGE_CMS[last]) * rate;
+  }
+
+  for (let i = 0; i < STAGE_COUNT - 1; i++) {
+    if (height <= STAGE_CMS[i + 1]) {
+      const t =
+        Math.log(height / STAGE_CMS[i]) /
+        Math.log(STAGE_CMS[i + 1] / STAGE_CMS[i]);
+      return STAGE_XS[i] + t * (STAGE_XS[i + 1] - STAGE_XS[i]);
+    }
+  }
+
+  return STAGE_XS[STAGE_COUNT - 1];
+}
+
+/** Inverse of {@link sizeToWorldX} — the real height the camera is looking at. */
+export function worldXToSize(worldX: number): number {
+  "worklet";
+  if (worldX <= STAGE_XS[0]) {
+    const rate =
+      (STAGE_XS[1] - STAGE_XS[0]) / Math.log10(STAGE_CMS[1] / STAGE_CMS[0]);
+    return STAGE_CMS[0] * Math.pow(10, (worldX - STAGE_XS[0]) / rate);
+  }
+
+  if (worldX >= STAGE_XS[STAGE_COUNT - 1]) {
+    const last = STAGE_COUNT - 1;
+    const rate =
+      (STAGE_XS[last] - STAGE_XS[last - 1]) /
+      Math.log10(STAGE_CMS[last] / STAGE_CMS[last - 1]);
+    return STAGE_CMS[last] * Math.pow(10, (worldX - STAGE_XS[last]) / rate);
+  }
+
+  for (let i = 0; i < STAGE_COUNT - 1; i++) {
+    if (worldX <= STAGE_XS[i + 1]) {
+      const t = (worldX - STAGE_XS[i]) / (STAGE_XS[i + 1] - STAGE_XS[i]);
+      return (
+        STAGE_CMS[i] * Math.pow(STAGE_CMS[i + 1] / STAGE_CMS[i], t)
+      );
+    }
+  }
+
+  return STAGE_CMS[STAGE_COUNT - 1];
 }
 
 // ── Scene geometry ───────────────────────────────────────────────────────────
@@ -83,13 +196,6 @@ export const GROUND_Y = 56;
  * read as in front of them on the same ground plane.
  */
 export const MARSHMALLOW_GROUND_Y = GROUND_Y - 50;
-
-/**
- * On-screen height of something exactly the size the camera is centred on.
- * `SCENE_HEIGHT - GROUND_Y` has to accommodate this times VISUAL_SCALE_MAX,
- * otherwise the largest objects clip against the top of the scene.
- */
-export const FOCUS_HEIGHT_PX = 162;
 
 /** Gap between an object's crown and the caption sitting above it. */
 export const OBJECT_LABEL_GAP = 8;
@@ -283,7 +389,7 @@ export interface RulerTick {
 /**
  * A logarithmic ruler needs logarithmic ticks: within each decade the marks
  * sit at 1, 1.5, 2, 2.5 … 9 times that decade's base, which keeps their pixel
- * spacing between roughly 30 and 130px everywhere from 2cm to 190cm.
+ * spacing even across the whole range rather than dense at one end.
  */
 function buildRulerTicks(): RulerTick[] {
   const steps = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 6, 7, 8, 9];
@@ -316,9 +422,10 @@ export const RULER_HEIGHT = 62;
 // ── Interaction tuning ───────────────────────────────────────────────────────
 
 /**
- * World distance between haptic detents. Because the world is logarithmic
- * these land at even *ratio* steps (~8% of size each), so the scrub feels
- * evenly notched across the whole range rather than dense at one end.
+ * World distance between haptic detents. Equal travel is an equal *size
+ * ratio* inside a naturally spaced pair, and a smaller ratio inside a pair
+ * that had to be opened — so the scrub stays notched even where objects
+ * would otherwise sit on top of each other.
  */
 export const DETENT_PX = 48;
 
