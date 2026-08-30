@@ -175,8 +175,9 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
     syncProfile(name, color, items).catch(() => {});
   }, [color, hydratedUserId, items, name, onboardingCompleted, userId]);
 
-  // Keeps the widget's marshmallow appearance in sync, whether it changed
-  // locally or was just hydrated from the remote profile.
+  // Keeps the marshmallow the widget and the shield draw in sync with this
+  // one, whether it changed locally or was just hydrated from the remote
+  // profile.
   useEffect(() => {
     ScreenTime.setMarshmallowColorHex(color);
   }, [color]);
@@ -184,6 +185,10 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
   useEffect(() => {
     ScreenTime.setMarshmallowItems(resolveEquippedEmoji(items));
   }, [items]);
+
+  useEffect(() => {
+    ScreenTime.setMarshmallowName(name);
+  }, [name]);
 
   const isProfileReady =
     !authLoading &&

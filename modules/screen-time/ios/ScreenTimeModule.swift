@@ -399,6 +399,14 @@ public class ScreenTimeModule: Module {
             WidgetCenter.shared.reloadAllTimelines()
         }
 
+        // Sync: the MarshmallowShield extension addresses the marshmallow by
+        // name on the shield, so it needs the name the user gave it. Nothing
+        // on the widget shows it, hence no timeline reload.
+        Function("setMarshmallowName") { (name: String) in
+            SharedBlockState.defaults.set(name, forKey: SharedBlockState.marshmallowNameKey)
+            SharedBlockState.defaults.synchronize()
+        }
+
         // Sync: keeps the widget's equipped items in sync. Takes already
         // resolved slot -> emoji pairs, so the item catalogue stays defined
         // only in constants/items.ts.

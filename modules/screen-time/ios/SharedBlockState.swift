@@ -1,11 +1,11 @@
 import Foundation
 
-// Shared between the main app target (ScreenTimeModule) and the
-// TimedBlockMonitor DeviceActivityMonitor extension. This exact file is
-// duplicated into the extension's target folder by the
-// `withTimedBlockMonitor` config plugin at prebuild time — keep it
-// self-contained (no imports beyond Foundation) so it compiles cleanly in
-// both places.
+// Shared between the main app target (ScreenTimeModule) and every app
+// extension that needs to know what the app knows: TimedBlockMonitor,
+// MarshmallowWidget, QuickBlockLiveActivity and MarshmallowShield. This exact
+// file is duplicated into each extension's target folder by that extension's
+// config plugin at prebuild time — keep it self-contained (no imports beyond
+// Foundation) so it compiles cleanly everywhere.
 enum SharedBlockState {
     static let appGroupId = "group.com.dllim.marshmallow"
 
@@ -42,10 +42,12 @@ enum SharedBlockState {
     // only actually awarded by the app on completion.
     static let activeGrowthCmKey = "marshmallow_active_native_growth_cm"
 
-    // Kept in sync from JS (FocusSessionContext/MarshmallowProfileContext)
-    // purely for MarshmallowWidget to render without needing the app open.
+    // Kept in sync from JS (FocusSessionContext/MarshmallowProfileContext) so
+    // MarshmallowWidget and MarshmallowShield can render the user's own
+    // marshmallow, and talk about it by name, without the app being open.
     static let marshmallowSizeCmKey = "marshmallow_size_cm"
     static let marshmallowColorHexKey = "marshmallow_color_hex"
+    static let marshmallowNameKey = "marshmallow_name"
 
     // [String: String] of item slot -> emoji, already resolved from item ids
     // by the JS side so the widget doesn't duplicate constants/items.ts.
