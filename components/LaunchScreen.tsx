@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -8,34 +8,16 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import * as SplashScreen from "expo-splash-screen";
-import MarshmallowStage from "@/components/onboarding/MarshmallowStage";
 import FadeIn from "@/components/onboarding/FadeIn";
-import {
-  getMarshmallowIntrinsicScale,
-  MARSHMALLOW_BODY_HEIGHT,
-} from "@/components/MarshmallowCharacter";
-import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
 import Theme from "@/constants/theme";
 
 /**
- * The character on the native splash is drawn from
- * `assets/images/splash-icon.png` at `app.json`'s `imageWidth`, and the art is
- * a square canvas with the body centred in it. Sizing the character here from
- * the same two numbers is what makes the handover invisible: React takes over
- * mid-launch with the marshmallow already where iOS left it, and the only
- * thing that changes is that it starts breathing.
+ * The native splash draws `assets/images/splash-icon.png` at this width.
+ * Showing the same image at the same size is what makes the handover
+ * invisible: React takes over mid-launch with the eyes already where iOS
+ * left them.
  */
 const SPLASH_IMAGE_WIDTH = 280;
-const ART_BODY_HEIGHT_RATIO = 800 / 1024;
-const CHARACTER_HEIGHT = SPLASH_IMAGE_WIDTH * ART_BODY_HEIGHT_RATIO;
-
-/** A hatchling, as in onboarding — the size the launch character is drawn at. */
-const SIZE_CM = 3;
-const CHARACTER_SCALE =
-  CHARACTER_HEIGHT / (MARSHMALLOW_BODY_HEIGHT * getMarshmallowIntrinsicScale(SIZE_CM));
-
-/** Matches the art, which is drawn in the brand's own colour rather than the user's. */
-const BRAND_COLOR = MARSHMALLOW_COLORS[0].hex;
 
 const COPY_AT_MS = 260;
 const COPY_MS = 420;
@@ -58,9 +40,9 @@ interface LaunchScreenProps {
 
 /**
  * The first thing anyone sees, and the only screen that outlives the native
- * splash. It continues that splash rather than replacing it — same marshmallow,
- * same place, same background — and holds until auth and the profile have
- * settled, so nobody watches the app assemble itself.
+ * splash. It continues that splash rather than replacing it — same eyes, same
+ * place, same background — and holds until auth and the profile have settled,
+ * so nobody watches the app assemble itself.
  */
 export default function LaunchScreen({ ready, onFinished }: LaunchScreenProps) {
   const [copyVisible, setCopyVisible] = useState(false);
@@ -110,12 +92,9 @@ export default function LaunchScreen({ ready, onFinished }: LaunchScreenProps) {
       pointerEvents={ready ? "none" : "auto"}
     >
       <View style={styles.stage}>
-        <MarshmallowStage
-          color={BRAND_COLOR}
-          name="Marshmallow"
-          sizeCm={SIZE_CM}
-          scale={CHARACTER_SCALE}
-          float
+        <Image
+          source={require("@/assets/images/splash-icon.png")}
+          style={styles.eyes}
         />
       </View>
 
@@ -132,11 +111,15 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.background,
   },
   // Absolute rather than a flex child, so the copy below cannot shift the
-  // character off the centre the native splash left it on.
+  // eyes off the centre the native splash left them on.
   stage: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
+  },
+  eyes: {
+    width: SPLASH_IMAGE_WIDTH,
+    height: SPLASH_IMAGE_WIDTH,
   },
   copy: {
     position: "absolute",

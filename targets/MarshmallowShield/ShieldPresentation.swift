@@ -28,7 +28,9 @@ enum ShieldPresentation {
     private static let defaultMarshmallowName = "Mochi"
 
     /// Points. The shield lays the icon out well above the title, and this is
-    /// as tall as it can be drawn there without being scaled down again.
+    /// as tall as it can be drawn there without being scaled down again. The
+    /// character is drawn on alpha and fills nearly all of it, so this is
+    /// close to the marshmallow's own height on screen.
     private static let iconHeight: CGFloat = 160
 
     /// How long one encouragement stays on screen before the rotation moves
@@ -51,10 +53,21 @@ enum ShieldPresentation {
             as? [String: String] ?? [:]
         let sizeCm = defaults.double(forKey: SharedBlockState.marshmallowSizeCmKey)
 
+        // `nil` for the blur style does not mean "no blur" — Apple treats nil
+        // as "use the default material", which is why the shield was reading
+        // as grey instead of the app's cream. An ultra-thin light material
+        // under the opaque cream lets the colour show as a solid fill.
+        //
+        // That composite is why the icon is drawn on alpha: the cream this
+        // renders is not the cream handed in, so the icon cannot match it.
         return ShieldConfiguration(
-            backgroundBlurStyle: nil,
+            backgroundBlurStyle: .systemUltraThinMaterialLight,
             backgroundColor: Palette.background,
-            icon: ShieldArt.marshmallow(colorHex: colorHex, items: items, height: iconHeight),
+            icon: ShieldArt.marshmallow(
+                colorHex: colorHex,
+                items: items,
+                height: iconHeight
+            ),
             title: ShieldConfiguration.Label(text: title(for: subject), color: Palette.text),
             subtitle: ShieldConfiguration.Label(
                 text: subtitle(marshmallowName: name, sizeCm: sizeCm, subject: subject),

@@ -16,51 +16,72 @@ import UIKit
 enum ShieldArt {
     private static let bodyWidth: CGFloat = 200
     private static let bodyHeight: CGFloat = 222
-    private static let bodyCornerRadius: CGFloat = 70
+    private static let bodyCornerRadius: CGFloat = 65
 
     private static let ink = UIColor(hex: "#2C2C2E")
 
-    /// Renders the character `height` points tall, in whatever width its
-    /// equipped items need.
+    /// Renders the character on a transparent square `height` points on a side.
+    ///
+    /// Transparent because the shield's background is not a colour this can
+    /// know. `ShieldConfiguration` composites its `backgroundColor` over a
+    /// blur of the app underneath, so any colour painted here reads as a
+    /// square of the wrong shade laid over the screen.
+    ///
+    /// Square because iOS aspect-fills the icon into a rounded square: a
+    /// portrait canvas loses its flatter top and bottom to the crop, leaving
+    /// a body whose corners look far too round.
     ///
     /// - Parameters:
     ///   - colorHex: the body colour the user chose, as stored by the app.
     ///   - items: item slot ("headwear"/"wings"/"face") -> emoji, already
     ///     resolved by the JS side so the item catalogue stays in one place.
-    static func marshmallow(colorHex: String, items: [String: String], height: CGFloat) -> UIImage {
+    static func marshmallow(
+        colorHex: String,
+        items: [String: String],
+        height: CGFloat
+    ) -> UIImage {
         // The component draws headwear above the body and wings past both of
-        // its sides, so the canvas is grown for the items actually equipped
-        // rather than always leaving room for the largest possible character —
-        // a shield icon is small enough that unused padding is visible as a
-        // shrunken marshmallow.
-        let canvasWidth: CGFloat = items["wings"] != nil ? 300 : 216
-        let bodyTop: CGFloat = items["headwear"] != nil ? 62 : 12
+        // its sides, so the content box grows for the items actually equipped
+        // rather than always leaving room for the largest possible character.
+        let contentWidth: CGFloat = items["wings"] != nil ? 300 : 216
+        let bodyInsetTop: CGFloat = items["headwear"] != nil ? 62 : 12
         // 20 below the body clears the ground shadow.
-        let canvasHeight = bodyTop + bodyHeight + 20
+        let contentHeight = bodyInsetTop + bodyHeight + 20
 
-        let scale = height / canvasHeight
+        // The content box is enough to survive the rounded-square crop: a
+        // 70pt corner radius on a 200x222 body pulls the outline inside the
+        // circle inscribed in this square. Sizing off the body's diagonal
+        // would only pad the icon and shrink the character.
+        let canvasSide = max(contentWidth, contentHeight)
+        let scale = height / canvasSide
 
         let format = UIGraphicsImageRendererFormat.default()
         format.opaque = false
 
         let renderer = UIGraphicsImageRenderer(
-            size: CGSize(width: canvasWidth * scale, height: height),
+            size: CGSize(width: height, height: height),
             format: format
         )
 
-        return renderer.image { context in
+        let image = renderer.image { context in
             let cg = context.cgContext
 
             /// Converts one of the component's layout units to canvas points.
             func u(_ value: CGFloat) -> CGFloat { value * scale }
 
-            let bodyLeft = (canvasWidth - bodyWidth) / 2
+            let originX = (canvasSide - contentWidth) / 2
+            let originY = (canvasSide - contentHeight) / 2
+            let bodyLeft = originX + (contentWidth - bodyWidth) / 2
+            let bodyTop = originY + bodyInsetTop
+
             let body = CGRect(x: u(bodyLeft), y: u(bodyTop), width: u(bodyWidth), height: u(bodyHeight))
             let bodyCentre = CGPoint(x: body.midX, y: body.midY)
 
-            // groundShadow: 161x38, marginLeft 30, bottom -8, rgba(0,0,0,0.06)
+            // groundShadow: 161x38, marginLeft 30, bottom -8, rgba(0,0,0,0.06).
+            // With neither left nor right set RN centres the 191-wide margin
+            // box in the 200-wide body, so the ellipse starts at 34.5.
             let ground = CGRect(
-                x: u(bodyLeft + 30),
+                x: u(bodyLeft + 34.5),
                 y: body.maxY + u(8) - u(38),
                 width: u(161),
                 height: u(38)
@@ -80,9 +101,16 @@ enum ShieldArt {
             bodyPath.fill()
             cg.restoreGState()
 
+            // RN draws borderWidth inside the box, so the stroke's centre
+            // line sits half a width in rather than on the body's edge.
+            let borderWidth = max(1 / format.scale, u(1))
+            let borderPath = UIBezierPath(
+                roundedRect: body.insetBy(dx: borderWidth / 2, dy: borderWidth / 2),
+                cornerRadius: u(bodyCornerRadius) - borderWidth / 2
+            )
             UIColor.black.withAlphaComponent(0.04).setStroke()
-            bodyPath.lineWidth = max(1 / format.scale, u(1))
-            bodyPath.stroke()
+            borderPath.lineWidth = borderWidth
+            borderPath.stroke()
 
             // shine: 40x20 pill at top 14 / left 28, white 50%, rotated -20deg
             let shine = CGRect(
@@ -105,7 +133,7 @@ enum ShieldArt {
             // Face. The component shifts it 14 left of the body's centre; the
             // eyes are 26 across and sit 40 either side of that.
             let faceCentreX = bodyCentre.x - u(14)
-            let eyeCentreY = body.minY + u(117)
+            let eyeCentreY = bodyCentre.y + u(5.5)
             let eyeRadius = u(13)
 
             for direction in [CGFloat(-1), CGFloat(1)] {
@@ -182,6 +210,8 @@ enum ShieldArt {
                 )
             }
         }
+
+        return image.withRenderingMode(.alwaysOriginal)
     }
 
     private static func draw(
