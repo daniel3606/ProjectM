@@ -198,6 +198,11 @@ export function worldXToSize(worldX: number): number {
 
 // ── Scene geometry ───────────────────────────────────────────────────────────
 
+export const SCENE_HEIGHT = 272;
+
+/** Distance from the bottom of the scene to the ground line everything stands on. */
+export const GROUND_Y = 56;
+
 /**
  * How far below the object ground line the marshmallow stands, which reads as
  * it being in front of the objects rather than among them. The pin trades it
@@ -205,29 +210,8 @@ export function worldXToSize(worldX: number): number {
  */
 export const MARSHMALLOW_FOREGROUND_DROP_PX = 50;
 
-/**
- * Apron under the marshmallow's feet. The scene clips what leaves it, and the
- * pin sinks the marshmallow up to 16px below where it stands at home, so
- * without room to sink into it would be cut off along the bottom edge — which
- * is exactly where the ruler starts. The remainder is for the character's own
- * shadow.
- */
-const MARSHMALLOW_SINK_ROOM_PX = 22;
-
-/** Distance from the bottom of the scene to the ground line everything stands on. */
-export const GROUND_Y = MARSHMALLOW_FOREGROUND_DROP_PX + MARSHMALLOW_SINK_ROOM_PX;
-
 /** Ground line the marshmallow stands on when it holds the focal point. */
 export const MARSHMALLOW_GROUND_Y = GROUND_Y - MARSHMALLOW_FOREGROUND_DROP_PX;
-
-/** Room above the ground line: an object drawn at focus, and its caption. */
-const SCENE_ABOVE_GROUND_PX = 216;
-
-/**
- * Deep enough for the world above the ground line and the apron below it, so
- * the apron never comes out of the objects' or their captions' space.
- */
-export const SCENE_HEIGHT = SCENE_ABOVE_GROUND_PX + GROUND_Y;
 
 /** Gap between an object's crown and the caption sitting above it. */
 export const OBJECT_LABEL_GAP = 8;

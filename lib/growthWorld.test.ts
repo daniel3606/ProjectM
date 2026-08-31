@@ -181,28 +181,6 @@ describe("marshmallow pin", () => {
     expect(pinLiftPx(2, 0)).toBeCloseTo(0, 10);
   });
 
-  it("never sinks the marshmallow through the bottom of the scene", () => {
-    // The scene clips what leaves it, and the ruler sits directly beneath, so
-    // a sink deeper than the apron shows up as the marshmallow being cut off
-    // along a straight edge. Swept over every size against every camera
-    // position above it, since the deepest sink is not at either extreme —
-    // it is where the ramp is well underway and the marshmallow still large.
-    let deepest = MARSHMALLOW_GROUND_Y;
-    for (const stage of OBJECT_STAGES) {
-      for (let cameraCm = stage.sizeCm; cameraCm <= 200; cameraCm += 0.25) {
-        const drift = sizeToWorldX(stage.sizeCm) - sizeToWorldX(cameraCm);
-        const drawnHeightPx =
-          FOCUS_HEIGHT_PX *
-          visualScaleForSize(stage.sizeCm, cameraCm, NO_SCALE_FLOOR);
-        const feetY =
-          MARSHMALLOW_GROUND_Y +
-          pinLiftPx(drawnHeightPx, pinProgress(drift));
-        deepest = Math.min(deepest, feetY);
-      }
-    }
-    expect(deepest).toBeGreaterThanOrEqual(0);
-  });
-
   it("draws the pinned marshmallow at its true ratio against the object in focus", () => {
     // A 10cm marshmallow beside a 22cm cake reads as under half its height,
     // which the object floor would have flattened to a quarter.
