@@ -1,3 +1,4 @@
+import LaunchScreen from "@/components/LaunchScreen";
 import Fonts from "@/constants/fonts";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { FocusSessionProvider } from "@/contexts/FocusSessionContext";
@@ -13,7 +14,7 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { Stack, usePathname, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 SplashScreen.preventAutoHideAsync();
@@ -43,12 +44,6 @@ function AuthNavigationGuard() {
   const { isProfileReady, onboardingCompleted } = useMarshmallowProfile();
   const pathname = usePathname();
   const router = useRouter();
-
-  useEffect(() => {
-    if (!isLoading && isProfileReady) {
-      SplashScreen.hideAsync();
-    }
-  }, [isLoading, isProfileReady]);
 
   useEffect(() => {
     if (isLoading || status === "loading" || !isProfileReady) return;
@@ -85,7 +80,30 @@ function AuthNavigationGuard() {
   return null;
 }
 
+/**
+ * Reports the moment the app behind the launch screen is worth revealing:
+ * a session has been restored or ruled out, and the profile it belongs to is
+ * loaded. This has to be read from inside the providers, while the launch
+ * screen itself is mounted outside `AccountScope` — signing out remounts
+ * everything under it, and that must not put the launch screen back up.
+ */
+function BootReadySignal({ onReady }: { onReady: () => void }) {
+  const { isLoading } = useAuth();
+  const { isProfileReady } = useMarshmallowProfile();
+
+  useEffect(() => {
+    if (!isLoading && isProfileReady) onReady();
+  }, [isLoading, isProfileReady, onReady]);
+
+  return null;
+}
+
 export default function Layout() {
+  const [bootReady, setBootReady] = useState(false);
+  const [launchFinished, setLaunchFinished] = useState(false);
+  const handleBootReady = useCallback(() => setBootReady(true), []);
+  const handleLaunchFinished = useCallback(() => setLaunchFinished(true), []);
+
   const [fontsLoaded] = useFonts({
     [Fonts.regular]: require("../assets/fonts/SF-Compact-Rounded-Regular.ttf"),
     [Fonts.medium]: require("../assets/fonts/SF-Compact-Rounded-Medium.ttf"),
@@ -114,6 +132,7 @@ export default function Layout() {
                       <FriendsProvider>
                         <OnboardingProvider>
                           <AuthNavigationGuard />
+                          <BootReadySignal onReady={handleBootReady} />
                           <Stack>
                             <Stack.Screen name="index" options={{ headerShown: false }} />
 
@@ -164,6 +183,10 @@ export default function Layout() {
           </AccountScope>
         </BottomSheetModalProvider>
       </AuthProvider>
+
+      {!launchFinished && (
+        <LaunchScreen ready={bootReady} onFinished={handleLaunchFinished} />
+      )}
     </GestureHandlerRootView>
   );
 }

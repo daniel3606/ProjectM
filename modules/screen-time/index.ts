@@ -217,6 +217,15 @@ export function setMarshmallowColorHex(hex: string): void {
   getNativeModule().setMarshmallowColorHex(hex);
 }
 
+/**
+ * Keeps the name in sync for the shield extension, which addresses the
+ * marshmallow by name when it stands in front of a blocked app.
+ */
+export function setMarshmallowName(name: string): void {
+  if (MOCK_MODE || Platform.OS !== "ios") return;
+  getNativeModule().setMarshmallowName(name);
+}
+
 /** Keeps the widget's equipped items in sync, as already-resolved slot -> emoji pairs. */
 export function setMarshmallowItems(items: Record<string, string>): void {
   if (MOCK_MODE || Platform.OS !== "ios") return;

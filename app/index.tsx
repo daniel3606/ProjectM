@@ -35,8 +35,8 @@ export default function Index() {
   }, [isLoading, isProfileReady, onboardingCompleted, router, status, user?.email]);
 
   // A blank, correctly coloured root rather than null: returning null blanks the
-  // navigator and can crash Release builds on device. The splash screen is still
-  // up at this point anyway, and hides once the profile is ready.
+  // navigator and can crash Release builds on device. The launch screen is still
+  // over the top at this point anyway, and lifts once the profile is ready.
   return <View style={styles.root} />;
 }
 
