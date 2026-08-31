@@ -175,7 +175,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: Theme.spacing.sm,
     marginTop: Theme.spacing.xl,
-    marginBottom: 40,
+    // Sits higher than the idle screen's Start button so the links read as part
+    // of the block rather than as the screen's bottom edge.
+    marginBottom: 64,
   },
   footerLink: {
     fontSize: 13,

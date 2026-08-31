@@ -27,6 +27,13 @@ import { Alert, StyleSheet, Text, View } from "react-native";
 /** Short enough that a first session is an easy yes, long enough to be worth running. */
 const FIRST_SESSION_MINUTES = 15;
 
+/** Header metrics. The header collapses out of the flow while a block runs, so
+ *  its height has to be a number the layout can subtract rather than something
+ *  measured — the gear stays exactly where it is and everything under it rises. */
+const SETTINGS_BUTTON_SIZE = 42;
+const HEADER_PADDING_TOP = Theme.spacing.lg;
+const HEADER_HEIGHT = HEADER_PADDING_TOP + SETTINGS_BUTTON_SIZE;
+
 interface HomeScreenProps {
   /**
    * Whether the scene's scrub haptics are allowed to fire. Set to false if the
@@ -161,10 +168,13 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
   return (
     <Screen style={styles.screen}>
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Marshmallow</Text>
-        <SettingsButton onPress={() => router.push("/settings")} />
+      {/* ── Header: title drops away while a block runs, gear stays put ─ */}
+      <View style={[styles.header, isFocusActive && styles.headerCollapsed]}>
+        {!isFocusActive && <Text style={styles.headerTitle}>Marshmallow</Text>}
+        <SettingsButton
+          size={SETTINGS_BUTTON_SIZE}
+          onPress={() => router.push("/settings")}
+        />
       </View>
 
       {/* ── Time left on the running block ──────────────────────────── */}
@@ -282,8 +292,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 12,
+    paddingTop: HEADER_PADDING_TOP,
     paddingBottom: 0,
+  },
+  /* Running block: the row keeps its own position, so the gear doesn't move,
+     but the negative margin stops it taking any space — the countdown and the
+     scene move up into the room the title used to sit in. zIndex keeps the
+     gear drawn over the countdown it now overlaps. */
+  headerCollapsed: {
+    marginBottom: -HEADER_HEIGHT+Theme.spacing.lg,
+    zIndex: 1,
   },
   headerTitle: {
     fontSize: 22,
