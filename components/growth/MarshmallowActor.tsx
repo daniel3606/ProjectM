@@ -11,10 +11,10 @@ import MarshmallowCharacter, {
 import type { EquippedItems } from "@/constants/items";
 import {
   FOCUS_HEIGHT_PX,
+  MARSHMALLOW_FOREGROUND_DROP_PX,
   MARSHMALLOW_GROUND_Y,
   MARSHMALLOW_PINNED_SIZE_CM,
   NO_SCALE_FLOOR,
-  pinLiftPx,
   pinProgress,
   pinnedOffsetPx,
   visualScaleForSize,
@@ -95,7 +95,7 @@ export default function MarshmallowActor({
         { translateX: offset },
         {
           translateY:
-            FOOT_INSET * scale + hop - pinLiftPx(DRAWN_HEIGHT * scale, pin),
+            FOOT_INSET * scale + hop - MARSHMALLOW_FOREGROUND_DROP_PX * pin,
         },
         { scaleX: scale * (1 - PULSE_SQUASH_X * pulse) },
         { scaleY: scale * (1 + PULSE_STRETCH_Y * pulse) },
