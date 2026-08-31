@@ -66,6 +66,19 @@ const DECAY_DECELERATION = 0.994;
  */
 const HYDRATION_WINDOW_MS = 1500;
 
+/**
+ * A/B experiment. While a block runs, does the camera stay locked to the
+ * marshmallow (false — the marshmallow holds the centre and the silhouette
+ * sits wherever the real ratio puts it, often off screen) or pull ahead toward
+ * the size the block is working toward (true — the marshmallow drifts left and
+ * shrinks a little, and its goal is always in frame)? Flip and reload to
+ * compare. Nothing else needs to change.
+ */
+const CAMERA_LEADS_TOWARD_GOAL = true;
+
+/** How far toward the goal the camera parks, as a fraction of the gap to it. */
+const CAMERA_LEAD_FRACTION = 0.42;
+
 function fireDetentHaptic() {
   Haptics.selectionAsync().catch(() => {});
 }
@@ -75,14 +88,16 @@ function fireHomeHaptic() {
 }
 
 /**
- * Hands the camera back to the marshmallow after a preview: it lingers on
- * whatever the user was looking at, then springs home and re-anchors. Because
- * the marshmallow is already at that world position, "re-anchoring" is just the
- * camera arriving — there is nothing to reposition.
+ * Hands the camera back after a preview: it lingers on whatever the user was
+ * looking at, then springs to its resting position. That is the marshmallow's
+ * own world position normally, or a point ahead of it toward the block's goal
+ * while {@link CAMERA_LEADS_TOWARD_GOAL} is on. Either way the resting camera
+ * fully determines where the marshmallow lands, so there is nothing else to
+ * reposition once it arrives.
  */
 function returnCameraHome(
   cameraX: SharedValue<number>,
-  marshmallowWorldX: SharedValue<number>,
+  cameraHomeX: SharedValue<number>,
   previewProgress: SharedValue<number>,
   isUserMotion: SharedValue<number>,
 ) {
@@ -94,7 +109,7 @@ function returnCameraHome(
   );
   cameraX.value = withDelay(
     RETURN_DWELL_MS,
-    withSpring(marshmallowWorldX.value, RETURN_SPRING),
+    withSpring(cameraHomeX.value, RETURN_SPRING),
   );
 }
 
@@ -163,7 +178,52 @@ export default function GrowthScene({
   const ghostPresence = useSharedValue(0);
   const [isGhostMounted, setIsGhostMounted] = useState(projectedSizeCm != null);
 
+  // Camera lead (the A/B experiment). `cameraHomeX` is the camera's resting
+  // position — the marshmallow itself normally, a point CAMERA_LEAD_FRACTION of
+  // the way toward a running block's goal while one is active. Every path that
+  // would otherwise rest the camera on the marshmallow rests it here instead,
+  // so with the flag off (`cameraHomeX` ≡ the marshmallow) nothing changes.
+  // `isSweeping` is up while a growth sweep owns the camera, so the reaction
+  // below leaves it to finish its celebratory overshoot.
+  const cameraHomeX = useSharedValue(initialWorldX);
+  const isSweeping = useSharedValue(0);
+  /** 1 while a block is running, so the sweep worklet knows to keep the lead. */
+  const hasActiveGoal = useSharedValue(projectedSizeCm != null ? 1 : 0);
+
   const mountedAtRef = useRef(Date.now());
+
+  // Keeps `cameraHomeX` current whenever the block state or the real size
+  // changes. Written synchronously on the JS thread so it is already in place
+  // before this render's hydration snap or growth sweep reads it. Positions
+  // come from the size props, never the animated marshmallow value, so there
+  // is no race to lose.
+  useEffect(() => {
+    const marshX = sizeToWorldX(sizeCm);
+    const leads = CAMERA_LEADS_TOWARD_GOAL && projectedSizeCm != null;
+    // With the experiment off this is always the marshmallow's own spot, so
+    // every path that rests the camera here behaves exactly as before.
+    cameraHomeX.value = leads
+      ? marshX + (sizeToWorldX(projectedSizeCm!) - marshX) * CAMERA_LEAD_FRACTION
+      : marshX;
+    hasActiveGoal.value = leads ? 1 : 0;
+  }, [projectedSizeCm, sizeCm, cameraHomeX, hasActiveGoal]);
+
+  // Eases the idle camera to a newly-changed resting position — this is what
+  // slides the marshmallow aside when a block starts and brings it back when
+  // one ends without growth. A hydration snap or a growth sweep is handled by
+  // its own path, so this stands down while either owns the camera.
+  useAnimatedReaction(
+    () => cameraHomeX.value,
+    (home, previous) => {
+      if (previous === null) return;
+      if (isUserMotion.value === 1 || previewProgress.value > 0) return;
+      if (isSweeping.value === 1 || isHydrating.value === 1) return;
+      cameraX.value = withTiming(home, {
+        duration: GROWTH_SWEEP_MS,
+        easing: CAMERA_EASING,
+      });
+    },
+  );
 
   // The silhouette slides out from the marshmallow when a block starts, so it
   // reads as where this block leads rather than as something that was always
@@ -217,8 +277,12 @@ export default function GrowthScene({
 
       if (isHydrating.value === 1) {
         marshmallowWorldX.value = target;
-        cameraX.value = target;
-        lastDetentIndex.value = Math.round(target / DETENT_PX);
+        // The lead effect runs before this reaction and has already put the
+        // camera's resting spot in `cameraHomeX`, so snap there rather than
+        // onto the marshmallow — otherwise a block restored at launch loses
+        // its lead. With the experiment off, `cameraHomeX` is the marshmallow.
+        cameraX.value = cameraHomeX.value;
+        lastDetentIndex.value = Math.round(cameraX.value / DETENT_PX);
         return;
       }
 
@@ -250,17 +314,36 @@ export default function GrowthScene({
       // as it springs back up, so the bounce reads as launching the sweep
       // rather than happening alongside it.
       const lead = grew ? PULSE_SQUASH_MS : 0;
-      const sweep = () =>
+      const sweep = (onSettled?: (finished?: boolean) => void) =>
         withDelay(
           lead,
           withSequence(
             withTiming(sweepTo, { duration: GROWTH_SWEEP_MS, easing: CAMERA_EASING }),
-            withSpring(target, SETTLE_SPRING),
+            withSpring(target, SETTLE_SPRING, onSettled),
           ),
         );
 
       marshmallowWorldX.value = sweep();
-      cameraX.value = sweep();
+
+      if (hasActiveGoal.value === 1) {
+        // A size change while a block is still running is stored state loading
+        // late, not earned growth. Keep the lead: send the camera to its
+        // resting spot, no celebratory overshoot.
+        cameraX.value = withTiming(cameraHomeX.value, {
+          duration: GROWTH_SWEEP_MS,
+          easing: CAMERA_EASING,
+        });
+      } else {
+        // Growth landed and the block is over, so home is the marshmallow's
+        // new spot — exactly where the sweep is taking the camera. Hold off the
+        // idle reaction until the overshoot settles so it isn't flattened.
+        cameraHomeX.value = target;
+        isSweeping.value = 1;
+        cameraX.value = sweep((finished) => {
+          "worklet";
+          if (finished) isSweeping.value = 0;
+        });
+      }
 
       if (grew) {
         growthPulse.value = withSequence(
@@ -335,12 +418,7 @@ export default function GrowthScene({
               "worklet";
               // Cancelled by a new touch — that gesture owns the camera now.
               if (!finished) return;
-              returnCameraHome(
-                cameraX,
-                marshmallowWorldX,
-                previewProgress,
-                isUserMotion,
-              );
+              returnCameraHome(cameraX, cameraHomeX, previewProgress, isUserMotion);
             },
           );
         })
@@ -349,9 +427,16 @@ export default function GrowthScene({
           // A touch that never became a drag still cancelled any return that
           // was pending, so it has to start a new one itself.
           if (wasActive) return;
-          returnCameraHome(cameraX, marshmallowWorldX, previewProgress, isUserMotion);
+          returnCameraHome(cameraX, cameraHomeX, previewProgress, isUserMotion);
         }),
-    [cameraX, cameraAtGestureStart, isUserMotion, lastDetentIndex, marshmallowWorldX, previewProgress],
+    [
+      cameraX,
+      cameraAtGestureStart,
+      cameraHomeX,
+      isUserMotion,
+      lastDetentIndex,
+      previewProgress,
+    ],
   );
 
   return (
@@ -395,12 +480,14 @@ export default function GrowthScene({
             marshmallowWorldX={marshmallowWorldX}
             previewProgress={previewProgress}
             color={color}
+            dimWhenResting={CAMERA_LEADS_TOWARD_GOAL && !!isBlocking}
           />
         </View>
       </GestureDetector>
 
       <SizeIndicator
         cameraX={cameraX}
+        marshmallowWorldX={marshmallowWorldX}
         previewProgress={previewProgress}
         actualSizeCm={sizeCm}
         pendingGrowthCm={
