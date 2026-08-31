@@ -1,7 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 import { AppState } from "react-native";
 import { usePersistedState } from "@/lib/storage";
-import { getGrowthForDuration, type FocusMode } from "@/constants/marshmallow";
+import { estimateGrowthCm, type FocusMode } from "@/constants/marshmallow";
+import { getBlockTypeForPlan } from "@/lib/growthModel";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { findActiveOccurrence, occurrenceKey } from "@/lib/timedBlockSchedule";
@@ -23,6 +24,13 @@ export interface TimedBlockPlan {
   appIds: string[];
   appsSummary: { appCount: number; catCount: number; webCount: number };
   enabled: boolean;
+  /**
+   * Marks a plan as covering sleep rather than focus. Sleep blocks still grow
+   * the marshmallow, at a lower rate, because hours asleep are not hours of
+   * deliberate focus. Absent on plans saved before the flag existed; those fall
+   * back to a label check.
+   */
+  isSleep?: boolean;
 }
 
 /** A plan run the user ended early, remembered until its window closes. */
@@ -99,7 +107,8 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
     [setPlans]
   );
 
-  const { activeSession, isSessionLoaded, startSession, stopSession } = useFocusSession();
+  const { activeSession, isSessionLoaded, startSession, stopSession, growthPreview } =
+    useFocusSession();
 
   // Persisted so a stop survives the app being killed — otherwise relaunching
   // mid-window restarts the block the user just ended.
@@ -143,7 +152,10 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         endMinute: plan.endMinute,
         durationMinutes: plan.durationMinutes,
         appIds: plan.appIds,
-        expectedGrowthCm: getGrowthForDuration(plan.durationMinutes, plan.focusMode),
+        expectedGrowthCm: estimateGrowthCm({
+          minutes: plan.durationMinutes,
+          blockType: getBlockTypeForPlan(plan),
+        }),
         focusMode: plan.focusMode,
       }));
     if (schedulable.length === 0) return;
@@ -208,7 +220,13 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
           {
             durationMinutes: plan.durationMinutes,
             focusMode: plan.focusMode,
-            expectedGrowthCm: getGrowthForDuration(plan.durationMinutes, plan.focusMode),
+            blockType: getBlockTypeForPlan(plan),
+            expectedGrowthCm: estimateGrowthCm({
+              minutes: plan.durationMinutes,
+              blockType: getBlockTypeForPlan(plan),
+              streakDays: growthPreview.streakDays,
+              rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
+            }),
             planId: plan.id,
             label: plan.label,
           },
@@ -226,7 +244,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
       cancelled = true;
       subscription.remove();
     };
-  }, [isReady, activeSession, plans, startSession]);
+  }, [isReady, activeSession, plans, startSession, growthPreview]);
 
   // Records the stop when a plan-driven session disappears mid-window.
   useEffect(() => {
@@ -284,10 +302,13 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         {
           durationMinutes: occurrence.plan.durationMinutes,
           focusMode: occurrence.plan.focusMode,
-          expectedGrowthCm: getGrowthForDuration(
-            occurrence.plan.durationMinutes,
-            occurrence.plan.focusMode
-          ),
+          blockType: getBlockTypeForPlan(occurrence.plan),
+          expectedGrowthCm: estimateGrowthCm({
+            minutes: occurrence.plan.durationMinutes,
+            blockType: getBlockTypeForPlan(occurrence.plan),
+            streakDays: growthPreview.streakDays,
+            rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
+          }),
           planId: occurrence.plan.id,
           label: occurrence.plan.label,
         },
@@ -299,7 +320,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
     tick();
     const interval = setInterval(tick, SCHEDULE_CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isReady, plans, activeSession, startSession, stopSession]);
+  }, [isReady, plans, activeSession, startSession, stopSession, growthPreview]);
 
   const value = useMemo(
     () => ({

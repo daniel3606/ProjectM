@@ -12,11 +12,11 @@ import Theme from "@/constants/theme";
 import SettingRow from "@/components/ui/SettingRow";
 import HoldToStartButton from "@/components/HoldToStartButton";
 import BlockedAppsSheet, { type BlockMode } from "@/components/BlockedAppsSheet";
-import { formatDuration, getGrowthForDuration } from "@/constants/marshmallow";
+import { estimateGrowthCm, formatDuration } from "@/constants/marshmallow";
 import { describeBreakAllowance, supportsBreaks } from "@/lib/focusBreaks";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import type { FocusSessionConfig } from "@/contexts/FocusSessionContext";
+import { useFocusSession, type FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
@@ -71,6 +71,7 @@ export default function FocusSessionSheet({
     setNeverAllowedApps,
   } = useMarshmallowProfile();
   const { isPremium } = useSubscription();
+  const { growthPreview } = useFocusSession();
 
   const [totalMinutes, setTotalMinutes] = useState(defaultDurationMinutes);
   // The caller's default can arrive after mount (it depends on persisted state),
@@ -88,10 +89,17 @@ export default function FocusSessionSheet({
   const blockedAppsSheetRef = useRef<BottomSheetModal>(null);
   const snapPoints = useMemo(() => ["78%"], []);
 
-  // Hard Mode is the paid tier's "deep" focus, so it carries the 1.5x growth
-  // multiplier the rest of the app already knows about.
   const focusMode = isHardMode ? "deep" : "flexible";
-  const expectedGrowth = getGrowthForDuration(totalMinutes, focusMode);
+
+  // Hard Mode's growth bonus is earned by finishing the stricter block, not by
+  // holding a subscription — a free and a Premium normal block are worth the same.
+  const expectedGrowth = estimateGrowthCm({
+    minutes: totalMinutes,
+    blockType: "quick",
+    isHardBlock: isHardMode,
+    streakDays: growthPreview.streakDays,
+    rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
+  });
 
   const hasBreaks = supportsBreaks(totalMinutes, isHardMode);
   const breakSummary = describeBreakAllowance(totalMinutes, isHardMode);
@@ -187,6 +195,7 @@ export default function FocusSessionSheet({
     const config: FocusSessionConfig = {
       durationMinutes: totalMinutes,
       focusMode,
+      blockType: "quick",
       expectedGrowthCm: expectedGrowth,
       appIds: effectiveAppIds,
       blockMode,

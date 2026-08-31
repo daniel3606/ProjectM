@@ -107,6 +107,9 @@ export type Database = {
           duration_minutes: number
           focus_mode: string
           growth_cm: number
+          raw_growth_cm: number | null
+          block_type: string | null
+          is_hard_block: boolean
           id: string
           user_id: string
         }
@@ -115,6 +118,9 @@ export type Database = {
           duration_minutes: number
           focus_mode: string
           growth_cm: number
+          raw_growth_cm?: number | null
+          block_type?: string | null
+          is_hard_block?: boolean
           id?: string
           user_id: string
         }
@@ -123,6 +129,9 @@ export type Database = {
           duration_minutes?: number
           focus_mode?: string
           growth_cm?: number
+          raw_growth_cm?: number | null
+          block_type?: string | null
+          is_hard_block?: boolean
           id?: string
           user_id?: string
         }

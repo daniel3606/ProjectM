@@ -14,12 +14,13 @@ import {
   formatClockTime,
   formatDaysOfWeek,
   formatDuration,
-  getGrowthForDuration,
+  estimateGrowthCm,
 } from "@/constants/marshmallow";
 import TimedBlockPlanSheet, {
   type TimedBlockPlanDraft,
 } from "@/components/TimedBlockPlanSheet";
 import { Screen, ScreenTitle, ScreenSubtitle, Card, SelectableCard } from "@/components/ui";
+import { getBlockTypeForPlan } from "@/lib/growthModel";
 import { STATS_EVENTS, trackStats } from "@/lib/stats/analytics";
 
 const SWITCH_TRACK_COLOR = {
@@ -122,7 +123,10 @@ const PlanCard = React.memo(function PlanCard({
           <PlanStat icon="time-outline" text={formatDuration(plan.durationMinutes)} />
           <PlanStat
             icon="trending-up-outline"
-            text={`+${getGrowthForDuration(plan.durationMinutes, plan.focusMode)}cm`}
+            text={`+${estimateGrowthCm({
+              minutes: plan.durationMinutes,
+              blockType: getBlockTypeForPlan(plan),
+            })}cm`}
           />
           <PlanStat
             icon="apps-outline"

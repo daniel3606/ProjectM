@@ -60,7 +60,13 @@ describe("saving a preset as a real plan", () => {
       appIds: ["app.1", "app.2", "cat.1"],
       appsSummary: { appCount: 2, catCount: 1, webCount: 0 },
       enabled: true,
+      isSleep: false,
     });
+  });
+
+  it("marks only the bedtime preset as a sleep block", () => {
+    expect(planFromPreset(bedtime, 0, apps).isSleep).toBe(true);
+    expect(planFromPreset(study, 0, apps).isSleep).toBe(false);
   });
 
   it("applies the shift and clamps it", () => {
