@@ -20,12 +20,6 @@ interface GrowthRulerProps {
   previewProgress: SharedValue<number>;
   /** Marshmallow colour, used for the "you are here" marker. */
   color: string;
-  /**
-   * When the camera leads toward a block's goal, the centre caret no longer
-   * lines up with the size readout, so the strip hides itself and only returns
-   * for the duration of an actual scrub.
-   */
-  dimWhenResting?: boolean;
 }
 
 /**
@@ -44,14 +38,9 @@ export default function GrowthRuler({
   marshmallowWorldX,
   previewProgress,
   color,
-  dimWhenResting = false,
 }: GrowthRulerProps) {
   const stripStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: -cameraX.value }],
-  }));
-
-  const rulerStyle = useAnimatedStyle(() => ({
-    opacity: dimWhenResting ? previewProgress.value : 1,
   }));
 
   const homeMarkerStyle = useAnimatedStyle(() => ({
@@ -60,7 +49,7 @@ export default function GrowthRuler({
   }));
 
   return (
-    <Animated.View style={[styles.ruler, rulerStyle]}>
+    <View style={styles.ruler}>
       <View style={styles.baseline} />
 
       <Animated.View style={[styles.strip, stripStyle]}>
@@ -89,7 +78,7 @@ export default function GrowthRuler({
         <View style={styles.caretArrow} />
         <View style={styles.caretStem} />
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
