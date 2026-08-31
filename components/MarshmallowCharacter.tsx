@@ -27,6 +27,26 @@ export const MARSHMALLOW_BODY_HEIGHT = 222;
 export const MARSHMALLOW_BODY_WIDTH = 200;
 export const MARSHMALLOW_BODY_RADIUS = 70;
 
+const GROUND_SHADOW_WIDTH = 161;
+const GROUND_SHADOW_HEIGHT = 38;
+
+/**
+ * Proportions and colour of the ellipse the character casts on the ground,
+ * exported so the comparison objects can stand on the same ground the same
+ * way. Each is a fraction of the caster rather than a pixel size, so an
+ * object of any footprint gets a shadow that belongs to it.
+ */
+export const GROUND_SHADOW_WIDTH_RATIO = GROUND_SHADOW_WIDTH / MARSHMALLOW_BODY_WIDTH;
+export const GROUND_SHADOW_ASPECT_RATIO = GROUND_SHADOW_HEIGHT / GROUND_SHADOW_WIDTH;
+
+/** How far the shadow sits below the foot line, as a fraction of drawn height. */
+export const GROUND_SHADOW_DROP_RATIO = 8 / MARSHMALLOW_BODY_HEIGHT;
+
+export const GROUND_SHADOW_COLOR = "rgba(0,0,0,0.06)";
+
+/** Larger than half of any shadow drawn, so the ellipse is always fully round. */
+export const GROUND_SHADOW_RADIUS = 265;
+
 /**
  * Minor size-driven scale applied inside the character. Exported so callers
  * that place the character in a scaled scene can work out its drawn height.
@@ -159,12 +179,13 @@ const styles = StyleSheet.create({
   },
   groundShadow: {
     position: "absolute",
-    bottom: -8,
-    width: 161,
-    height: 38,
-    borderRadius: 265,
+    bottom: -MARSHMALLOW_BODY_HEIGHT * GROUND_SHADOW_DROP_RATIO,
+    width: GROUND_SHADOW_WIDTH,
+    height: GROUND_SHADOW_HEIGHT,
+    borderRadius: GROUND_SHADOW_RADIUS,
+    // The face sits right of centre, so the shadow follows it.
     marginLeft: 30,
-    backgroundColor: "rgba(0,0,0,0.06)",
+    backgroundColor: GROUND_SHADOW_COLOR,
   },
   body: {
     width: MARSHMALLOW_BODY_WIDTH,

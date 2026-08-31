@@ -5,6 +5,13 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import Theme from "@/constants/theme";
+import {
+  GROUND_SHADOW_ASPECT_RATIO,
+  GROUND_SHADOW_COLOR,
+  GROUND_SHADOW_DROP_RATIO,
+  GROUND_SHADOW_RADIUS,
+  GROUND_SHADOW_WIDTH_RATIO,
+} from "@/components/MarshmallowCharacter";
 import { getObjectAspectRatio, getObjectImage } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
@@ -43,6 +50,8 @@ function WorldObject({
 }: WorldObjectProps) {
   const image = revealed ? getObjectImage(stage.id) : undefined;
   const aspectRatio = image ? getObjectAspectRatio(stage.id) : 1;
+  const spriteWidth = FOCUS_HEIGHT_PX * aspectRatio;
+  const shadowWidth = spriteWidth * GROUND_SHADOW_WIDTH_RATIO;
 
   const columnStyle = useAnimatedStyle(() => {
     const offset = stage.worldX - cameraX.value;
@@ -82,10 +91,17 @@ function WorldObject({
       pointerEvents="none"
     >
       <Animated.View style={[styles.sprite, spriteStyle]}>
+        <View
+          style={[
+            styles.groundShadow,
+            { width: shadowWidth, height: shadowWidth * GROUND_SHADOW_ASPECT_RATIO },
+          ]}
+        />
+
         {image ? (
           <Image
             source={image}
-            style={[styles.artwork, { width: FOCUS_HEIGHT_PX * aspectRatio }]}
+            style={[styles.artwork, { width: spriteWidth }]}
             resizeMode="contain"
             accessibilityLabel={stage.objectName}
           />
@@ -119,6 +135,14 @@ const styles = StyleSheet.create({
     // Grow upward from the ground line rather than from the middle, so an
     // object never sinks through the floor as it scales.
     transformOrigin: "50% 100%",
+  },
+  // Drawn before the artwork so it stays behind it, and sized by the caller
+  // from the object's own footprint.
+  groundShadow: {
+    position: "absolute",
+    bottom: -FOCUS_HEIGHT_PX * GROUND_SHADOW_DROP_RATIO,
+    borderRadius: GROUND_SHADOW_RADIUS,
+    backgroundColor: GROUND_SHADOW_COLOR,
   },
   artwork: {
     height: FOCUS_HEIGHT_PX,
