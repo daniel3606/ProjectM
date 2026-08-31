@@ -205,8 +205,8 @@ export const GROUND_Y = 56;
 
 /**
  * How far below the object ground line the marshmallow stands, which reads as
- * it being in front of the objects rather than among them. The pin undoes it:
- * a marshmallow being compared to an object belongs on that object's line.
+ * it being in front of the objects rather than among them. The pin trades it
+ * for the comparison pose — see {@link pinLiftPx}.
  */
 export const MARSHMALLOW_FOREGROUND_DROP_PX = 50;
 
@@ -273,6 +273,22 @@ export function pinProgress(offsetPx: number): number {
   "worklet";
   if (offsetPx >= 0) return 0;
   return -pinnedOffsetPx(offsetPx) / PIN_OFFSET_PX;
+}
+
+/**
+ * How far to raise the marshmallow out of the foreground as it pins, given the
+ * height it is currently drawn at.
+ *
+ * Fully pinned it straddles {@link GROUND_Y} with its middle on the line every
+ * object stands on, so the two are read off the same baseline. That depends on
+ * how tall it is drawn, which is why this is a function and not a constant: a
+ * marshmallow still nearly the size of the object in focus sits lower than a
+ * distant one, and past half the foreground drop it settles below where it
+ * started rather than above it.
+ */
+export function pinLiftPx(drawnHeightPx: number, pin: number): number {
+  "worklet";
+  return (MARSHMALLOW_FOREGROUND_DROP_PX - drawnHeightPx / 2) * pin;
 }
 
 // ── Depth / occlusion ────────────────────────────────────────────────────────

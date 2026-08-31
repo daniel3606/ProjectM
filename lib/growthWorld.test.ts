@@ -5,9 +5,12 @@ import { INITIAL_MARSHMALLOW_SIZE_CM } from "@/constants/marshmallow";
 import { getObjectAspectRatio } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
+  GROUND_Y,
+  MARSHMALLOW_GROUND_Y,
   NO_SCALE_FLOOR,
   PIN_OFFSET_PX,
   WORLD_PX_PER_DECADE,
+  pinLiftPx,
   pinProgress,
   pinnedOffsetPx,
   sizeToWorldX,
@@ -158,6 +161,24 @@ describe("marshmallow pin", () => {
       expect(progress).toBeGreaterThan(previous);
       previous = progress;
     }
+  });
+
+  it("lands the marshmallow's middle on the line the objects stand on", () => {
+    // Feet start at the marshmallow's own ground line, so where its middle
+    // ends up is the lift plus half of however tall it is drawn.
+    for (const drawnHeightPx of [162, 96, 32, 12, 2]) {
+      const feetY = MARSHMALLOW_GROUND_Y + pinLiftPx(drawnHeightPx, 1);
+      expect(feetY + drawnHeightPx / 2).toBeCloseTo(GROUND_Y, 5);
+    }
+  });
+
+  it("sinks a marshmallow too tall to stand on the line", () => {
+    // Half of a full-height marshmallow is deeper than the foreground drop, so
+    // the pose it eases toward is below where it started, not above.
+    expect(pinLiftPx(162, 1)).toBeLessThan(0);
+    expect(pinLiftPx(2, 1)).toBeGreaterThan(0);
+    expect(pinLiftPx(162, 0)).toBeCloseTo(0, 10);
+    expect(pinLiftPx(2, 0)).toBeCloseTo(0, 10);
   });
 
   it("draws the pinned marshmallow at its true ratio against the object in focus", () => {
