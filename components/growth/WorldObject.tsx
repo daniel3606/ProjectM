@@ -9,6 +9,7 @@ import {
   GROUND_SHADOW_ASPECT_RATIO,
   GROUND_SHADOW_COLOR,
   GROUND_SHADOW_DROP_RATIO,
+  GROUND_SHADOW_OFFSET_RATIO,
   GROUND_SHADOW_RADIUS,
   GROUND_SHADOW_WIDTH_RATIO,
 } from "@/components/MarshmallowCharacter";
@@ -23,6 +24,14 @@ import {
   worldXToSize,
   type WorldStage,
 } from "@/lib/growthWorld";
+
+/**
+ * The objects take half the marshmallow's shadow offset. Its art sits right of
+ * centre inside its own box, which absorbs some of the shift; the object
+ * sprites are centred in theirs, so the full offset would swing the shadow
+ * clear of the artwork it belongs to.
+ */
+const OBJECT_SHADOW_OFFSET_RATIO = GROUND_SHADOW_OFFSET_RATIO / 2;
 
 interface WorldObjectProps {
   stage: WorldStage;
@@ -94,7 +103,11 @@ function WorldObject({
         <View
           style={[
             styles.groundShadow,
-            { width: shadowWidth, height: shadowWidth * GROUND_SHADOW_ASPECT_RATIO },
+            {
+              width: shadowWidth,
+              height: shadowWidth * GROUND_SHADOW_ASPECT_RATIO,
+              marginLeft: spriteWidth * OBJECT_SHADOW_OFFSET_RATIO,
+            },
           ]}
         />
 

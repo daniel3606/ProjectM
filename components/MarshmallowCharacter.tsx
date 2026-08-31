@@ -29,6 +29,7 @@ export const MARSHMALLOW_BODY_RADIUS = 70;
 
 const GROUND_SHADOW_WIDTH = 161;
 const GROUND_SHADOW_HEIGHT = 38;
+const GROUND_SHADOW_OFFSET = 30;
 
 /**
  * Proportions and colour of the ellipse the character casts on the ground,
@@ -41,6 +42,13 @@ export const GROUND_SHADOW_ASPECT_RATIO = GROUND_SHADOW_HEIGHT / GROUND_SHADOW_W
 
 /** How far the shadow sits below the foot line, as a fraction of drawn height. */
 export const GROUND_SHADOW_DROP_RATIO = 8 / MARSHMALLOW_BODY_HEIGHT;
+
+/**
+ * How far right of centre the shadow sits, as a fraction of the caster's
+ * width. The scene lights from the upper left, so every shadow falls the same
+ * way rather than pooling symmetrically under its caster.
+ */
+export const GROUND_SHADOW_OFFSET_RATIO = GROUND_SHADOW_OFFSET / MARSHMALLOW_BODY_WIDTH;
 
 export const GROUND_SHADOW_COLOR = "rgba(0,0,0,0.06)";
 
@@ -183,8 +191,7 @@ const styles = StyleSheet.create({
     width: GROUND_SHADOW_WIDTH,
     height: GROUND_SHADOW_HEIGHT,
     borderRadius: GROUND_SHADOW_RADIUS,
-    // The face sits right of centre, so the shadow follows it.
-    marginLeft: 30,
+    marginLeft: GROUND_SHADOW_OFFSET,
     backgroundColor: GROUND_SHADOW_COLOR,
   },
   body: {
