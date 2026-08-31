@@ -2,6 +2,13 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { usePersistedState } from "@/lib/storage";
 import { computeMarshmallowSizeCm, type FocusMode } from "@/constants/marshmallow";
 import {
+  computeSessionGrowth,
+  getRawGrowthToday,
+  getStreakDays,
+  roundGrowthCm,
+  type GrowthBlockType,
+} from "@/lib/growthModel";
+import {
   notifyBlockEnded,
   scheduleBlockEndNotification,
   cancelBlockEndNotification,
@@ -35,6 +42,11 @@ export interface FocusSessionConfig {
   blockMode?: BlockMode;
   /** Hard Mode blocks can't be ended early and earn no breaks. */
   isHardMode?: boolean;
+  /**
+   * Which growth multiplier the block earns. Absent on sessions saved before
+   * the growth model existed; those are read as Quick Blocks.
+   */
+  blockType?: GrowthBlockType;
   /** Set when this session was auto-started by a Timed Block plan rather than manually. */
   planId?: string;
   /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
@@ -49,6 +61,13 @@ export interface ActiveSession extends FocusSessionConfig {
 
 export interface CompletedSession extends FocusSessionConfig {
   completedAt: number;
+  /**
+   * What the block earned before the daily soft cap. The rest of the day is
+   * priced against this, not against the award.
+   */
+  rawGrowthCm?: number;
+  /** What the marshmallow actually grew by. Absent on pre-model history. */
+  awardedGrowthCm?: number;
 }
 
 export interface PendingGrowthResult {
@@ -56,6 +75,12 @@ export interface PendingGrowthResult {
   durationMinutes: number;
   focusMode: FocusMode;
   label?: string;
+}
+
+/** The day-dependent half of a growth estimate; the block itself supplies the rest. */
+export interface GrowthPreview {
+  streakDays: number;
+  rawGrowthTodayCm: number;
 }
 
 const MAX_HISTORY = 50;
@@ -75,6 +100,8 @@ interface FocusSessionContextValue {
   /** Every block the user started, completed or not. Powers Stats. */
   attempts: SessionAttempt[];
   pendingGrowthResult: PendingGrowthResult | null;
+  /** Streak and day-so-far raw growth, for previewing what a block would earn. */
+  growthPreview: GrowthPreview;
   /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
   startSession: (config: FocusSessionConfig, startedAt?: number) => void;
   stopSession: () => void;
@@ -110,6 +137,12 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     usePersistedState<PendingGrowthResult | null>("focusSession.pendingGrowthResult", null);
   const presenceRef = useRef<RealtimeChannel | null>(null);
   const endNotificationIdRef = useRef<string | null>(null);
+
+  // Read by `stopSession` for the day's raw growth and the streak. A ref, not a
+  // dependency: `stopSession` must keep a stable identity or the auto-end timer
+  // effect below re-arms every time a session lands in history.
+  const historyRef = useRef(history);
+  historyRef.current = history;
 
   // Broadcast focus presence when session starts/stops
   useEffect(() => {
@@ -320,6 +353,22 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     return () => clearTimeout(timer);
   }, [activeSession, endBreak]);
 
+  // The one place a block's growth is priced. Both the completion path and the
+  // "Block Ended" notification call it with the same inputs, so the number the
+  // user is told is the number the marshmallow gets.
+  const awardGrowthFor = useCallback(
+    (session: FocusSessionConfig, endedAt: number) =>
+      computeSessionGrowth({
+        minutes: session.durationMinutes,
+        blockType: session.blockType ?? "quick",
+        isHardBlock: !!session.isHardMode,
+        streakDays: getStreakDays(historyRef.current, endedAt),
+        completed: true,
+        rawGrowthTodayCm: getRawGrowthToday(historyRef.current, endedAt),
+      }),
+    []
+  );
+
   const stopSession = useCallback(() => {
     ScreenTime.clearBlocking().catch(() => {});
     ScreenTime.clearActiveNativeBlock().catch(() => {});
@@ -371,15 +420,29 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
         );
 
         // Ended early (cancelled, or the underlying plan changed mid-window):
-        // no growth, and it doesn't count as a completed session.
+        // no growth, and it doesn't count as a completed session. A Hard Block
+        // exited this way earns no Hard Block bonus either.
         if (ranFullDuration) {
           const { startedAt, ...config } = current;
-          const completed: CompletedSession = { ...config, completedAt: endedAt };
+
+          // Priced now rather than at start. A block that runs past midnight is
+          // charged against the new day's soft cap, which the estimate shown
+          // when it began could not know.
+          const { rawGrowthCm, awardedGrowthCm } = awardGrowthFor(current, endedAt);
+          const growthCm = roundGrowthCm(awardedGrowthCm);
+
+          const completed: CompletedSession = {
+            ...config,
+            completedAt: endedAt,
+            expectedGrowthCm: growthCm,
+            rawGrowthCm,
+            awardedGrowthCm,
+          };
           setHistory((prev) =>
             [completed, ...prev].slice(0, MAX_HISTORY)
           );
           setPendingGrowthResult({
-            growthCm: current.expectedGrowthCm,
+            growthCm,
             durationMinutes: current.durationMinutes,
             focusMode: current.focusMode,
             label: current.label,
@@ -390,7 +453,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       }
       return null;
     });
-  }, [setActiveSession, setAttempts, setHistory, setPendingGrowthResult]);
+  }, [awardGrowthFor, setActiveSession, setAttempts, setHistory, setPendingGrowthResult]);
 
   // Auto-dismisses the active session (and unblocks apps) the moment its
   // duration elapses, whether it was started manually or by a Timed Block
@@ -418,7 +481,10 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       // Cancel the scheduled notification — we're firing the immediate one instead.
       cancelBlockEndNotification(endNotificationIdRef.current);
       endNotificationIdRef.current = null;
-      notifyBlockEnded(activeSession.label, activeSession.expectedGrowthCm);
+      notifyBlockEnded(
+        activeSession.label,
+        roundGrowthCm(awardGrowthFor(activeSession, Date.now()).awardedGrowthCm)
+      );
       stopSession();
     };
 
@@ -428,7 +494,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     }
     const timer = setTimeout(autoEnd, remainingMs);
     return () => clearTimeout(timer);
-  }, [activeSession, activeSessionLoaded, stopSession]);
+  }, [activeSession, activeSessionLoaded, awardGrowthFor, stopSession]);
 
   // Live Activity on Lock Screen / Dynamic Island for whichever block is
   // running. Scheduled blocks the TimedBlockMonitor extension started while the
@@ -454,6 +520,16 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
     });
   }, [activeSession, activeSessionLoaded]);
 
+  // What the growth model needs to price a block the user is still setting up.
+  // Both move during the day, so a preview built from them is only an estimate.
+  const growthPreview = useMemo(
+    () => ({
+      streakDays: getStreakDays(history),
+      rawGrowthTodayCm: getRawGrowthToday(history),
+    }),
+    [history]
+  );
+
   const value = useMemo(
     () => ({
       activeSession,
@@ -461,6 +537,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       history,
       attempts,
       pendingGrowthResult,
+      growthPreview,
       startSession,
       stopSession,
       updateSession,
@@ -476,6 +553,7 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
       history,
       attempts,
       pendingGrowthResult,
+      growthPreview,
       startSession,
       stopSession,
       updateSession,

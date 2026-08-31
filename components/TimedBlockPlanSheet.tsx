@@ -19,12 +19,14 @@ import Theme from "@/constants/theme";
 import { Card, SelectableCard, Button, SectionLabel } from "@/components/ui";
 import {
   DAY_LABELS,
+  estimateGrowthCm,
   formatDuration,
-  getGrowthForDuration,
   type FocusMode,
 } from "@/constants/marshmallow";
+import { useFocusSession } from "@/contexts/FocusSessionContext";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
+import { getBlockTypeForPlan } from "@/lib/growthModel";
 import type { TimedBlockPlan } from "@/contexts/TimedBlockPlansContext";
 import WheelPicker, { ITEM_HEIGHT, PICKER_HEIGHT } from "@/components/WheelPicker";
 
@@ -88,6 +90,7 @@ export default function TimedBlockPlanSheet({
   onDelete,
 }: TimedBlockPlanSheetProps) {
   const insets = useSafeAreaInsets();
+  const { growthPreview } = useFocusSession();
 
   const [label, setLabel] = useState("");
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(() => [new Date().getDay()]);
@@ -96,6 +99,7 @@ export default function TimedBlockPlanSheet({
   const [endHour, setEndHour] = useState(17);
   const [endMinute, setEndMinute] = useState(0);
   const [focusMode, setFocusMode] = useState<FocusMode>("flexible");
+  const [isSleep, setIsSleep] = useState(false);
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
 
   useEffect(() => {
@@ -107,6 +111,7 @@ export default function TimedBlockPlanSheet({
       setEndHour(editingPlan.endHour);
       setEndMinute(editingPlan.endMinute);
       setFocusMode(editingPlan.focusMode);
+      setIsSleep(getBlockTypeForPlan(editingPlan) === "sleep");
       setSelectedApps(selectionFromPlan(editingPlan));
       return;
     }
@@ -133,7 +138,12 @@ export default function TimedBlockPlanSheet({
     const diff = end - start;
     return diff > 0 ? diff : diff + 24 * 60;
   }, [startHour, startMinute, endHour, endMinute]);
-  const expectedGrowth = getGrowthForDuration(totalMinutes, focusMode);
+  const expectedGrowth = estimateGrowthCm({
+    minutes: totalMinutes,
+    blockType: isSleep ? "sleep" : "scheduled",
+    streakDays: growthPreview.streakDays,
+    rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
+  });
 
   const appCount = selectedApps.filter((i) => i.type === "application").length;
   const catCount = selectedApps.filter((i) => i.type === "category").length;
@@ -161,6 +171,7 @@ export default function TimedBlockPlanSheet({
     setEndHour(17);
     setEndMinute(0);
     setFocusMode("flexible");
+    setIsSleep(false);
     setSelectedApps([]);
   }, []);
 
@@ -184,7 +195,7 @@ export default function TimedBlockPlanSheet({
   const handleDeepFocusPress = useCallback(() => {
     Alert.alert(
       "Premium Feature",
-      "Deep Focus mode with 1.5x growth multiplier is coming soon for premium members."
+      "Deep Focus mode with stricter blocking is coming soon for premium members."
     );
   }, []);
 
@@ -203,6 +214,7 @@ export default function TimedBlockPlanSheet({
       appIds: selectedApps.map((i) => i.id),
       appsSummary: { appCount, catCount, webCount },
       enabled: editingPlan?.enabled ?? true,
+      isSleep,
     };
 
     if (editingPlan) {
@@ -222,6 +234,7 @@ export default function TimedBlockPlanSheet({
     endHour,
     endMinute,
     focusMode,
+    isSleep,
     selectedApps,
     appCount,
     catCount,
@@ -300,6 +313,28 @@ export default function TimedBlockPlanSheet({
           <Text style={styles.growthDesc}>{formatDuration(totalMinutes)} block</Text>
         </Card>
 
+        <SectionLabel style={styles.sectionTitle}>Block Type</SectionLabel>
+        <View style={styles.focusModeRow}>
+          <SelectableCard
+            tone="surface"
+            selected={!isSleep}
+            onPress={() => setIsSleep(false)}
+            style={styles.focusModeCard}
+          >
+            <Text style={styles.focusModeTitle}>Focus</Text>
+            <Text style={styles.focusModeDesc}>Work, study, or screen-free time</Text>
+          </SelectableCard>
+          <SelectableCard
+            tone="surface"
+            selected={isSleep}
+            onPress={() => setIsSleep(true)}
+            style={styles.focusModeCard}
+          >
+            <Text style={styles.focusModeTitle}>Sleep</Text>
+            <Text style={styles.focusModeDesc}>Overnight, grows at a lower rate</Text>
+          </SelectableCard>
+        </View>
+
         <SectionLabel style={styles.sectionTitle}>Focus Mode</SectionLabel>
         <View style={styles.focusModeRow}>
           <SelectableCard
@@ -317,7 +352,7 @@ export default function TimedBlockPlanSheet({
             style={styles.focusModeCard}
           >
             <Text style={styles.focusModeTitle}>Deep Focus</Text>
-            <Text style={styles.focusModeDesc}>Strict blocking, 1.5x growth</Text>
+            <Text style={styles.focusModeDesc}>Strict blocking, no early exit</Text>
             <View style={styles.proBadge}>
               <Text style={styles.proBadgeText}>PRO</Text>
             </View>

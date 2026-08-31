@@ -53,7 +53,11 @@ export async function syncCompletedSession(session: CompletedSession): Promise<v
     user_id: userId,
     duration_minutes: session.durationMinutes,
     focus_mode: session.focusMode,
-    growth_cm: session.expectedGrowthCm,
+    // `growth_cm` is the awarded figure — what the marshmallow actually gained.
+    growth_cm: session.awardedGrowthCm ?? session.expectedGrowthCm,
+    raw_growth_cm: session.rawGrowthCm ?? null,
+    block_type: session.blockType ?? null,
+    is_hard_block: !!session.isHardMode,
     completed_at: new Date(session.completedAt).toISOString(),
   });
 
@@ -168,7 +172,9 @@ export async function syncOnboarding(
 export async function fetchRemoteSessions(userId: string): Promise<CompletedSession[]> {
   const { data } = await supabase
     .from("focus_sessions")
-    .select("duration_minutes, focus_mode, growth_cm, completed_at")
+    .select(
+      "duration_minutes, focus_mode, growth_cm, raw_growth_cm, block_type, is_hard_block, completed_at"
+    )
     .eq("user_id", userId)
     .order("completed_at", { ascending: false })
     .limit(50);
@@ -179,6 +185,12 @@ export async function fetchRemoteSessions(userId: string): Promise<CompletedSess
     durationMinutes: row.duration_minutes,
     focusMode: row.focus_mode as CompletedSession["focusMode"],
     expectedGrowthCm: Number(row.growth_cm),
+    awardedGrowthCm: Number(row.growth_cm),
+    // Null on rows written before the growth model. Left undefined so the daily
+    // soft cap treats them as contributing no raw growth rather than guessing.
+    rawGrowthCm: row.raw_growth_cm == null ? undefined : Number(row.raw_growth_cm),
+    blockType: (row.block_type as CompletedSession["blockType"]) ?? undefined,
+    isHardMode: !!row.is_hard_block,
     completedAt: new Date(row.completed_at).getTime(),
   }));
 }

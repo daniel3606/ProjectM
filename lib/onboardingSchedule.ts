@@ -78,5 +78,8 @@ export function planFromPreset(
     appIds: apps.map((app) => app.id),
     appsSummary: summarizeApps(apps),
     enabled: true,
+    // Bedtime is the one preset that covers sleep, which grows the marshmallow
+    // at a lower rate than a focus window of the same length.
+    isSleep: preset.id === "bedtime",
   };
 }

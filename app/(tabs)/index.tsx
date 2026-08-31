@@ -9,6 +9,7 @@ import { GrowthScene } from "@/components/growth";
 import { FirstSessionCoachMark } from "@/components/onboarding";
 import { Button, Screen } from "@/components/ui";
 import { computeMarshmallowSizeCm } from "@/constants/marshmallow";
+import { roundGrowthCm } from "@/lib/growthModel";
 import Theme from "@/constants/theme";
 import {
   useFocusSession,
@@ -66,10 +67,11 @@ export default function HomeScreen({ hapticsEnabled = true }: HomeScreenProps) {
 
   // The scene holds the pre-growth size for as long as a result popup is
   // waiting to be dismissed, so the marshmallow grows *after* the user has
-  // read the popup instead of behind it. Growth is additive and rounded to the
-  // same 0.1cm, so subtracting it reproduces the earlier size exactly.
+  // read the popup instead of behind it. Growth is additive, so subtracting the
+  // award rewinds the size; the popup figure is rounded to 0.1cm, so round the
+  // difference back to the same step rather than showing its remainder.
   const displayedSizeCm = pendingGrowthResult
-    ? actualSizeCm - pendingGrowthResult.growthCm
+    ? roundGrowthCm(actualSizeCm - pendingGrowthResult.growthCm)
     : actualSizeCm;
 
   // Growth still owed to the marshmallow, either because the block is running

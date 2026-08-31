@@ -10,16 +10,17 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
 import { Card, Button, SectionLabel } from "@/components/ui";
-import { formatDuration, getGrowthForDuration } from "@/constants/marshmallow";
+import { estimateGrowthCm, formatDuration } from "@/constants/marshmallow";
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
-import type { ActiveSession } from "@/contexts/FocusSessionContext";
+import { useFocusSession, type ActiveSession } from "@/contexts/FocusSessionContext";
 
 const DURATION_STEP = 5;
 const MAX_DURATION = 240;
 
 export interface EditBlockPatch {
   durationMinutes: number;
+  /** Re-estimated for the new duration; the award is still recomputed at completion. */
   expectedGrowthCm: number;
   appIds: string[];
   appsSummary: { appCount: number; catCount: number; webCount: number };
@@ -36,6 +37,7 @@ interface EditBlockSheetProps {
 /** Lets the user adjust the duration and blocked apps of an already-running block, or end it entirely. */
 export default function EditBlockSheet({ sheetRef, session, onSave, onCancelBlock }: EditBlockSheetProps) {
   const insets = useSafeAreaInsets();
+  const { growthPreview } = useFocusSession();
 
   const [totalMinutes, setTotalMinutes] = useState(session?.durationMinutes ?? DURATION_STEP);
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
@@ -50,7 +52,21 @@ export default function EditBlockSheet({ sheetRef, session, onSave, onCancelBloc
     : 0;
   const minDuration = Math.max(DURATION_STEP, elapsedMinutes + DURATION_STEP);
 
-  const expectedGrowth = session ? getGrowthForDuration(totalMinutes, session.focusMode) : 0;
+  const estimateGrowth = useCallback(
+    (minutes: number) =>
+      session
+        ? estimateGrowthCm({
+            minutes,
+            blockType: session.blockType ?? "quick",
+            isHardBlock: !!session.isHardMode,
+            streakDays: growthPreview.streakDays,
+            rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
+          })
+        : 0,
+    [session, growthPreview]
+  );
+
+  const expectedGrowth = estimateGrowth(totalMinutes);
 
   const appCount = selectedApps.filter((i) => i.type === "application").length;
   const catCount = selectedApps.filter((i) => i.type === "category").length;
@@ -121,11 +137,11 @@ export default function EditBlockSheet({ sheetRef, session, onSave, onCancelBloc
     sheetRef.current?.dismiss();
     onSave({
       durationMinutes: totalMinutes,
-      expectedGrowthCm: getGrowthForDuration(totalMinutes, session.focusMode),
+      expectedGrowthCm: estimateGrowth(totalMinutes),
       appIds,
       appsSummary: { appCount, catCount, webCount },
     });
-  }, [session, selectedApps, totalMinutes, appCount, catCount, webCount, sheetRef, onSave]);
+  }, [session, selectedApps, totalMinutes, estimateGrowth, appCount, catCount, webCount, sheetRef, onSave]);
 
   const handleCancelBlock = useCallback(() => {
     sheetRef.current?.dismiss();

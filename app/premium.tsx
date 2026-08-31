@@ -8,7 +8,7 @@ import OnboardingButton from "@/components/OnboardingButton";
 import { Screen, HeroTitle, HeroSubtitle } from "@/components/ui";
 
 const PREMIUM_FEATURES = [
-  { icon: "lock-closed", label: "Deep Focus mode with 1.5x growth" },
+  { icon: "lock-closed", label: "Hard Block mode you can't exit early" },
   { icon: "infinite", label: "Unlimited scheduled blocks" },
   { icon: "stats-chart", label: "Detailed screen time insights" },
   { icon: "people", label: "Compete with friends on leaderboards" },

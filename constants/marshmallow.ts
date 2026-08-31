@@ -1,3 +1,9 @@
+import {
+  computeSessionGrowth,
+  roundGrowthCm,
+  type SessionGrowthInput,
+} from "@/lib/growthModel";
+
 export const MARSHMALLOW_COLORS = [
   { name: "Strawberry", hex: "#FFB5C2" },
   { name: "Classic", hex: "#FFF5EE" },
@@ -19,10 +25,21 @@ export function formatDuration(totalMinutes: number): string {
 
 export const INITIAL_MARSHMALLOW_SIZE_CM = 2.5;
 
-/** The marshmallow's real size, derived from completed session history. */
-export function computeMarshmallowSizeCm(sessions: { expectedGrowthCm: number }[]): number {
-  const totalGrowth = sessions.reduce((sum, s) => sum + s.expectedGrowthCm, 0);
-  return Math.round((INITIAL_MARSHMALLOW_SIZE_CM + totalGrowth) * 10) / 10;
+/**
+ * The marshmallow's real size, derived from completed session history.
+ *
+ * Sums the *awarded* growth — what the soft cap actually paid out — falling
+ * back to `expectedGrowthCm` for sessions completed before the growth model
+ * separated the two, where the estimate was the award.
+ */
+export function computeMarshmallowSizeCm(
+  sessions: { expectedGrowthCm: number; awardedGrowthCm?: number }[]
+): number {
+  const totalGrowth = sessions.reduce(
+    (sum, s) => sum + (s.awardedGrowthCm ?? s.expectedGrowthCm),
+    0
+  );
+  return roundGrowthCm(INITIAL_MARSHMALLOW_SIZE_CM + totalGrowth);
 }
 
 export function getSizeDescription(cm: number): string {
@@ -39,16 +56,14 @@ export function getSizeDescription(cm: number): string {
 export type FocusMode = "flexible" | "deep";
 
 /**
- * Returns expected growth in cm for a given focus duration.
- * Base rate: 0.5cm per 15 minutes. Deep focus applies a 1.5x multiplier.
+ * What a block is worth if it is completed, as the UI previews it.
+ *
+ * This is an estimate, not a promise: it prices the block against the day's
+ * raw growth *right now*, and the day keeps moving while the block runs. The
+ * figure actually awarded is recomputed at completion in `FocusSessionContext`.
  */
-export function getGrowthForDuration(
-  minutes: number,
-  mode: FocusMode = "flexible"
-): number {
-  const baseGrowth = (minutes / 15) * 0.5;
-  const multiplier = mode === "deep" ? 1.5 : 1.0;
-  return Math.round(baseGrowth * multiplier * 10) / 10;
+export function estimateGrowthCm(input: SessionGrowthInput & { rawGrowthTodayCm?: number }): number {
+  return roundGrowthCm(computeSessionGrowth(input).awardedGrowthCm);
 }
 
 export const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
