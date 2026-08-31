@@ -12,10 +12,10 @@ import {
 } from "@/components/MarshmallowCharacter";
 import {
   FOCUS_HEIGHT_PX,
-  MARSHMALLOW_FOREGROUND_DROP_PX,
   MARSHMALLOW_GROUND_Y,
   MARSHMALLOW_PINNED_SIZE_CM,
   NO_SCALE_FLOOR,
+  pinLiftPx,
   pinProgress,
   pinnedOffsetPx,
   visualScaleForSize,
@@ -76,7 +76,7 @@ export default function GhostMarshmallow({
       // The translations precede the scales so they stay in unscaled pixels.
       transform: [
         { translateX: offset },
-        { translateY: -MARSHMALLOW_FOREGROUND_DROP_PX * pin },
+        { translateY: -pinLiftPx(BODY_HEIGHT * scale, pin) },
         { scaleX: scale },
         { scaleY: scale },
       ],

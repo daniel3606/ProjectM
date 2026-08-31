@@ -5,8 +5,12 @@ import { INITIAL_MARSHMALLOW_SIZE_CM } from "@/constants/marshmallow";
 import { getObjectAspectRatio } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
+  GROUND_Y,
+  MARSHMALLOW_GROUND_Y,
   NO_SCALE_FLOOR,
+  PIN_OFFSET_PX,
   WORLD_PX_PER_DECADE,
+  pinLiftPx,
   pinProgress,
   pinnedOffsetPx,
   sizeToWorldX,
@@ -105,7 +109,7 @@ describe("size ↔ world round-trip", () => {
 
 describe("marshmallow pin", () => {
   /** Offsets the marshmallow reaches when the camera scrubs up to bigger objects. */
-  const upwardDrifts = [-1, -20, -116, -400, -2000, -20000];
+  const upwardDrifts = [-1, -20, -PIN_OFFSET_PX, -400, -2000, -20000];
 
   it("leaves the drift toward smaller objects alone", () => {
     for (const drift of [0, 1, 40, 300, 5000]) {
@@ -114,17 +118,41 @@ describe("marshmallow pin", () => {
     }
   });
 
-  it("holds the middle of the scene however far the camera runs", () => {
+  it("lets go of the focal point at the speed it always did", () => {
+    // Slope one at the origin: for the first few pixels the pin is invisible,
+    // so nothing catches as it takes over.
+    for (const drift of [-0.5, -1, -2]) {
+      expect(pinnedOffsetPx(drift)).toBeCloseTo(drift, 1);
+    }
+  });
+
+  it("keeps the marshmallow on screen however far the camera runs", () => {
+    // Half of the narrowest phone the scene is designed against: anything
+    // inside this is still visible next to the object in focus.
+    const halfScreen = COMPACT_VIEWPORT_WIDTH_PX / 2;
     for (const drift of upwardDrifts) {
-      expect(pinnedOffsetPx(drift)).toBe(0);
+      expect(Math.abs(pinnedOffsetPx(drift))).toBeLessThan(halfScreen);
+      expect(Math.abs(pinnedOffsetPx(drift))).toBeLessThanOrEqual(PIN_OFFSET_PX);
+    }
+    expect(pinnedOffsetPx(-20000)).toBeCloseTo(-PIN_OFFSET_PX, 5);
+  });
+
+  it("never reorders the marshmallow and the silhouette ahead of it", () => {
+    // The ghost sits at a larger size, so a smaller drift. Squashing the two
+    // toward one pin must not flip which is on the left.
+    let previous = pinnedOffsetPx(-20000);
+    for (const drift of [-2000, -400, -PIN_OFFSET_PX, -20, -1, 0, 40]) {
+      const offset = pinnedOffsetPx(drift);
+      expect(offset).toBeGreaterThan(previous);
+      previous = offset;
     }
   });
 
   it("rises into the comparison pose rather than jumping into it", () => {
-    // The lift is what the pin actually animates, so it has to ease in: a step
-    // would snap the marshmallow up to the object ground line.
+    // The lift rides the same curve as the offset, so it has to ease in: a
+    // step would snap the marshmallow up to the object ground line.
     expect(pinProgress(-1)).toBeLessThan(0.05);
-    expect(pinProgress(-116)).toBeGreaterThan(0.5);
+    expect(pinProgress(-PIN_OFFSET_PX)).toBeGreaterThan(0.5);
     expect(pinProgress(-20000)).toBeCloseTo(1, 5);
 
     let previous = 0;
@@ -133,6 +161,46 @@ describe("marshmallow pin", () => {
       expect(progress).toBeGreaterThan(previous);
       previous = progress;
     }
+  });
+
+  it("lands the marshmallow's middle on the line the objects stand on", () => {
+    // Feet start at the marshmallow's own ground line, so where its middle
+    // ends up is the lift plus half of however tall it is drawn.
+    for (const drawnHeightPx of [162, 96, 32, 12, 2]) {
+      const feetY = MARSHMALLOW_GROUND_Y + pinLiftPx(drawnHeightPx, 1);
+      expect(feetY + drawnHeightPx / 2).toBeCloseTo(GROUND_Y, 5);
+    }
+  });
+
+  it("sinks a marshmallow too tall to stand on the line", () => {
+    // Half of a full-height marshmallow is deeper than the foreground drop, so
+    // the pose it eases toward is below where it started, not above.
+    expect(pinLiftPx(162, 1)).toBeLessThan(0);
+    expect(pinLiftPx(2, 1)).toBeGreaterThan(0);
+    expect(pinLiftPx(162, 0)).toBeCloseTo(0, 10);
+    expect(pinLiftPx(2, 0)).toBeCloseTo(0, 10);
+  });
+
+  it("never sinks the marshmallow through the bottom of the scene", () => {
+    // The scene clips what leaves it, and the ruler sits directly beneath, so
+    // a sink deeper than the apron shows up as the marshmallow being cut off
+    // along a straight edge. Swept over every size against every camera
+    // position above it, since the deepest sink is not at either extreme —
+    // it is where the ramp is well underway and the marshmallow still large.
+    let deepest = MARSHMALLOW_GROUND_Y;
+    for (const stage of OBJECT_STAGES) {
+      for (let cameraCm = stage.sizeCm; cameraCm <= 200; cameraCm += 0.25) {
+        const drift = sizeToWorldX(stage.sizeCm) - sizeToWorldX(cameraCm);
+        const drawnHeightPx =
+          FOCUS_HEIGHT_PX *
+          visualScaleForSize(stage.sizeCm, cameraCm, NO_SCALE_FLOOR);
+        const feetY =
+          MARSHMALLOW_GROUND_Y +
+          pinLiftPx(drawnHeightPx, pinProgress(drift));
+        deepest = Math.min(deepest, feetY);
+      }
+    }
+    expect(deepest).toBeGreaterThanOrEqual(0);
   });
 
   it("draws the pinned marshmallow at its true ratio against the object in focus", () => {

@@ -142,7 +142,7 @@ interface GrowthSceneProps {
  * - Preview mode: the pan gesture writes the camera directly and the
  *   marshmallow drifts and rescales under the same law as every other object.
  *   Nothing needs to be blended between the two states, and the marshmallow
- *   cannot jump. Dragged toward bigger objects it holds the middle rather than
+ *   cannot jump. Dragged toward bigger objects it stops at the pin rather than
  *   leaving the scene, so there is always something to compare against.
  */
 export default function GrowthScene({
