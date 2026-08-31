@@ -60,10 +60,10 @@ interface MarshmallowActorProps {
  * being done. Dragging the camera away just moves it along that law.
  *
  * The one departure is the pin (see `pinnedOffsetPx`): dragged toward bigger
- * objects the marshmallow holds the middle of the scene rather than leaving
- * it, shrinking in place to its true size against whatever is in focus, so the
- * object always has something to be measured against. Its scale is untouched
- * by this — only whether it keeps drifting is.
+ * objects the marshmallow stops short of leaving the screen and stands at the
+ * left, shrunk to its true size against whatever is in focus, so the object it
+ * is being measured against has something to be measured against. Its scale is
+ * untouched by this — only where it stands is.
  */
 export default function MarshmallowActor({
   cameraX,

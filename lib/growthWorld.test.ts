@@ -6,6 +6,7 @@ import { getObjectAspectRatio } from "@/constants/objectImages";
 import {
   FOCUS_HEIGHT_PX,
   NO_SCALE_FLOOR,
+  PIN_OFFSET_PX,
   WORLD_PX_PER_DECADE,
   pinProgress,
   pinnedOffsetPx,
@@ -105,7 +106,7 @@ describe("size ↔ world round-trip", () => {
 
 describe("marshmallow pin", () => {
   /** Offsets the marshmallow reaches when the camera scrubs up to bigger objects. */
-  const upwardDrifts = [-1, -20, -116, -400, -2000, -20000];
+  const upwardDrifts = [-1, -20, -PIN_OFFSET_PX, -400, -2000, -20000];
 
   it("leaves the drift toward smaller objects alone", () => {
     for (const drift of [0, 1, 40, 300, 5000]) {
@@ -114,17 +115,41 @@ describe("marshmallow pin", () => {
     }
   });
 
-  it("holds the middle of the scene however far the camera runs", () => {
+  it("lets go of the focal point at the speed it always did", () => {
+    // Slope one at the origin: for the first few pixels the pin is invisible,
+    // so nothing catches as it takes over.
+    for (const drift of [-0.5, -1, -2]) {
+      expect(pinnedOffsetPx(drift)).toBeCloseTo(drift, 1);
+    }
+  });
+
+  it("keeps the marshmallow on screen however far the camera runs", () => {
+    // Half of the narrowest phone the scene is designed against: anything
+    // inside this is still visible next to the object in focus.
+    const halfScreen = COMPACT_VIEWPORT_WIDTH_PX / 2;
     for (const drift of upwardDrifts) {
-      expect(pinnedOffsetPx(drift)).toBe(0);
+      expect(Math.abs(pinnedOffsetPx(drift))).toBeLessThan(halfScreen);
+      expect(Math.abs(pinnedOffsetPx(drift))).toBeLessThanOrEqual(PIN_OFFSET_PX);
+    }
+    expect(pinnedOffsetPx(-20000)).toBeCloseTo(-PIN_OFFSET_PX, 5);
+  });
+
+  it("never reorders the marshmallow and the silhouette ahead of it", () => {
+    // The ghost sits at a larger size, so a smaller drift. Squashing the two
+    // toward one pin must not flip which is on the left.
+    let previous = pinnedOffsetPx(-20000);
+    for (const drift of [-2000, -400, -PIN_OFFSET_PX, -20, -1, 0, 40]) {
+      const offset = pinnedOffsetPx(drift);
+      expect(offset).toBeGreaterThan(previous);
+      previous = offset;
     }
   });
 
   it("rises into the comparison pose rather than jumping into it", () => {
-    // The lift is what the pin actually animates, so it has to ease in: a step
-    // would snap the marshmallow up to the object ground line.
+    // The lift rides the same curve as the offset, so it has to ease in: a
+    // step would snap the marshmallow up to the object ground line.
     expect(pinProgress(-1)).toBeLessThan(0.05);
-    expect(pinProgress(-116)).toBeGreaterThan(0.5);
+    expect(pinProgress(-PIN_OFFSET_PX)).toBeGreaterThan(0.5);
     expect(pinProgress(-20000)).toBeCloseTo(1, 5);
 
     let previous = 0;

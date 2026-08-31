@@ -227,14 +227,18 @@ export const MARSHMALLOW_PINNED_SIZE_CM = 3;
 // ── Pinning ──────────────────────────────────────────────────────────────────
 
 /**
- * Camera travel over which the marshmallow eases from standing in the
- * foreground into the comparison pose, up on the object ground line.
+ * How far left of the focal point the marshmallow comes to rest once the
+ * camera has moved on to things bigger than it. Far enough to clear the object
+ * in focus, close enough to read as standing beside it.
+ *
+ * It doubles as the distance over which the marshmallow settles there: holding
+ * the drift at its natural speed to begin with pins the two together.
  */
-export const PIN_RAMP_PX = 116;
+export const PIN_OFFSET_PX = 116;
 
 /**
- * The pinned marshmallow is never floored. It holds the middle of the scene at
- * any camera position, so nothing has to keep it on screen, and beside
+ * The pinned marshmallow is never floored. It comes to rest a fixed distance
+ * from the focal point, so nothing has to keep it on screen, and beside
  * something a hundred times its size it should dwindle to almost nothing. That
  * is the comparison, not a failure of it.
  */
@@ -246,24 +250,29 @@ export const NO_SCALE_FLOOR = 0;
  *
  * Scrubbing down to smaller objects is unchanged: the marshmallow drifts off
  * to the right and grows as it goes, like any other inhabitant. Scrubbing up
- * is where the comparison lives, so it holds the middle of the scene and
- * shrinks in place, standing against whatever the camera has moved on to.
+ * is where the comparison lives, so instead of leaving the screen it eases to
+ * a stop {@link PIN_OFFSET_PX} left of the focal point and shrinks against
+ * whatever is in view.
+ *
+ * The curve starts at zero with slope one, so the marshmallow leaves the focal
+ * point at the same rate it always did and only bends toward the pin further
+ * out. Nothing has to be blended at the moment the pin takes over.
  */
 export function pinnedOffsetPx(offsetPx: number): number {
   "worklet";
-  return Math.max(offsetPx, 0);
+  if (offsetPx >= 0) return offsetPx;
+  return -PIN_OFFSET_PX * (1 - Math.exp(offsetPx / PIN_OFFSET_PX));
 }
 
 /**
- * 0 with the marshmallow in the foreground, 1 once it is fully in the
- * comparison pose. Eased over {@link PIN_RAMP_PX} rather than switched, so it
- * rises to the object ground line instead of jumping there the moment the
- * camera passes it.
+ * 0 with the marshmallow in the foreground, 1 once it has settled on the pin
+ * in the comparison pose. Drawn from the same curve as the offset, so the lift
+ * onto the object ground line arrives exactly as the marshmallow parks.
  */
 export function pinProgress(offsetPx: number): number {
   "worklet";
   if (offsetPx >= 0) return 0;
-  return 1 - Math.exp(offsetPx / PIN_RAMP_PX);
+  return -pinnedOffsetPx(offsetPx) / PIN_OFFSET_PX;
 }
 
 // ── Depth / occlusion ────────────────────────────────────────────────────────
