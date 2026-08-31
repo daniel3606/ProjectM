@@ -29,6 +29,12 @@ function formatCm(cm: number) {
 
 interface SizeIndicatorProps {
   cameraX: SharedValue<number>;
+  /**
+   * The marshmallow's own world position. The resting readout follows this
+   * rather than the camera, so it stays the marshmallow's real size even when
+   * the camera has pulled ahead toward a running block's goal.
+   */
+  marshmallowWorldX: SharedValue<number>;
   previewProgress: SharedValue<number>;
   /** The marshmallow's real stored size, used to gate undiscovered copy. */
   actualSizeCm: number;
@@ -47,6 +53,7 @@ interface SizeIndicatorProps {
  */
 export default function SizeIndicator({
   cameraX,
+  marshmallowWorldX,
   previewProgress,
   actualSizeCm,
   pendingGrowthCm,
@@ -56,7 +63,10 @@ export default function SizeIndicator({
   const framesSincePush = useSharedValue(0);
 
   useAnimatedReaction(
-    () => cameraX.value,
+    // Resting, the number is the marshmallow's own size; only while the camera
+    // is under the finger does it read whatever the camera is pointing at.
+    () =>
+      previewProgress.value > 0 ? cameraX.value : marshmallowWorldX.value,
     (current, previous) => {
       framesSincePush.value += 1;
 
