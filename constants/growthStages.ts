@@ -6,27 +6,38 @@ export interface GrowthStage {
 }
 
 export const GROWTH_STAGES: GrowthStage[] = [
-  { id: "blueberry",    sizeCm: 2,   objectName: "Blueberry",     message: "Small and sweet — your very first step." },
-  { id: "grape",        sizeCm: 3,   objectName: "Grape",          message: "Tiny but already growing." },
-  { id: "strawberry",   sizeCm: 4,   objectName: "Strawberry",     message: "Sweet progress." },
-  { id: "egg",          sizeCm: 5,   objectName: "Egg",            message: "Egg-sized focus energy." },
-  { id: "tangerine",    sizeCm: 6,   objectName: "Tangerine",      message: "Zesty consistency." },
-  { id: "apple",        sizeCm: 8,   objectName: "Apple",          message: "Crisp progress." },
-  { id: "cupcake",      sizeCm: 10,  objectName: "Cupcake",        message: "Sweet milestone!" },
-  { id: "donut",        sizeCm: 12,  objectName: "Donut",          message: "Keep the momentum rolling!" },
-  { id: "hot_beverage", sizeCm: 14,  objectName: "Hot Beverage",   message: "A cozy, warm milestone." },
-  { id: "banana",       sizeCm: 17,  objectName: "Banana",         message: "Long focus streaks are paying off." },
-  { id: "birthday_cake",sizeCm: 22,  objectName: "Birthday Cake",  message: "This is worth celebrating." },
-  { id: "teddy_bear",   sizeCm: 28,  objectName: "Teddy Bear",     message: "Soft, strong, and growing." },
-  { id: "basketball",   sizeCm: 35,  objectName: "Basketball",     message: "Now that is a round achievement." },
-  { id: "sneaker",      sizeCm: 45,  objectName: "Sneaker",        message: "Keep running toward your goals." },
-  { id: "laptop",       sizeCm: 55,  objectName: "Laptop",         message: "Your focus could power a whole screen." },
-  { id: "cat",          sizeCm: 70,  objectName: "Cat",            message: "Cat-sized discipline." },
-  { id: "dog",          sizeCm: 85,  objectName: "Dog",            message: "Your marshmallow has real presence now." },
-  { id: "skateboard",   sizeCm: 100, objectName: "Skateboard",     message: "Rolling into serious growth." },
-  { id: "chair",        sizeCm: 120, objectName: "Chair",          message: "Almost human scale." },
-  { id: "bicycle",      sizeCm: 145, objectName: "Bicycle",        message: "You are really going places." },
-  { id: "person",       sizeCm: 170, objectName: "Person",         message: "Your marshmallow reached human size." },
+  { id: "blueberry",           sizeCm: 2,   objectName: "Blueberry",           message: "A tiny little start." },
+  { id: "grape",               sizeCm: 3,   objectName: "Grape",               message: "Already a little bigger." },
+  { id: "strawberry",          sizeCm: 5,   objectName: "Strawberry",          message: "Sweet progress." },
+  { id: "macaron",             sizeCm: 6,   objectName: "Macaron",             message: "Small, cute, and growing." },
+  { id: "apple",               sizeCm: 9,   objectName: "Apple",               message: "A crisp little milestone." },
+
+  { id: "cupcake",             sizeCm: 11,  objectName: "Cupcake",             message: "A sweet achievement." },
+  { id: "boba",                sizeCm: 15,  objectName: "Boba",                message: "Now that's refreshing progress." },
+  { id: "potted_cactus",       sizeCm: 18,  objectName: "Potted Cactus",       message: "Standing a little taller." },
+  { id: "basketball",          sizeCm: 24,  objectName: "Basketball",          message: "Round and growing strong." },
+  { id: "cat",                 sizeCm: 30,  objectName: "Cat",                 message: "You're cat-sized now!" },
+
+  { id: "yorkshire",           sizeCm: 38,  objectName: "Yorkshire",           message: "Yorkshire-sized consistency." },
+  { id: "shiba_inu",           sizeCm: 45,  objectName: "Shiba Inu",           message: "A fluffy milestone." },
+  { id: "suitcase",            sizeCm: 60,  objectName: "Suitcase",            message: "Packed and ready to grow." },
+  { id: "penguin",             sizeCm: 80,  objectName: "Penguin",             message: "You're penguin-sized now!" },
+  { id: "flamingo",            sizeCm: 100, objectName: "Flamingo",            message: "Standing tall and proud." },
+
+  { id: "teddybear",           sizeCm: 120, objectName: "Teddy Bear",          message: "That's a giant cuddle." },
+  { id: "sunflower",           sizeCm: 150, objectName: "Sunflower",           message: "Reaching for the sun." },
+  { id: "person",              sizeCm: 170, objectName: "Person",              message: "You've reached human size!" },
+  { id: "llama",               sizeCm: 180, objectName: "Llama",               message: "Llama-sized now!" },
+  { id: "ostrich",             sizeCm: 200, objectName: "Ostrich",             message: "That's a tall bird." },
+
+  { id: "christmas_tree",      sizeCm: 250, objectName: "Christmas Tree",      message: "Tree-sized and magical." },
+  { id: "slide",               sizeCm: 300, objectName: "Slide",               message: "Welcome to giant territory." },
+  { id: "cherry_blossom_tree", sizeCm: 400, objectName: "Cherry Blossom Tree", message: "In full bloom and towering." },
+  { id: "giraffe",             sizeCm: 500, objectName: "Giraffe",             message: "That's a seriously tall milestone." },
+  { id: "tiny_house",          sizeCm: 650, objectName: "Tiny House",          message: "You're as tall as a tiny house." },
+
+  { id: "cottage",             sizeCm: 800, objectName: "Cottage",             message: "Now that's house-sized growth." },
+  { id: "house",               sizeCm: 900, objectName: "House",               message: "You've grown to full house size." },
 ];
 
 /** Returns the growth stage that matches or is the closest stage at or below the given size. */
@@ -79,7 +90,7 @@ export function isObjectRevealed(sizeCm: number, objectSizeCm: number): boolean 
   return false;
 }
 
-/** All stages have a comparison object image. */
+/** Every growth stage is a comparison object in the world. */
 export const OBJECT_STAGES = GROWTH_STAGES;
 
 export interface ComparisonLayout {

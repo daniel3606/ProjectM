@@ -8,6 +8,7 @@ import {
   NO_SCALE_FLOOR,
   PIN_OFFSET_PX,
   WORLD_PX_PER_DECADE,
+  WORLD_STAGES,
   pinProgress,
   pinnedOffsetPx,
   sizeToWorldX,
@@ -22,16 +23,24 @@ function naturalGapPx(fromCm: number, toCm: number): number {
   return Math.log10(toCm / fromCm) * WORLD_PX_PER_DECADE;
 }
 
+function stageSizeCm(id: string): number {
+  const stage = OBJECT_STAGES.find((candidate) => candidate.id === id);
+  if (!stage) {
+    throw new Error(`Unknown growth stage: ${id}`);
+  }
+  return stage.sizeCm;
+}
+
 describe("growth world spacing", () => {
   it("starts the marshmallow between blueberry and grape", () => {
     const start = sizeToWorldX(INITIAL_MARSHMALLOW_SIZE_CM);
-    expect(start).toBeGreaterThan(sizeToWorldX(2));
-    expect(start).toBeLessThan(sizeToWorldX(3));
+    expect(start).toBeGreaterThan(sizeToWorldX(stageSizeCm("blueberry")));
+    expect(start).toBeLessThan(sizeToWorldX(stageSizeCm("grape")));
   });
 
   it("keeps blueberry and grape on a compact screen at their midpoint", () => {
-    const blueberry = sizeToWorldX(2);
-    const grape = sizeToWorldX(3);
+    const blueberry = sizeToWorldX(stageSizeCm("blueberry"));
+    const grape = sizeToWorldX(stageSizeCm("grape"));
     const mid = (blueberry + grape) / 2;
     const halfScreen = COMPACT_VIEWPORT_WIDTH_PX / 2;
 
@@ -40,15 +49,19 @@ describe("growth world spacing", () => {
   });
 
   it("does not shrink the blueberry–grape gap below the log spacing that fits the screen", () => {
-    const gap = sizeToWorldX(3) - sizeToWorldX(2);
-    expect(gap).toBeCloseTo(naturalGapPx(2, 3), 5);
+    const gap =
+      sizeToWorldX(stageSizeCm("grape")) - sizeToWorldX(stageSizeCm("blueberry"));
+    expect(gap).toBeCloseTo(
+      naturalGapPx(stageSizeCm("blueberry"), stageSizeCm("grape")),
+      5,
+    );
   });
 
   it("never lets consecutive sprites overlap, even when the larger one is scaled up", () => {
-    for (let i = 1; i < OBJECT_STAGES.length; i++) {
-      const previous = OBJECT_STAGES[i - 1];
-      const next = OBJECT_STAGES[i];
-      const gap = sizeToWorldX(next.sizeCm) - sizeToWorldX(previous.sizeCm);
+    for (let i = 1; i < WORLD_STAGES.length; i++) {
+      const previous = WORLD_STAGES[i - 1];
+      const next = WORLD_STAGES[i];
+      const gap = next.worldX - previous.worldX;
 
       for (const cameraCm of [previous.sizeCm, next.sizeCm]) {
         const prevHalf =
@@ -67,9 +80,11 @@ describe("growth world spacing", () => {
     }
   });
 
-  it("opens a tight pair such as egg and tangerine rather than stacking them", () => {
-    const natural = naturalGapPx(5, 6);
-    const placed = sizeToWorldX(6) - sizeToWorldX(5);
+  it("opens a tight pair such as person and llama rather than stacking them", () => {
+    const personCm = stageSizeCm("person");
+    const llamaCm = stageSizeCm("llama");
+    const natural = naturalGapPx(personCm, llamaCm);
+    const placed = sizeToWorldX(llamaCm) - sizeToWorldX(personCm);
     expect(natural).toBeLessThan(FOCUS_HEIGHT_PX);
     expect(placed).toBeGreaterThan(natural);
     expect(placed).toBeGreaterThanOrEqual(FOCUS_HEIGHT_PX);
@@ -78,17 +93,20 @@ describe("growth world spacing", () => {
 
 describe("visual scale", () => {
   it("draws neighbouring objects at their real height ratio", () => {
-    // Egg 5cm and tangerine 6cm on screen together at 5.7cm: the tangerine
-    // must read as 20% taller, not the compressed ~14% a gamma < 1 produces.
-    const egg = visualScaleForSize(5, 5.7);
-    const tangerine = visualScaleForSize(6, 5.7);
-    expect(tangerine / egg).toBeCloseTo(6 / 5, 5);
+    // Strawberry 5cm and macaron 6cm on screen together at 5.5cm: the
+    // macaron must read as 20% taller, not the compressed ~14% a gamma
+    // < 1 produces.
+    const strawberryCm = stageSizeCm("strawberry");
+    const macaronCm = stageSizeCm("macaron");
+    const strawberry = visualScaleForSize(strawberryCm, 5.5);
+    const macaron = visualScaleForSize(macaronCm, 5.5);
+    expect(macaron / strawberry).toBeCloseTo(macaronCm / strawberryCm, 5);
   });
 });
 
 describe("size ↔ world round-trip", () => {
   it("inverts at every stage and at points between them", () => {
-    const samples = [1.8, 2, 2.5, 3, 4, 5, 5.5, 6, 10, 85, 170, 190];
+    const samples = [1.8, 2, 2.5, 3, 5, 6, 11, 30, 38, 45, 170, 180, 400, 800, 900, 1000];
     for (const cm of samples) {
       expect(worldXToSize(sizeToWorldX(cm))).toBeCloseTo(cm, 8);
     }
@@ -96,7 +114,7 @@ describe("size ↔ world round-trip", () => {
 
   it("is strictly increasing with size", () => {
     let previous = sizeToWorldX(1);
-    for (const cm of [2, 2.5, 3, 6, 12, 55, 170]) {
+    for (const cm of [2, 2.5, 3, 6, 11, 30, 170, 400, 900]) {
       const next = sizeToWorldX(cm);
       expect(next).toBeGreaterThan(previous);
       previous = next;
@@ -161,23 +179,23 @@ describe("marshmallow pin", () => {
   });
 
   it("draws the pinned marshmallow at its true ratio against the object in focus", () => {
-    // A 10cm marshmallow beside a 22cm cake reads as under half its height,
-    // which the object floor would have flattened to a quarter.
-    expect(visualScaleForSize(10, 22, NO_SCALE_FLOOR)).toBeCloseTo(10 / 22, 5);
-    expect(visualScaleForSize(4, 45, NO_SCALE_FLOOR)).toBeCloseTo(4 / 45, 5);
+    // A 10cm marshmallow beside a 24cm basketball reads as under half its
+    // height, which the object floor would have flattened to a quarter.
+    expect(visualScaleForSize(10, 24, NO_SCALE_FLOOR)).toBeCloseTo(10 / 24, 5);
+    expect(visualScaleForSize(4, 30, NO_SCALE_FLOOR)).toBeCloseTo(4 / 30, 5);
   });
 
   it("keeps shrinking the pinned marshmallow all the way to nearly nothing", () => {
-    // No floor: against a person a 2cm marshmallow is about two pixels, and
-    // every step of the way there is a further step down.
+    // No floor: against a house a 2cm marshmallow is a fraction of a pixel,
+    // and every step of the way there is a further step down.
     let previous = visualScaleForSize(2, 2, NO_SCALE_FLOOR);
-    for (const cameraCm of [5, 22, 70, 170]) {
+    for (const cameraCm of [5, 24, 80, 170, 900]) {
       const scale = visualScaleForSize(2, cameraCm, NO_SCALE_FLOOR);
       expect(scale).toBeCloseTo(2 / cameraCm, 5);
       expect(scale).toBeLessThan(previous);
       previous = scale;
     }
-    expect(FOCUS_HEIGHT_PX * previous).toBeLessThan(3);
+    expect(FOCUS_HEIGHT_PX * previous).toBeLessThan(1);
     expect(previous).toBeGreaterThan(0);
   });
 });

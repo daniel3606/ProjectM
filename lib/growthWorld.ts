@@ -26,9 +26,9 @@ import { getObjectAspectRatio } from "@/constants/objectImages";
  * objects; lowering it packs more of the range onto one screen.
  *
  * 1600 is set by blueberry (2cm) and grape (3cm), the widest ratio in the
- * set: their midpoint keeps both on a compact phone. Later pairs are closer
- * in ratio and would stack on this scale, so they are opened in
- * {@link buildStageWorldXs} rather than by stretching the whole decade.
+ * early set: their midpoint keeps both on a compact phone. Later pairs that
+ * sit closer in ratio are opened in {@link buildStageWorldXs} rather than by
+ * stretching the whole decade.
  */
 export const WORLD_PX_PER_DECADE = 1600;
 
@@ -43,12 +43,12 @@ export const FOCUS_HEIGHT_PX = 162;
 
 /**
  * How much of a real size ratio survives into on-screen size. 1.0 is
- * literal — a 6cm tangerine is drawn 20% taller than a 5cm egg when both
- * are on screen. Values below 1 used to compress that (0.72 turned 20%
- * into 14%), which made neighbouring objects look the same height.
+ * literal — a 6cm macaron is drawn 20% taller than a 5cm strawberry when
+ * both are on screen. Values below 1 used to compress that (0.72 turned
+ * 20% into 14%), which made neighbouring objects look the same height.
  *
  * Far-off extremes are handled by the clamps below, not by gamma, so a
- * person does not fill the scene when the camera is still on a grape.
+ * house does not fill the scene when the camera is still on a grape.
  */
 export const VISUAL_GAMMA = 1;
 
@@ -86,6 +86,7 @@ export function visualScaleForSize(
 const SPRITE_EDGE_GAP_PX = 32;
 
 function logSpacingPx(fromCm: number, toCm: number): number {
+  if (fromCm === toCm) return 0;
   return Math.log10(toCm / fromCm) * WORLD_PX_PER_DECADE;
 }
 
@@ -156,12 +157,15 @@ export function sizeToWorldX(heightCm: number): number {
   }
 
   for (let i = 0; i < STAGE_COUNT - 1; i++) {
-    if (height <= STAGE_CMS[i + 1]) {
-      const t =
-        Math.log(height / STAGE_CMS[i]) /
-        Math.log(STAGE_CMS[i + 1] / STAGE_CMS[i]);
-      return STAGE_XS[i] + t * (STAGE_XS[i + 1] - STAGE_XS[i]);
+    if (height > STAGE_CMS[i + 1]) continue;
+
+    const sizeRatio = STAGE_CMS[i + 1] / STAGE_CMS[i];
+    if (sizeRatio === 1) {
+      return STAGE_XS[i];
     }
+
+    const t = Math.log(height / STAGE_CMS[i]) / Math.log(sizeRatio);
+    return STAGE_XS[i] + t * (STAGE_XS[i + 1] - STAGE_XS[i]);
   }
 
   return STAGE_XS[STAGE_COUNT - 1];
@@ -404,16 +408,16 @@ export interface WorldStage extends GrowthStage {
  * layout or animation code.
  */
 export const WORLD_STAGES: WorldStage[] = OBJECT_STAGES.map((stage, index) => {
-  const worldX = sizeToWorldX(stage.sizeCm);
-  const previous = OBJECT_STAGES[index - 1];
-  const next = OBJECT_STAGES[index + 1];
+  const worldX = STAGE_XS[index];
+  const previousX = index > 0 ? STAGE_XS[index - 1] : undefined;
+  const nextX = index < STAGE_COUNT - 1 ? STAGE_XS[index + 1] : undefined;
 
-  const claimFromX = previous
-    ? (worldX + sizeToWorldX(previous.sizeCm)) / 2
-    : worldX - EDGE_CLAIM_MARGIN_PX;
-  const claimToX = next
-    ? (worldX + sizeToWorldX(next.sizeCm)) / 2
-    : worldX + EDGE_CLAIM_MARGIN_PX;
+  const claimFromX =
+    previousX === undefined
+      ? worldX - EDGE_CLAIM_MARGIN_PX
+      : (worldX + previousX) / 2;
+  const claimToX =
+    nextX === undefined ? worldX + EDGE_CLAIM_MARGIN_PX : (worldX + nextX) / 2;
 
   return {
     ...stage,
@@ -464,7 +468,9 @@ function buildRulerTicks(): RulerTick[] {
   const maxCm = VIEW_MAX_CM * 1.6;
   const ticks: RulerTick[] = [];
 
-  for (let decade = 0; decade <= 2; decade++) {
+  const minDecade = Math.max(0, Math.floor(Math.log10(Math.max(minCm, 1))));
+  const maxDecade = Math.floor(Math.log10(maxCm));
+  for (let decade = minDecade; decade <= maxDecade; decade++) {
     const base = Math.pow(10, decade);
     for (const step of steps) {
       const cm = step * base;
