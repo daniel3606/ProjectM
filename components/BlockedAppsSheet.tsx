@@ -11,17 +11,25 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
 import SettingRow, { ProBadge } from "@/components/ui/SettingRow";
 import * as ScreenTime from "@/modules/screen-time";
+import { ScreenTimeTokenLabel } from "@/modules/screen-time";
 import type { BlockMode, ScreenTimeItem } from "@/modules/screen-time";
 
 // Re-exported so callers of this sheet don't have to reach into the native
 // module for the type of the value it hands back.
 export type { BlockMode };
 
+// Only reached for items with no token behind them — anything the picker
+// returns is drawn by ScreenTimeTokenLabel with its real icon instead.
 const ITEM_ICON: Record<ScreenTimeItem["type"], React.ComponentProps<typeof Ionicons>["name"]> = {
   application: "apps-outline",
   category: "folder-outline",
   webDomain: "globe-outline",
 };
+
+// Both leave room for the padding, gap and close icon around them, so a long
+// app name truncates inside the chip/tile instead of pushing past it.
+const CHIP_LABEL_MAX_WIDTH = 130;
+const SUGGESTED_LABEL_MAX_WIDTH = 64;
 
 interface BlockedAppsSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
@@ -60,6 +68,15 @@ export default function BlockedAppsSheet({
 
   const [draft, setDraft] = useState<ScreenTimeItem[]>(selected);
   const [draftMode, setDraftMode] = useState<BlockMode>(mode);
+
+  // Suggestions saved before tokens were stored can't be drawn as the app they
+  // stand for, and their ids are positions into a selection that has since been
+  // replaced — tapping one would add whatever now sits at that index. Leave
+  // them out; the row fills back in once onboarding apps are picked again.
+  const resolvableSuggested = useMemo(
+    () => suggested.filter((app) => Boolean(app.token)),
+    [suggested]
+  );
 
   // Re-seed from the committed values whenever the parent's selection
   // changes, so a discarded draft never leaks into the next open.
@@ -244,14 +261,25 @@ export default function BlockedAppsSheet({
                 onPress={() => handleRemove(item.id)}
                 style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
               >
-                <Ionicons
-                  name={ITEM_ICON[item.type]}
-                  size={15}
-                  color={Theme.colors.secondary}
+                <ScreenTimeTokenLabel
+                  item={item}
+                  mode="both"
+                  fontSize={13}
+                  color={Theme.colors.text}
+                  maxWidth={CHIP_LABEL_MAX_WIDTH}
+                  fallback={
+                    <>
+                      <Ionicons
+                        name={ITEM_ICON[item.type]}
+                        size={15}
+                        color={Theme.colors.secondary}
+                      />
+                      <Text style={styles.chipText} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                    </>
+                  }
                 />
-                <Text style={styles.chipText} numberOfLines={1}>
-                  {item.label}
-                </Text>
                 <Ionicons name="close" size={14} color={Theme.colors.gray} />
               </Pressable>
             ))}
@@ -259,7 +287,7 @@ export default function BlockedAppsSheet({
         )}
 
         {/* ── Suggested ────────────────────────────────────────────── */}
-        {suggested.length > 0 && (
+        {resolvableSuggested.length > 0 && (
           <>
             <Text style={styles.sectionHeading}>Suggested</Text>
             <ScrollView
@@ -267,7 +295,7 @@ export default function BlockedAppsSheet({
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.suggestedRow}
             >
-              {suggested.map((app) => {
+              {resolvableSuggested.map((app) => {
                 const isAdded = draft.some((item) => item.id === app.id);
                 return (
                   <Pressable
@@ -279,20 +307,37 @@ export default function BlockedAppsSheet({
                       pressed && styles.pressed,
                     ]}
                   >
-                    <Ionicons
-                      name={ITEM_ICON[app.type]}
-                      size={22}
-                      color={isAdded ? Theme.colors.white : Theme.colors.secondary}
+                    <ScreenTimeTokenLabel
+                      item={app}
+                      mode="icon"
+                      fontSize={26}
+                      maxWidth={SUGGESTED_LABEL_MAX_WIDTH}
+                      fallback={
+                        <Ionicons
+                          name={ITEM_ICON[app.type]}
+                          size={22}
+                          color={isAdded ? Theme.colors.white : Theme.colors.secondary}
+                        />
+                      }
                     />
-                    <Text
-                      style={[
-                        styles.suggestedLabel,
-                        isAdded && styles.suggestedLabelAdded,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {app.label}
-                    </Text>
+                    <ScreenTimeTokenLabel
+                      item={app}
+                      mode="name"
+                      fontSize={11}
+                      color={isAdded ? Theme.colors.white : Theme.colors.textSecondary}
+                      maxWidth={SUGGESTED_LABEL_MAX_WIDTH}
+                      fallback={
+                        <Text
+                          style={[
+                            styles.suggestedLabel,
+                            isAdded && styles.suggestedLabelAdded,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {app.label}
+                        </Text>
+                      }
+                    />
                     <View style={styles.suggestedBadge}>
                       <Ionicons
                         name={isAdded ? "checkmark" : "add"}

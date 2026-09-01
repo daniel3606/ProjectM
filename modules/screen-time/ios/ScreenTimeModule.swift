@@ -487,6 +487,35 @@ public class ScreenTimeModule: Module {
                 promise.resolve(nil)
             }
         }
+
+        // MARK: - Token label view
+        //
+        // Renders one selected app/category/domain with its real name and icon.
+        // See ScreenTimeTokenLabelView for why this has to be a native view.
+        View(ScreenTimeTokenLabelView.self) {
+            Prop("token") { (view: ScreenTimeTokenLabelView, token: String?) in
+                view.encodedToken = token
+            }
+            Prop("itemType") { (view: ScreenTimeTokenLabelView, itemType: String) in
+                view.itemType = itemType
+            }
+            Prop("mode") { (view: ScreenTimeTokenLabelView, mode: TokenLabelMode) in
+                view.mode = mode
+            }
+            Prop("fontSize") { (view: ScreenTimeTokenLabelView, fontSize: Double) in
+                view.fontSize = CGFloat(fontSize)
+            }
+            Prop("color") { (view: ScreenTimeTokenLabelView, color: UIColor?) in
+                view.textColor = color ?? .label
+            }
+            Prop("maxWidth") { (view: ScreenTimeTokenLabelView, maxWidth: Double) in
+                view.maxWidth = CGFloat(maxWidth)
+            }
+            OnViewDidUpdateProps { (view: ScreenTimeTokenLabelView) in
+                view.rebuild()
+            }
+        }
+
     }
 
     // MARK: - Persistence (App Group UserDefaults with PropertyList encoding)
@@ -510,24 +539,29 @@ public class ScreenTimeModule: Module {
     // MARK: - Token → JS serialization
     //
     // Tokens are opaque; Apple provides no public API to extract a display name
-    // outside of SwiftUI's Label(_, token:). We assign stable-ish per-session
-    // indices. The native picker already showed the real app names when the user
-    // made their selection, so the generic labels here are acceptable for a PoC.
+    // or icon outside of SwiftUI's Label(_ token:). So `label` here stays a
+    // generic fallback, and each item also carries its encoded token: JS can't
+    // read anything out of it, but it can hand it to ScreenTimeTokenLabelView,
+    // which renders the real name and icon natively. Indices are still emitted
+    // because applyBlocking/applyAllowOnly resolve item ids through them.
 
     private func serializeSelection() -> [[String: Any]] {
         var items: [[String: Any]] = []
 
-        for (i, _) in currentSelection.applicationTokens.enumerated() {
+        for (i, token) in currentSelection.applicationTokens.enumerated() {
             items.append(["id": "app_\(i)", "type": "application",
-                          "label": "App \(i + 1)", "index": i])
+                          "label": "App \(i + 1)", "index": i,
+                          "token": ScreenTimeTokenCoding.encode(token) ?? ""])
         }
-        for (i, _) in currentSelection.categoryTokens.enumerated() {
+        for (i, token) in currentSelection.categoryTokens.enumerated() {
             items.append(["id": "cat_\(i)", "type": "category",
-                          "label": "Category \(i + 1)", "index": i])
+                          "label": "Category \(i + 1)", "index": i,
+                          "token": ScreenTimeTokenCoding.encode(token) ?? ""])
         }
-        for (i, _) in currentSelection.webDomainTokens.enumerated() {
+        for (i, token) in currentSelection.webDomainTokens.enumerated() {
             items.append(["id": "web_\(i)", "type": "webDomain",
-                          "label": "Web Domain \(i + 1)", "index": i])
+                          "label": "Web Domain \(i + 1)", "index": i,
+                          "token": ScreenTimeTokenCoding.encode(token) ?? ""])
         }
 
         return items
