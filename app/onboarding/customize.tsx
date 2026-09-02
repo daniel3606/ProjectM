@@ -14,12 +14,10 @@ import { useOnboarding } from "@/contexts/OnboardingContext";
 import { hapticSelection } from "@/lib/haptics";
 import { useOnboardingStep } from "@/lib/useOnboardingStep";
 
-type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
-
 /**
  * A colour and a name, no more. The point of this screen is attachment, not
- * configuration — accessories and the rest of the wardrobe live on the
- * Customize tab, where nobody is mid-flow and in a hurry.
+ * configuration. Only the fixed palette is offered here: the custom colour is
+ * premium, and onboarding is the wrong place to meet a paywall.
  */
 export default function OnboardingCustomizeStep() {
   const profile = useMarshmallowProfile();
@@ -35,7 +33,7 @@ export default function OnboardingCustomizeStep() {
   }, []);
 
   const handleColor = useCallback(
-    (hex: MarshmallowColorHex) => {
+    (hex: string) => {
       if (hex === profile.color) return;
       acknowledgeChange();
       profile.setColor(hex);
