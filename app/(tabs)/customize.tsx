@@ -1,16 +1,46 @@
-import React from "react";
+import React, { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 import { MARSHMALLOW_COLORS } from "@/constants/marshmallow";
-import { ITEM_SLOTS, getItemsForSlot } from "@/constants/items";
+import { isPresetColor } from "@/lib/color";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import MarshmallowCharacter from "@/components/MarshmallowCharacter";
-import { Screen, ScreenTitle, ColorPicker, ItemPicker } from "@/components/ui";
+import CustomColorModal from "@/components/ui/CustomColorModal";
+import { Screen, ScreenTitle, ColorPicker } from "@/components/ui";
 
 const PREVIEW_SIZE_CM = 4;
 
 export default function CustomizeScreen() {
   const profile = useMarshmallowProfile();
+  const router = useRouter();
+  const { isPremium, isSubscriptionLoaded } = useSubscription();
+  const [isCustomPickerOpen, setIsCustomPickerOpen] = useState(false);
+
+  // A colour that isn't in the palette can only have come from the custom
+  // picker, so the swatch shows it back rather than the empty rainbow.
+  const customColor = isPresetColor(profile.color) ? undefined : profile.color;
+
+  const handleCustomPress = useCallback(() => {
+    // Until the entitlement has been read we don't know which of the two this
+    // tap means, and guessing sends someone to the wrong screen.
+    if (!isSubscriptionLoaded) return;
+    if (!isPremium) {
+      router.push("/premium");
+      return;
+    }
+    setIsCustomPickerOpen(true);
+  }, [isPremium, isSubscriptionLoaded, router]);
+
+  const handleCustomConfirm = useCallback(
+    (hex: string) => {
+      profile.setColor(hex);
+      setIsCustomPickerOpen(false);
+    },
+    [profile]
+  );
 
   return (
     <Screen style={styles.screen}>
@@ -38,21 +68,29 @@ export default function CustomizeScreen() {
             colors={MARSHMALLOW_COLORS}
             selected={profile.color}
             onSelect={profile.setColor}
-            style={styles.colorGrid}
+            custom={{
+              value: customColor,
+              selected: customColor !== undefined,
+              locked: !isPremium,
+              onPress: handleCustomPress,
+            }}
           />
         </View>
 
-        {ITEM_SLOTS.map((slot) => (
-          <View key={slot.id} style={styles.section}>
-            <Text style={styles.sectionTitle}>{slot.label}</Text>
-            <ItemPicker
-              items={getItemsForSlot(slot.id)}
-              selectedId={profile.items[slot.id]}
-              onSelect={(itemId) => profile.toggleItem(slot.id, itemId)}
-            />
-          </View>
-        ))}
+        <View style={styles.comingSoon}>
+          <Ionicons name="sparkles-outline" size={18} color={Theme.colors.secondary} />
+          <Text style={styles.comingSoonText}>
+            Hats, wings and accessories are on the way — they&apos;ll arrive in a future update.
+          </Text>
+        </View>
       </ScrollView>
+
+      <CustomColorModal
+        visible={isCustomPickerOpen}
+        initialColor={profile.color}
+        onCancel={() => setIsCustomPickerOpen(false)}
+        onConfirm={handleCustomConfirm}
+      />
     </Screen>
   );
 }
@@ -90,7 +128,21 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
     marginBottom: Theme.spacing.md,
   },
-  colorGrid: {
-    justifyContent: "flex-start",
+  comingSoon: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Theme.spacing.md,
+    padding: Theme.spacing.lg,
+    borderRadius: Theme.radius.xl,
+    backgroundColor: Theme.colors.card,
+    borderWidth: 1,
+    borderColor: Theme.colors.cardBorder,
+  },
+  comingSoonText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.gray,
   },
 });

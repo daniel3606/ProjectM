@@ -8,7 +8,6 @@ export const MARSHMALLOW_COLORS = [
   { name: "Strawberry", hex: "#FFB5C2" },
   { name: "Classic", hex: "#FFF5EE" },
   { name: "Blue Berry", hex: "#B5D8FF" },
-  { name: "Mint", hex: "#B5FFCB" },
   { name: "Pineapple", hex: "#f5e689" },
   { name: "Grape", hex: "#D4B5FF" },
   { name: "Peach", hex: "#FFD4B5" },

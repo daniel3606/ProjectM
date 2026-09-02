@@ -21,7 +21,11 @@ import {
 import * as ScreenTime from "@/modules/screen-time";
 import type { ScreenTimeItem } from "@/modules/screen-time";
 
-type MarshmallowColorHex = (typeof MARSHMALLOW_COLORS)[number]["hex"];
+/**
+ * Any `#RRGGBB`, not just the palette: premium accounts can mix their own on
+ * the Customize tab, so the stored colour can't be narrowed to the presets.
+ */
+type MarshmallowColorHex = string;
 
 interface MarshmallowProfileContextValue {
   name: string;
@@ -115,9 +119,7 @@ export function MarshmallowProfileProvider({ children }: { children: React.React
           // moments after we asked them to save it.
           if (remote.onboarding_completed) {
             if (remote.display_name) setRawName(remote.display_name);
-            if (remote.marshmallow_color) {
-              setRawColor(remote.marshmallow_color as MarshmallowColorHex);
-            }
+            if (remote.marshmallow_color) setRawColor(remote.marshmallow_color);
             if (remote.equipped_items && typeof remote.equipped_items === "object") {
               setItems(remote.equipped_items as EquippedItems);
             }

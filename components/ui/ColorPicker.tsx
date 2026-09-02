@@ -8,11 +8,28 @@ import {
   type StyleProp,
   type ViewStyle,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
+import { hslToHex } from "@/lib/color";
+
+/** Stripes that make the empty custom swatch read as "any colour". */
+const RAINBOW_STOPS = Array.from({ length: 12 }, (_, i) =>
+  hslToHex({ h: (i / 12) * 360, s: 70, l: 72 })
+);
 
 interface ColorOption<Hex extends string> {
   hex: Hex;
   name: string;
+}
+
+export interface CustomColorOption {
+  /** The custom hex in use, or undefined while a preset is selected. */
+  value?: string;
+  /** True when the swatch is selected — i.e. `value` is the marshmallow's colour. */
+  selected: boolean;
+  /** Renders a lock and a PRO chip; the press still fires so it can open the paywall. */
+  locked?: boolean;
+  onPress: () => void;
 }
 
 interface ColorPickerProps<Hex extends string> {
@@ -27,6 +44,11 @@ interface ColorPickerProps<Hex extends string> {
    * used where vertical space is tight, e.g. the create-marshmallow screen.
    */
   layout?: "grid" | "row";
+  /**
+   * Appends an extra swatch after the presets that opens a free-form picker
+   * instead of selecting a fixed colour. Grid layout only.
+   */
+  custom?: CustomColorOption;
 }
 
 /** Wrapped grid (or compact horizontal row) of swatches with a checkmark on the selected color. */
@@ -36,6 +58,7 @@ export default function ColorPicker<Hex extends string>({
   onSelect,
   style,
   layout = "grid",
+  custom,
 }: ColorPickerProps<Hex>) {
   if (layout === "row") {
     const selectedName = colors.find((c) => c.hex === selected)?.name;
@@ -81,6 +104,44 @@ export default function ColorPicker<Hex extends string>({
           <Text style={styles.label}>{c.name}</Text>
         </Pressable>
       ))}
+
+      {custom && (
+        <Pressable onPress={custom.onPress} style={styles.option}>
+          <View
+            style={[
+              styles.swatch,
+              styles.customSwatch,
+              custom.value ? { backgroundColor: custom.value } : null,
+              custom.selected && styles.swatchSelected,
+            ]}
+          >
+            {!custom.value && (
+              <View style={styles.rainbow} pointerEvents="none">
+                {RAINBOW_STOPS.map((hex) => (
+                  <View key={hex} style={[styles.rainbowStop, { backgroundColor: hex }]} />
+                ))}
+              </View>
+            )}
+            {custom.locked ? (
+              <View style={styles.lockScrim}>
+                <Ionicons name="lock-closed" size={18} color={Theme.colors.white} />
+              </View>
+            ) : custom.selected ? (
+              <Text style={styles.checkmark}>✓</Text>
+            ) : (
+              <Ionicons name="color-palette" size={22} color="rgba(0,0,0,0.55)" />
+            )}
+          </View>
+          <View style={styles.customLabelRow}>
+            <Text style={styles.label}>Custom</Text>
+            {custom.locked && (
+              <View style={styles.proChip}>
+                <Text style={styles.proChipText}>PRO</Text>
+              </View>
+            )}
+          </View>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -124,6 +185,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.gray,
+  },
+  customSwatch: {
+    overflow: "hidden",
+  },
+  rainbow: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+  },
+  rainbowStop: {
+    flex: 1,
+  },
+  lockScrim: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.34)",
+  },
+  customLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  proChip: {
+    marginTop: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: Theme.radius.sm,
+    backgroundColor: Theme.colors.lightGray,
+  },
+  proChipText: {
+    fontSize: 9,
+    fontFamily: Theme.fonts.bold,
+    color: Theme.colors.secondary,
+    letterSpacing: 0.4,
   },
   rowContent: {
     alignItems: "center",
