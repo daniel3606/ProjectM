@@ -23,7 +23,7 @@ describe("growth stages", () => {
     }
   });
 
-  it("has artwork for every milestone so a reached object is never a mystery box", () => {
+  it("has artwork for every milestone so a reached object is never a silhouette", () => {
     for (const stage of GROWTH_STAGES) {
       expect(getObjectImage(stage.id)).toBeDefined();
     }
@@ -31,13 +31,13 @@ describe("growth stages", () => {
 });
 
 describe("isObjectRevealed", () => {
-  it("shows every object the marshmallow has reached, plus the next two ahead", () => {
+  it("shows every object the marshmallow has reached, plus the next one ahead", () => {
     // Starting size is 2.5cm, between blueberry and grape. Blueberry is
-    // already reached; grape and strawberry are the two targets; macaron
-    // and beyond stay hidden.
+    // already reached; grape is the one target; strawberry and beyond stay
+    // silhouettes.
     expect(isObjectRevealed(2.5, stageSizeCm("blueberry"))).toBe(true);
     expect(isObjectRevealed(2.5, stageSizeCm("grape"))).toBe(true);
-    expect(isObjectRevealed(2.5, stageSizeCm("strawberry"))).toBe(true);
+    expect(isObjectRevealed(2.5, stageSizeCm("strawberry"))).toBe(false);
     expect(isObjectRevealed(2.5, stageSizeCm("macaron"))).toBe(false);
   });
 
@@ -49,23 +49,25 @@ describe("isObjectRevealed", () => {
     expect(isObjectRevealed(pastStrawberryCm, stageSizeCm("macaron"))).toBe(
       true,
     );
-    expect(isObjectRevealed(pastStrawberryCm, stageSizeCm("apple"))).toBe(true);
+    expect(isObjectRevealed(pastStrawberryCm, stageSizeCm("apple"))).toBe(
+      false,
+    );
     expect(isObjectRevealed(pastStrawberryCm, stageSizeCm("cupcake"))).toBe(
       false,
     );
   });
 
-  it("treats an exact match as reached, so the two ahead sit above it", () => {
+  it("treats an exact match as reached, so the one ahead sits above it", () => {
     const strawberryCm = stageSizeCm("strawberry");
     expect(isObjectRevealed(strawberryCm, strawberryCm)).toBe(true);
     expect(isObjectRevealed(strawberryCm, stageSizeCm("macaron"))).toBe(true);
-    expect(isObjectRevealed(strawberryCm, stageSizeCm("apple"))).toBe(true);
+    expect(isObjectRevealed(strawberryCm, stageSizeCm("apple"))).toBe(false);
     expect(isObjectRevealed(strawberryCm, stageSizeCm("cupcake"))).toBe(false);
   });
 
-  it("reveals the first two objects as targets when the marshmallow is still smaller", () => {
+  it("reveals the first object as a target when the marshmallow is still smaller", () => {
     expect(isObjectRevealed(1, stageSizeCm("blueberry"))).toBe(true);
-    expect(isObjectRevealed(1, stageSizeCm("grape"))).toBe(true);
+    expect(isObjectRevealed(1, stageSizeCm("grape"))).toBe(false);
     expect(isObjectRevealed(1, stageSizeCm("strawberry"))).toBe(false);
   });
 
