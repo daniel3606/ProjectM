@@ -64,6 +64,8 @@ struct StoredPlan: Codable {
     let expectedGrowthCm: Double?
     /// "flexible" or "deep"; shown on the Live Activity the monitor raises.
     let focusMode: String?
+    /// "block" or "allowOnly". Absent on plans saved before Allow Only existed.
+    let blockMode: String?
 }
 
 // The subset of a plan that actually determines its DeviceActivitySchedule.

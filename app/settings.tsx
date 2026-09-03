@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
@@ -17,7 +17,8 @@ export default function SettingsScreen() {
   const { user, signOut } = useAuth();
   const profile = useMarshmallowProfile();
   const { history } = useFocusSession();
-  const { isPremium } = useSubscription();
+  const { isPremium, hasStoreSubscription, restoreAccountPurchases, manageSubscription } =
+    useSubscription();
   const [remoteProfile, setRemoteProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -46,6 +47,22 @@ export default function SettingsScreen() {
   const handleSignOut = async () => {
     await signOut();
     router.replace("/auth");
+  };
+
+  const handleRestorePurchases = async () => {
+    const result = await restoreAccountPurchases();
+    if (result === "restored" || result === "purchased") {
+      Alert.alert("Premium restored", "Your Marshmallow Premium subscription is active.");
+      return;
+    }
+    Alert.alert(
+      "Restore purchases",
+      result === "none"
+        ? "No Premium subscription was found for this Apple ID."
+        : result === "unavailable"
+          ? "Purchases aren't available in this build. Use a development or TestFlight build."
+          : "We couldn't restore purchases. Please try again."
+    );
   };
 
   return (
@@ -115,6 +132,25 @@ export default function SettingsScreen() {
               value={isPremium ? "Premium" : "Free"}
               onPress={() => router.push("/premium")}
             />
+            <SettingsRow
+              icon="refresh-outline"
+              label="Restore Purchases"
+              onPress={handleRestorePurchases}
+            />
+            {hasStoreSubscription ? (
+              <SettingsRow
+                icon="open-outline"
+                label="Manage Subscription"
+                onPress={() => {
+                  manageSubscription().catch(() => {
+                    Alert.alert(
+                      "Couldn't open subscriptions",
+                      "Open Settings → Apple ID → Subscriptions to manage Premium."
+                    );
+                  });
+                }}
+              />
+            ) : null}
             <SettingsRow
               icon="color-palette-outline"
               label="Customize Marshmallow"

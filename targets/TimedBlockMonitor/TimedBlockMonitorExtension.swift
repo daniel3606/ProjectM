@@ -114,6 +114,11 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
             let selection = try? PropertyListDecoder().decode(FamilyActivitySelection.self, from: selectionData)
         else { return }
 
+        if plan.blockMode == "allowOnly" {
+            applyAllowOnlyShield(selection: selection, allowedIds: Set(plan.appIds))
+            return
+        }
+
         if plan.appIds.isEmpty {
             if !selection.applicationTokens.isEmpty { store.shield.applications = selection.applicationTokens }
             if !selection.categoryTokens.isEmpty {
@@ -145,6 +150,27 @@ class TimedBlockMonitorExtension: DeviceActivityMonitor {
         store.shield.applications = appTokens.isEmpty ? nil : appTokens
         store.shield.applicationCategories = categoryTokens.isEmpty ? nil : .specific(categoryTokens, except: Set())
         store.shield.webDomains = webTokens.isEmpty ? nil : webTokens
+    }
+
+    private func applyAllowOnlyShield(selection: FamilyActivitySelection, allowedIds: Set<String>) {
+        var allowedApps = Set<ApplicationToken>()
+        var allowedWebs = Set<WebDomainToken>()
+
+        let appArray = Array(selection.applicationTokens)
+        let webArray = Array(selection.webDomainTokens)
+
+        for id in allowedIds {
+            if id.hasPrefix("app_"), let index = Int(id.dropFirst(4)), index < appArray.count {
+                allowedApps.insert(appArray[index])
+            } else if id.hasPrefix("web_"), let index = Int(id.dropFirst(4)), index < webArray.count {
+                allowedWebs.insert(webArray[index])
+            }
+        }
+
+        store.shield.applications = nil
+        store.shield.applicationCategories = .all(except: allowedApps)
+        store.shield.webDomains = nil
+        store.shield.webDomainCategories = .all(except: allowedWebs)
     }
 
     private func notify(title: String, body: String) {

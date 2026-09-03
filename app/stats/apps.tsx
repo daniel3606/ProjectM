@@ -11,6 +11,7 @@ import { formatMinutes, formatPercent } from "@/lib/stats/format";
 import { formatHourWindow, periodCaption } from "@/lib/stats/time";
 import type { DistractingApp, StatsPeriodId } from "@/lib/stats/types";
 import EmptyState from "@/components/stats/EmptyState";
+import LockedPeriod from "@/components/stats/LockedPeriod";
 
 const FALLBACK_PERIOD: StatsPeriodId = "week";
 
@@ -66,7 +67,14 @@ export default function AppBreakdownScreen() {
       >
         <Text style={styles.caption}>{periodCaption(period)}</Text>
 
-        {model.distractions.unavailable ? (
+        {model.periodLocked ? (
+          <LockedPeriod
+            period={period}
+            onUnlock={() => {
+              router.push("/premium");
+            }}
+          />
+        ) : model.distractions.unavailable ? (
           <EmptyState
             icon="apps-outline"
             title="Nothing to break down yet"

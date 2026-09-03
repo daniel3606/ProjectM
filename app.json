@@ -43,7 +43,8 @@
       "./plugins/withTimedBlockMonitor",
       "./plugins/withMarshmallowWidget",
       "./plugins/withQuickBlockLiveActivity",
-      "./plugins/withShieldUI"
+      "./plugins/withShieldUI",
+      "expo-iap"
     ],
     "experiments": {
       "typedRoutes": true,

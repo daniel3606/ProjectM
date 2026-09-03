@@ -54,6 +54,8 @@ export interface NativeSchedulablePlan {
   expectedGrowthCm: number;
   /** Shown on the Live Activity the monitor extension raises for this plan. */
   focusMode: FocusMode;
+  /** "block" or "allowOnly". Absent on plans saved before Allow Only existed. */
+  blockMode?: BlockMode;
 }
 
 export interface ActiveNativeBlock {

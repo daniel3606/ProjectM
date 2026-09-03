@@ -3,11 +3,16 @@ import { AppState } from "react-native";
 import { usePersistedState } from "@/lib/storage";
 import { estimateGrowthCm, type FocusMode } from "@/constants/marshmallow";
 import { getBlockTypeForPlan } from "@/lib/growthModel";
-import { useFocusSession } from "@/contexts/FocusSessionContext";
+import { useFocusSession, type FocusSessionConfig } from "@/contexts/FocusSessionContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { findActiveOccurrence, occurrenceKey } from "@/lib/timedBlockSchedule";
 import { notifyBlockStarted } from "@/lib/notifications";
+import {
+  scheduledBlockIsHard,
+  scheduledBlockMode,
+} from "@/lib/timedBlockPremium";
 import * as ScreenTime from "@/modules/screen-time";
+import type { BlockMode } from "@/modules/screen-time";
 
 const SCHEDULE_CHECK_INTERVAL_MS = 15_000;
 
@@ -31,6 +36,11 @@ export interface TimedBlockPlan {
    * back to a label check.
    */
   isSleep?: boolean;
+  /**
+   * Whether `appIds` lists what to block or the only things left open.
+   * Allow Only is Premium; a free account's saved value is ignored at start.
+   */
+  blockMode?: BlockMode;
 }
 
 /** A plan run the user ended early, remembered until its window closes. */
@@ -42,7 +52,7 @@ interface DismissedOccurrence {
 
 interface TimedBlockPlansContextValue {
   plans: TimedBlockPlan[];
-  /** Max plans this account may keep — `Infinity` on premium. */
+  /** Max plans this account may keep. */
   planLimit: number;
   /** False once the free-tier limit is reached; `addPlan` is a no-op then. */
   canAddPlan: boolean;
@@ -63,10 +73,35 @@ function normalizePlan(plan: TimedBlockPlan): TimedBlockPlan {
   return { ...plan, daysOfWeek: typeof legacyDay === "number" ? [legacyDay] : [] };
 }
 
+function sessionConfigFromPlan(
+  plan: TimedBlockPlan,
+  growthPreview: { streakDays: number; rawGrowthTodayCm: number },
+  isPremium: boolean
+): FocusSessionConfig {
+  const isHardMode = scheduledBlockIsHard(plan, isPremium);
+  return {
+    durationMinutes: plan.durationMinutes,
+    focusMode: isHardMode ? "deep" : "flexible",
+    blockType: getBlockTypeForPlan(plan),
+    expectedGrowthCm: estimateGrowthCm({
+      minutes: plan.durationMinutes,
+      blockType: getBlockTypeForPlan(plan),
+      isHardBlock: isHardMode,
+      streakDays: growthPreview.streakDays,
+      rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
+    }),
+    planId: plan.id,
+    label: plan.label,
+    appIds: plan.appIds,
+    blockMode: scheduledBlockMode(plan, isPremium),
+    isHardMode,
+  };
+}
+
 export function TimedBlockPlansProvider({ children }: { children: React.ReactNode }) {
   const [rawPlans, setPlans, plansLoaded] = usePersistedState<TimedBlockPlan[]>("timedBlockPlans", []);
   const plans = useMemo(() => rawPlans.map(normalizePlan), [rawPlans]);
-  const { timedBlockLimit } = useSubscription();
+  const { timedBlockLimit, isPremium } = useSubscription();
 
   const canAddPlan = plans.length < timedBlockLimit;
 
@@ -155,12 +190,14 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         expectedGrowthCm: estimateGrowthCm({
           minutes: plan.durationMinutes,
           blockType: getBlockTypeForPlan(plan),
+          isHardBlock: scheduledBlockIsHard(plan, isPremium),
         }),
         focusMode: plan.focusMode,
+        blockMode: scheduledBlockMode(plan, isPremium),
       }));
     if (schedulable.length === 0) return;
     ScreenTime.scheduleTimedBlocks(schedulable).catch(() => {});
-  }, [plans, plansLoaded]);
+  }, [plans, plansLoaded, isPremium]);
 
   // Drops dismissal records whose window has closed, so the set doesn't grow
   // without bound and the plan runs again at its next occurrence.
@@ -210,28 +247,12 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
 
         // Re-apply blocking from the main app process — the extension's
         // ManagedSettingsStore may not have persisted across cold launch.
-        const applyBlock =
-          plan.appIds.length > 0
-            ? ScreenTime.applyBlocking(plan.appIds)
-            : ScreenTime.blockAll();
-        applyBlock.catch(() => {});
+        ScreenTime.applyBlockMode(
+          scheduledBlockMode(plan, isPremium),
+          plan.appIds
+        ).catch(() => {});
 
-        startSession(
-          {
-            durationMinutes: plan.durationMinutes,
-            focusMode: plan.focusMode,
-            blockType: getBlockTypeForPlan(plan),
-            expectedGrowthCm: estimateGrowthCm({
-              minutes: plan.durationMinutes,
-              blockType: getBlockTypeForPlan(plan),
-              streakDays: growthPreview.streakDays,
-              rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
-            }),
-            planId: plan.id,
-            label: plan.label,
-          },
-          native.startedAt
-        );
+        startSession(sessionConfigFromPlan(plan, growthPreview, isPremium), native.startedAt);
       }).catch(() => {});
     };
 
@@ -244,7 +265,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
       cancelled = true;
       subscription.remove();
     };
-  }, [isReady, activeSession, plans, startSession, growthPreview]);
+  }, [isReady, activeSession, plans, startSession, growthPreview, isPremium]);
 
   // Records the stop when a plan-driven session disappears mid-window.
   useEffect(() => {
@@ -292,26 +313,13 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
       if (activeSession || !occurrence) return;
       if (dismissedRef.current.has(occurrenceKey(occurrence.plan.id, occurrence.startsAt))) return;
 
-      const applyBlock =
-        occurrence.plan.appIds.length > 0
-          ? ScreenTime.applyBlocking(occurrence.plan.appIds)
-          : ScreenTime.blockAll();
-      applyBlock.catch(() => {});
+      ScreenTime.applyBlockMode(
+        scheduledBlockMode(occurrence.plan, isPremium),
+        occurrence.plan.appIds
+      ).catch(() => {});
 
       startSession(
-        {
-          durationMinutes: occurrence.plan.durationMinutes,
-          focusMode: occurrence.plan.focusMode,
-          blockType: getBlockTypeForPlan(occurrence.plan),
-          expectedGrowthCm: estimateGrowthCm({
-            minutes: occurrence.plan.durationMinutes,
-            blockType: getBlockTypeForPlan(occurrence.plan),
-            streakDays: growthPreview.streakDays,
-            rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
-          }),
-          planId: occurrence.plan.id,
-          label: occurrence.plan.label,
-        },
+        sessionConfigFromPlan(occurrence.plan, growthPreview, isPremium),
         occurrence.startsAt
       );
       notifyBlockStarted(occurrence.plan.label);
@@ -320,7 +328,7 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
     tick();
     const interval = setInterval(tick, SCHEDULE_CHECK_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isReady, plans, activeSession, startSession, stopSession, growthPreview]);
+  }, [isReady, plans, activeSession, startSession, stopSession, growthPreview, isPremium]);
 
   const value = useMemo(
     () => ({

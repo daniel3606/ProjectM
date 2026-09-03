@@ -1,13 +1,13 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View, type ViewStyle, type StyleProp } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import Theme from "@/constants/theme";
 
 /** The small "PRO" chip that marks a premium-gated control. */
 export function ProBadge() {
   return (
     <View style={styles.proBadge}>
-      <Ionicons name="flash" size={10} color={Theme.colors.secondary} />
+      <MaterialCommunityIcons name="crown" size={11} color={Theme.colors.secondary} />
       <Text style={styles.proBadgeText}>PRO</Text>
     </View>
   );
