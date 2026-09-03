@@ -10,8 +10,9 @@ interface ComparisonWorldProps {
   /** Camera position at mount, used to pick the first batch of objects to mount. */
   initialCameraX: number;
   /**
-   * Real marshmallow size. Artwork is shown for every object this size or
-   * smaller, plus the next two ahead; everything beyond that stays a placeholder.
+   * Real marshmallow size. Full-color artwork is shown for every object this
+   * size or smaller, plus the next one ahead; everything beyond that is a
+   * black silhouette of the real object.
    */
   actualSizeCm: number;
 }
