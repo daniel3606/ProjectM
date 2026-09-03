@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text } from "react-native";
 import Animated, {
   useAnimatedStyle,
   type SharedValue,
@@ -17,14 +17,18 @@ import {
   type WorldStage,
 } from "@/lib/growthWorld";
 
+/** Solid fill for unrevealed objects — a black pit of the real silhouette. */
+const HIDDEN_OBJECT_TINT = "#000000";
+
 interface WorldObjectProps {
   stage: WorldStage;
   /** Draw order: larger objects sit in front of smaller neighbours. */
   depthIndex: number;
   cameraX: SharedValue<number>;
   /**
-   * True for objects the marshmallow has reached, and for the next two
-   * stages ahead. False objects render as a placeholder with a hidden name.
+   * True for objects the marshmallow has reached, and for the next stage
+   * ahead. False objects render as a black pit of the real artwork, with
+   * a hidden name.
    */
   revealed: boolean;
 }
@@ -41,7 +45,7 @@ function WorldObject({
   cameraX,
   revealed,
 }: WorldObjectProps) {
-  const image = revealed ? getObjectImage(stage.id) : undefined;
+  const image = getObjectImage(stage.id);
   const aspectRatio = image ? getObjectAspectRatio(stage.id) : 1;
 
   const columnStyle = useAnimatedStyle(() => {
@@ -85,15 +89,15 @@ function WorldObject({
         {image ? (
           <Image
             source={image}
-            style={[styles.artwork, { width: FOCUS_HEIGHT_PX * aspectRatio }]}
+            style={[
+              styles.artwork,
+              { width: FOCUS_HEIGHT_PX * aspectRatio },
+              !revealed && styles.hiddenArtwork,
+            ]}
             resizeMode="contain"
-            accessibilityLabel={stage.objectName}
+            accessibilityLabel={revealed ? stage.objectName : "Hidden object"}
           />
-        ) : (
-          <View style={styles.placeholder} accessibilityLabel="Hidden object">
-            <Text style={styles.placeholderMark}>?</Text>
-          </View>
-        )}
+        ) : null}
       </Animated.View>
 
       <Animated.View style={[styles.label, labelStyle]}>
@@ -140,19 +144,7 @@ const styles = StyleSheet.create({
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.gray,
   },
-  placeholder: {
-    height: FOCUS_HEIGHT_PX,
-    width: FOCUS_HEIGHT_PX,
-    borderRadius: Theme.radius.xl,
-    backgroundColor: Theme.colors.card,
-    borderWidth: 2,
-    borderColor: Theme.colors.cardBorder,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placeholderMark: {
-    fontSize: 64,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.cardBorder,
+  hiddenArtwork: {
+    tintColor: HIDDEN_OBJECT_TINT,
   },
 });
