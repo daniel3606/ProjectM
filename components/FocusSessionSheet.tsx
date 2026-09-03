@@ -68,7 +68,6 @@ export default function FocusSessionSheet({
   const {
     distractingApps,
     neverAllowedApps,
-    setNeverAllowedApps,
   } = useMarshmallowProfile();
   const { isPremium } = useSubscription();
   const { growthPreview } = useFocusSession();
@@ -346,12 +345,9 @@ export default function FocusSessionSheet({
         sheetRef={blockedAppsSheetRef}
         selected={selectedApps}
         mode={blockMode}
-        suggested={distractingApps}
         isPremium={isPremium}
         onUpgrade={onUpgrade}
         onConfirm={handleConfirmApps}
-        neverAllowed={neverAllowedApps}
-        onChangeNeverAllowed={setNeverAllowedApps}
       />
     </>
   );

@@ -1,6 +1,13 @@
 import { Platform } from "react-native";
 import type { FocusMode } from "@/constants/marshmallow";
 
+export {
+  getSelectionListView,
+  getSuggestedListView,
+  hasNativeLists,
+} from "./src/ScreenTimeNativeLists";
+export type { TokenItemInput } from "./src/ScreenTimeNativeLists";
+
 export type AuthorizationStatus =
   | "notDetermined"
   | "denied"
@@ -17,8 +24,19 @@ export type BlockMode = "block" | "allowOnly";
 export interface ScreenTimeItem {
   id: string;
   type: "application" | "category" | "webDomain";
+  /**
+   * Generic fallback text ("App 1"). iOS never exposes an app's real name as
+   * data, so anything user-facing should render <ScreenTimeTokenLabel> and fall
+   * back to this only when `token` is missing.
+   */
   label: string;
   index: number;
+  /**
+   * Opaque, encoded FamilyControls token. Meaningless to JS, but handing it to
+   * <ScreenTimeTokenLabel> draws the item's real name and icon. Absent on items
+   * persisted before tokens were stored.
+   */
+  token?: string;
 }
 
 /** Minimal, JSON-serializable shape of a Timed Block plan for the native side. */
