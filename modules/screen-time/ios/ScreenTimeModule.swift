@@ -487,6 +487,61 @@ public class ScreenTimeModule: Module {
                 promise.resolve(nil)
             }
         }
+
+        // MARK: - Native list views
+        //
+        // The selected-apps list and the suggested strip are drawn in SwiftUI —
+        // see ScreenTimeSelectionListView for why. JS owns the state and the
+        // container's height; these just draw and report taps.
+        View(ScreenTimeSelectionListView.self) {
+            Events("onRemove")
+
+            Prop("items") { (view: ScreenTimeSelectionListView, items: [TokenItemRecord]) in
+                view.items = items
+            }
+            Prop("rowHeight") { (view: ScreenTimeSelectionListView, value: Double) in
+                view.rowHeight = CGFloat(value)
+            }
+            Prop("iconSize") { (view: ScreenTimeSelectionListView, value: Double) in
+                view.iconSize = CGFloat(value)
+            }
+            Prop("fontSize") { (view: ScreenTimeSelectionListView, value: Double) in
+                view.fontSize = CGFloat(value)
+            }
+            Prop("dividerInset") { (view: ScreenTimeSelectionListView, value: Double) in
+                view.dividerInset = CGFloat(value)
+            }
+            Prop("textColor") { (view: ScreenTimeSelectionListView, color: UIColor?) in
+                view.textColor = color ?? .label
+            }
+            Prop("dividerColor") { (view: ScreenTimeSelectionListView, color: UIColor?) in
+                view.dividerColor = color ?? .separator
+            }
+            Prop("removeBackground") { (view: ScreenTimeSelectionListView, color: UIColor?) in
+                view.removeBackground = color ?? .secondarySystemFill
+            }
+            Prop("removeTint") { (view: ScreenTimeSelectionListView, color: UIColor?) in
+                view.removeTint = color ?? .secondaryLabel
+            }
+            OnViewDidUpdateProps { (view: ScreenTimeSelectionListView) in
+                view.rebuild()
+            }
+        }
+
+        View(ScreenTimeSuggestedListView.self) {
+            Events("onToggle")
+
+            Prop("items") { (view: ScreenTimeSuggestedListView, items: [TokenItemRecord]) in
+                view.items = items
+            }
+            Prop("iconSize") { (view: ScreenTimeSuggestedListView, value: Double) in
+                view.iconSize = CGFloat(value)
+            }
+            OnViewDidUpdateProps { (view: ScreenTimeSuggestedListView) in
+                view.rebuild()
+            }
+        }
+
     }
 
     // MARK: - Persistence (App Group UserDefaults with PropertyList encoding)
@@ -509,25 +564,29 @@ public class ScreenTimeModule: Module {
 
     // MARK: - Token → JS serialization
     //
-    // Tokens are opaque; Apple provides no public API to extract a display name
-    // outside of SwiftUI's Label(_, token:). We assign stable-ish per-session
-    // indices. The native picker already showed the real app names when the user
-    // made their selection, so the generic labels here are acceptable for a PoC.
+    // Tokens are opaque; Apple exposes no way to read a display name or icon
+    // out of one. So `label` here stays a generic fallback and each item also
+    // carries its encoded token: JS can't read anything out of it, but handing
+    // it to ScreenTimeTokenLabelView draws the real name and icon. Indices are
+    // still emitted because applyBlocking/applyAllowOnly resolve ids by them.
 
     private func serializeSelection() -> [[String: Any]] {
         var items: [[String: Any]] = []
 
-        for (i, _) in currentSelection.applicationTokens.enumerated() {
+        for (i, token) in currentSelection.applicationTokens.enumerated() {
             items.append(["id": "app_\(i)", "type": "application",
-                          "label": "App \(i + 1)", "index": i])
+                          "label": "App \(i + 1)", "index": i,
+                          "token": ScreenTimeTokenCoding.encode(token) ?? ""])
         }
-        for (i, _) in currentSelection.categoryTokens.enumerated() {
+        for (i, token) in currentSelection.categoryTokens.enumerated() {
             items.append(["id": "cat_\(i)", "type": "category",
-                          "label": "Category \(i + 1)", "index": i])
+                          "label": "Category \(i + 1)", "index": i,
+                          "token": ScreenTimeTokenCoding.encode(token) ?? ""])
         }
-        for (i, _) in currentSelection.webDomainTokens.enumerated() {
+        for (i, token) in currentSelection.webDomainTokens.enumerated() {
             items.append(["id": "web_\(i)", "type": "webDomain",
-                          "label": "Web Domain \(i + 1)", "index": i])
+                          "label": "Web Domain \(i + 1)", "index": i,
+                          "token": ScreenTimeTokenCoding.encode(token) ?? ""])
         }
 
         return items

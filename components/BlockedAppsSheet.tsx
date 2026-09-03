@@ -1,42 +1,46 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ProBadge } from "@/components/ui/SettingRow";
+import Theme from "@/constants/theme";
+import type {
+  BlockMode,
+  ScreenTimeItem,
+  TokenItemInput,
+} from "@/modules/screen-time";
+import * as ScreenTime from "@/modules/screen-time";
+import { getSelectionListView } from "@/modules/screen-time";
+import { Ionicons } from "@expo/vector-icons";
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
-import { Ionicons } from "@expo/vector-icons";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Theme from "@/constants/theme";
-import SettingRow, { ProBadge } from "@/components/ui/SettingRow";
-import * as ScreenTime from "@/modules/screen-time";
-import type { BlockMode, ScreenTimeItem } from "@/modules/screen-time";
 
 // Re-exported so callers of this sheet don't have to reach into the native
 // module for the type of the value it hands back.
 export type { BlockMode };
 
-const ITEM_ICON: Record<ScreenTimeItem["type"], React.ComponentProps<typeof Ionicons>["name"]> = {
-  application: "apps-outline",
-  category: "folder-outline",
-  webDomain: "globe-outline",
-};
+// Every dimension the rows use is fixed here. ScreenTimeTokenLabel draws into
+// the box it is handed and reports no size of its own, so a row's layout is
+// settled before iOS has resolved any app — the icon and name cannot shift off
+// the row's centre line depending on when they arrive.
+const ROW_HEIGHT = 64;
+const ROW_ICON = 40;
+const ROW_GAP = Theme.spacing.lg;
+const ROW_NAME_FONT_SIZE = 17;
 
 interface BlockedAppsSheetProps {
   sheetRef: React.RefObject<BottomSheetModal | null>;
   /** Committed selection, used to seed the draft each time the sheet opens. */
   selected: ScreenTimeItem[];
   mode: BlockMode;
-  /** Apps chosen during onboarding, offered as one-tap adds. */
-  suggested: ScreenTimeItem[];
   isPremium: boolean;
   /** Sends the user to the paywall when they reach for a PRO-only control. */
   onUpgrade: () => void;
   /** Fired on confirm only; backing out discards the draft. */
   onConfirm: (selected: ScreenTimeItem[], mode: BlockMode) => void;
-  neverAllowed: ScreenTimeItem[];
-  onChangeNeverAllowed: (items: ScreenTimeItem[]) => void;
 }
 
 /**
@@ -48,18 +52,43 @@ export default function BlockedAppsSheet({
   sheetRef,
   selected,
   mode,
-  suggested,
   isPremium,
   onUpgrade,
   onConfirm,
-  neverAllowed,
-  onChangeNeverAllowed,
 }: BlockedAppsSheetProps) {
   const insets = useSafeAreaInsets();
   const snapPoints = useMemo(() => ["94%"], []);
 
+  // Both lists are drawn natively — a Screen Time token only renders through
+  // SwiftUI's own label. Absent on a build without the module.
+  const SelectionList = getSelectionListView();
+
   const [draft, setDraft] = useState<ScreenTimeItem[]>(selected);
   const [draftMode, setDraftMode] = useState<BlockMode>(mode);
+
+  const drawableDraft = useMemo(
+    () => draft.filter((item) => Boolean(item.token)),
+    [draft]
+  );
+
+  const selectionItems = useMemo<TokenItemInput[]>(
+    () =>
+      drawableDraft.map((item) => ({
+        id: item.id,
+        type: item.type,
+        token: item.token as string,
+      })),
+    [drawableDraft]
+  );
+
+  const selectionListHeight = selectionItems.length * ROW_HEIGHT;
+  // Clip to the row stack so extra native height cannot open a gap
+  // after the last row. A parent View is required — overflow on the
+  // native view itself is ignored until a native rebuild.
+  const selectionListStyle = useMemo(
+    () => ({ height: selectionListHeight, overflow: "hidden" as const }),
+    [selectionListHeight]
+  );
 
   // Re-seed from the committed values whenever the parent's selection
   // changes, so a discarded draft never leaks into the next open.
@@ -114,30 +143,16 @@ export default function BlockedAppsSheet({
     }
   }, []);
 
-  const handleEditNeverAllowed = useCallback(async () => {
-    if (!isPremium) {
-      onUpgrade();
-      return;
-    }
-    try {
-      const picked = await ScreenTime.openAppPicker();
-      if (picked !== null) onChangeNeverAllowed(picked);
-    } catch {
-      Alert.alert("Error", "Failed to open the app picker.");
-    }
-  }, [isPremium, onUpgrade, onChangeNeverAllowed]);
-
-  const handleToggleSuggested = useCallback((app: ScreenTimeItem) => {
-    setDraft((prev) =>
-      prev.some((item) => item.id === app.id)
-        ? prev.filter((item) => item.id !== app.id)
-        : [...prev, app]
-    );
-  }, []);
-
   const handleRemove = useCallback((id: string) => {
     setDraft((prev) => prev.filter((item) => item.id !== id));
   }, []);
+
+  const handleRemoveEvent = useCallback(
+    (event: { nativeEvent: { id: string } }) => {
+      handleRemove(event.nativeEvent.id);
+    },
+    [handleRemove]
+  );
 
   const emptyStateText =
     draftMode === "block"
@@ -224,108 +239,50 @@ export default function BlockedAppsSheet({
         </Text>
 
         {/* ── Add ──────────────────────────────────────────────────── */}
-        <Pressable onPress={handleAddFromPicker} style={styles.addRow}>
-          <View style={styles.addIcon}>
-            <Ionicons name="add" size={22} color={Theme.colors.text} />
+        <Pressable
+          onPress={handleAddFromPicker}
+          style={({ pressed }) => [styles.addRow, pressed && styles.pressed]}
+        >
+          <View style={styles.addTile}>
+            <Ionicons name="add" size={24} color={Theme.colors.text} />
           </View>
-          <Text style={styles.addLabel}>Add App or Website</Text>
+          <Text style={styles.rowName}>Add App or Website</Text>
         </Pressable>
 
-        <View style={styles.divider} />
-
         {/* ── Current selection ────────────────────────────────────── */}
-        {draft.length === 0 ? (
-          <Text style={styles.emptyText}>{emptyStateText}</Text>
-        ) : (
-          <View style={styles.chipWrap}>
-            {draft.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => handleRemove(item.id)}
-                style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-              >
-                <Ionicons
-                  name={ITEM_ICON[item.type]}
-                  size={15}
-                  color={Theme.colors.secondary}
-                />
-                <Text style={styles.chipText} numberOfLines={1}>
-                  {item.label}
-                </Text>
-                <Ionicons name="close" size={14} color={Theme.colors.gray} />
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {/* ── Suggested ────────────────────────────────────────────── */}
-        {suggested.length > 0 && (
+        {selectionItems.length === 0 ? (
           <>
-            <Text style={styles.sectionHeading}>Suggested</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.suggestedRow}
-            >
-              {suggested.map((app) => {
-                const isAdded = draft.some((item) => item.id === app.id);
-                return (
-                  <Pressable
-                    key={app.id}
-                    onPress={() => handleToggleSuggested(app)}
-                    style={({ pressed }) => [
-                      styles.suggestedTile,
-                      isAdded && styles.suggestedTileAdded,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Ionicons
-                      name={ITEM_ICON[app.type]}
-                      size={22}
-                      color={isAdded ? Theme.colors.white : Theme.colors.secondary}
-                    />
-                    <Text
-                      style={[
-                        styles.suggestedLabel,
-                        isAdded && styles.suggestedLabelAdded,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {app.label}
-                    </Text>
-                    <View style={styles.suggestedBadge}>
-                      <Ionicons
-                        name={isAdded ? "checkmark" : "add"}
-                        size={12}
-                        color={Theme.colors.white}
-                      />
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            <View style={styles.rowDivider} />
+            <Text style={styles.emptyText}>{emptyStateText}</Text>
+          </>
+        ) : (
+          <>
+            {SelectionList ? (
+              <>
+                <View style={styles.selectionListGap} />
+                <View style={selectionListStyle}>
+                  <SelectionList
+                    items={selectionItems}
+                    rowHeight={ROW_HEIGHT}
+                    iconSize={ROW_ICON}
+                    fontSize={ROW_NAME_FONT_SIZE}
+                    dividerInset={ROW_ICON + ROW_GAP}
+                    textColor={Theme.colors.text}
+                    dividerColor={Theme.colors.cardBorder}
+                    removeBackground={Theme.colors.lightGray}
+                    removeTint={Theme.colors.textSecondary}
+                    onRemove={handleRemoveEvent}
+                    style={selectionListStyle}
+                  />
+                </View>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>
+                Update the app to see your selected apps.
+              </Text>
+            )}
           </>
         )}
-
-        <View style={styles.divider} />
-
-        {/* ── Never Allowed ────────────────────────────────────────── */}
-        <SettingRow
-          title="Never Allowed"
-          subtitle={
-            neverAllowed.length > 0
-              ? `${neverAllowed.length} always blocked`
-              : "Nothing set up"
-          }
-          pro={!isPremium}
-          chevron
-          onPress={handleEditNeverAllowed}
-          testID="never-allowed-row"
-        />
-        <Text style={styles.footnote}>
-          Apps and websites here stay blocked in every block you run — they are
-          added to a Block list and left out of an Allow Only one.
-        </Text>
       </BottomSheetScrollView>
     </BottomSheetModal>
   );
@@ -412,17 +369,17 @@ const styles = StyleSheet.create({
     marginTop: Theme.spacing.md,
   },
 
-  /* Add row */
+  /* Rows */
+  // Matches the native list's row metrics so the add row lines up with them.
   addRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Theme.spacing.lg,
-    paddingVertical: Theme.spacing.lg,
-    marginTop: Theme.spacing.sm,
+    gap: ROW_GAP,
+    height: ROW_HEIGHT,
   },
-  addIcon: {
-    width: 44,
-    height: 44,
+  addTile: {
+    width: ROW_ICON,
+    height: ROW_ICON,
     borderRadius: Theme.radius.md,
     alignItems: "center",
     justifyContent: "center",
@@ -430,103 +387,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.cardBorder,
   },
-  addLabel: {
-    fontSize: 17,
+  rowName: {
+    fontSize: ROW_NAME_FONT_SIZE,
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.text,
   },
-  divider: {
+  rowDivider: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: Theme.colors.cardBorder,
-    marginVertical: Theme.spacing.lg,
+    // Inset to the name, so the dividers break at the text not under the icons.
+    marginLeft: ROW_ICON + ROW_GAP,
+  },
+  selectionListGap: {
+    height: Theme.spacing.sm,
   },
   emptyText: {
     fontSize: 15,
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.textSecondary,
     textAlign: "center",
-    paddingVertical: Theme.spacing.sm,
-  },
-
-  /* Selection chips */
-  chipWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Theme.spacing.sm,
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Theme.spacing.xs,
-    paddingVertical: Theme.spacing.sm,
-    paddingHorizontal: Theme.spacing.md,
-    borderRadius: Theme.radius.pill,
-    backgroundColor: Theme.colors.white,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-    maxWidth: 180,
-  },
-  chipText: {
-    fontSize: 13,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.text,
-    flexShrink: 1,
-  },
-
-  /* Suggested */
-  sectionHeading: {
-    fontSize: 18,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.text,
-    marginTop: Theme.spacing.xxl,
-    marginBottom: Theme.spacing.md,
-  },
-  suggestedRow: {
-    gap: Theme.spacing.md,
-    paddingBottom: Theme.spacing.xxs,
-  },
-  suggestedTile: {
-    width: 78,
-    height: 78,
-    borderRadius: Theme.radius.xl,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Theme.spacing.xxs,
-    paddingHorizontal: Theme.spacing.xs,
-    backgroundColor: Theme.colors.white,
-    borderWidth: 1,
-    borderColor: Theme.colors.cardBorder,
-  },
-  suggestedTileAdded: {
-    backgroundColor: Theme.colors.secondary,
-    borderColor: Theme.colors.secondary,
-  },
-  suggestedLabel: {
-    fontSize: 11,
-    fontFamily: Theme.fonts.medium,
-    color: Theme.colors.textSecondary,
-  },
-  suggestedLabelAdded: {
-    color: Theme.colors.white,
-  },
-  suggestedBadge: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: Theme.colors.secondaryLight,
-  },
-  footnote: {
-    fontSize: 12,
-    fontFamily: Theme.fonts.regular,
-    color: Theme.colors.textSecondary,
-    lineHeight: 17,
-    textAlign: "center",
-    marginTop: Theme.spacing.md,
+    paddingVertical: Theme.spacing.xl,
   },
   pressed: {
     opacity: 0.7,
