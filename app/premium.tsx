@@ -1,24 +1,28 @@
 import { MarshmallowStage } from "@/components/onboarding";
 import { Button, HeroSubtitle, HeroTitle, Screen, SelectableCard } from "@/components/ui";
 import {
+  APPLE_STANDARD_EULA_URL,
   PREMIUM_TIMED_BLOCK_LIMIT,
+  PRIVACY_POLICY_URL,
   SUBSCRIPTION_PLANS,
   type SubscriptionPlan,
   type SubscriptionPlanId,
 } from "@/constants/subscription";
 import Theme from "@/constants/theme";
 import { useMarshmallowProfile } from "@/contexts/MarshmallowProfileContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { HARD_BLOCK_MULTIPLIER } from "@/lib/growthModel";
-import { hapticSelection } from "@/lib/haptics";
+import { hapticEmphasis, hapticSelection } from "@/lib/haptics";
 import {
   formatCentsPerDay,
   formatPlanPrice,
   yearlySavingsPercent,
 } from "@/lib/subscriptionPlans";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Linking from "expo-linking";
 import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const HARD_BLOCK_GROWTH_PERCENT = Math.round((HARD_BLOCK_MULTIPLIER - 1) * 100);
@@ -68,20 +72,67 @@ export default function PremiumScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const profile = useMarshmallowProfile();
+  const {
+    isPremium,
+    isPurchasing,
+    storePriceByPlan,
+    purchasePlan,
+    restoreAccountPurchases,
+    manageSubscription,
+  } = useSubscription();
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>("yearly");
 
-  const close = () => {
+  const close = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
       return;
     }
     router.replace("/(tabs)");
-  };
+  }, [router]);
 
   const selectPlan = useCallback((planId: SubscriptionPlanId) => {
     hapticSelection();
     setSelectedPlanId(planId);
   }, []);
+
+  const startTrial = useCallback(async () => {
+    if (isPremium) {
+      close();
+      return;
+    }
+    const result = await purchasePlan(selectedPlanId);
+    if (result === "purchased" || result === "restored") {
+      hapticEmphasis();
+      close();
+      return;
+    }
+    if (result === "cancelled") return;
+    Alert.alert(
+      "Couldn't subscribe",
+      result === "unavailable"
+        ? "Purchases aren't available in this build. Use a development or TestFlight build to subscribe."
+        : "We couldn't complete that purchase. Please try again."
+    );
+  }, [close, isPremium, purchasePlan, selectedPlanId]);
+
+  const restore = useCallback(async () => {
+    if (isPurchasing) return;
+    const result = await restoreAccountPurchases();
+    if (result === "restored" || result === "purchased") {
+      hapticEmphasis();
+      close();
+      return;
+    }
+    if (result === "cancelled") return;
+    Alert.alert(
+      "Restore purchases",
+      result === "none"
+        ? "No Premium subscription was found for this Apple ID."
+        : result === "unavailable"
+          ? "Purchases aren't available in this build. Use a development or TestFlight build."
+          : "We couldn't restore purchases. Please try again."
+    );
+  }, [close, isPurchasing, restoreAccountPurchases]);
 
   return (
     <>
@@ -175,17 +226,61 @@ export default function PremiumScreen() {
                 key={plan.id}
                 plan={plan}
                 selected={selectedPlanId === plan.id}
+                storeDisplayPrice={storePriceByPlan[plan.id]}
                 onPress={() => selectPlan(plan.id)}
               />
             ))}
           </View>
         </View>
 
-        <Button
-          label="Start Free Trial"
-          onPress={close}
-          style={{ marginHorizontal: 32, marginBottom: insets.bottom + 12 }}
-        />
+        <View style={[styles.footer, { marginBottom: insets.bottom + 8 }]}>
+          <Button
+            label={isPremium ? "Continue" : "Start Free Trial"}
+            onPress={isPremium ? close : startTrial}
+            loading={isPurchasing}
+          />
+          {isPremium ? (
+            <Pressable
+              onPress={() => {
+                manageSubscription().catch(() => {
+                  Alert.alert(
+                    "Couldn't open subscriptions",
+                    "Open Settings → Apple ID → Subscriptions to manage Premium."
+                  );
+                });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Manage subscription"
+            >
+              <Text style={styles.restore}>Manage Subscription</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={restore}
+              accessibilityRole="button"
+              accessibilityLabel="Restore purchases"
+            >
+              <Text style={styles.restore}>Restore Purchases</Text>
+            </Pressable>
+          )}
+          <Text style={styles.legal}>
+            Charged to your Apple ID. Auto-renews unless canceled at least 24 hours
+            before the period ends.{" "}
+            <Text
+              style={styles.legalLink}
+              onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+            >
+              Privacy
+            </Text>
+            {" · "}
+            <Text
+              style={styles.legalLink}
+              onPress={() => Linking.openURL(APPLE_STANDARD_EULA_URL)}
+            >
+              Terms
+            </Text>
+          </Text>
+        </View>
       </Screen>
     </>
   );
@@ -194,10 +289,12 @@ export default function PremiumScreen() {
 function PlanOption({
   plan,
   selected,
+  storeDisplayPrice,
   onPress,
 }: {
   plan: SubscriptionPlan;
   selected: boolean;
+  storeDisplayPrice?: string;
   onPress: () => void;
 }) {
   const isYearly = plan.id === "yearly";
@@ -247,7 +344,7 @@ function PlanOption({
             selected && styles.planPriceSelected,
           ]}
         >
-          {formatPlanPrice(plan)}
+          {formatPlanPrice(plan, storeDisplayPrice)}
         </Text>
       </View>
     </SelectableCard>
@@ -430,5 +527,27 @@ const styles = StyleSheet.create({
   },
   planMetaYearly: {
     fontSize: 13,
+  },
+  footer: {
+    marginHorizontal: 32,
+    gap: 8,
+  },
+  restore: {
+    fontFamily: Theme.fonts.medium,
+    fontSize: 13,
+    color: Theme.colors.secondary,
+    textAlign: "center",
+    paddingVertical: 2,
+  },
+  legal: {
+    fontFamily: Theme.fonts.regular,
+    fontSize: 10,
+    lineHeight: 14,
+    color: Theme.colors.gray,
+    textAlign: "center",
+  },
+  legalLink: {
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.secondary,
   },
 });

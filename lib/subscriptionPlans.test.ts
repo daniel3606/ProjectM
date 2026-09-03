@@ -36,6 +36,7 @@ describe("Premium plan pricing", () => {
 
     expect(formatPlanPrice(yearly)).toBe("$24.99/year");
     expect(formatPlanPrice(monthly)).toBe("$5.99/month");
+    expect(formatPlanPrice(yearly, "US$24.99")).toBe("US$24.99/year");
     expect(formatCentsPerDay(yearly)).toBe("7¢ per day");
     expect(formatCentsPerDay(monthly)).toBe("20¢ per day");
   });

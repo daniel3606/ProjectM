@@ -68,6 +68,7 @@ interface PlanCardProps {
   plan: TimedBlockPlan;
   /** True for the plan whose block is running right now. */
   isActive: boolean;
+  isPremium: boolean;
   onEdit: (plan: TimedBlockPlan) => void;
   onToggle: (id: string, enabled: boolean) => void;
 }
@@ -75,6 +76,7 @@ interface PlanCardProps {
 const PlanCard = React.memo(function PlanCard({
   plan,
   isActive,
+  isPremium,
   onEdit,
   onToggle,
 }: PlanCardProps) {
@@ -127,6 +129,7 @@ const PlanCard = React.memo(function PlanCard({
             text={`+${estimateGrowthCm({
               minutes: plan.durationMinutes,
               blockType: getBlockTypeForPlan(plan),
+              isHardBlock: isPremium && plan.focusMode === "deep",
             })}cm`}
           />
           <PlanStat
@@ -257,6 +260,7 @@ export default function TimedBlockScreen() {
             key={plan.id}
             plan={plan}
             isActive={activeSession?.planId === plan.id}
+            isPremium={isPremium}
             onEdit={handleEditPlan}
             onToggle={setPlanEnabled}
           />

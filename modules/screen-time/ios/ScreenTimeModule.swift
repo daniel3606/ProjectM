@@ -264,7 +264,8 @@ public class ScreenTimeModule: Module {
                         appIds: appIds,
                         durationMinutes: durationMinutes,
                         expectedGrowthCm: raw["expectedGrowthCm"] as? Double,
-                        focusMode: raw["focusMode"] as? String
+                        focusMode: raw["focusMode"] as? String,
+                        blockMode: raw["blockMode"] as? String
                     )
                 )
 

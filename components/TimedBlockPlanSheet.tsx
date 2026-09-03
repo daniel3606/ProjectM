@@ -16,7 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Theme from "@/constants/theme";
-import { Card, SelectableCard, Button, SectionLabel } from "@/components/ui";
+import { Card, SelectableCard, Button, SectionLabel, ProBadge } from "@/components/ui";
 import {
   DAY_LABELS,
   estimateGrowthCm,
@@ -24,11 +24,13 @@ import {
   type FocusMode,
 } from "@/constants/marshmallow";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import * as ScreenTime from "@/modules/screen-time";
-import type { ScreenTimeItem } from "@/modules/screen-time";
+import type { BlockMode, ScreenTimeItem } from "@/modules/screen-time";
 import { getBlockTypeForPlan } from "@/lib/growthModel";
 import type { TimedBlockPlan } from "@/contexts/TimedBlockPlansContext";
 import WheelPicker, { ITEM_HEIGHT, PICKER_HEIGHT } from "@/components/WheelPicker";
+import { useRouter } from "expo-router";
 
 const HOURS_24 = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
@@ -90,6 +92,8 @@ export default function TimedBlockPlanSheet({
   onDelete,
 }: TimedBlockPlanSheetProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { isPremium } = useSubscription();
   const { growthPreview } = useFocusSession();
 
   const [label, setLabel] = useState("");
@@ -101,6 +105,7 @@ export default function TimedBlockPlanSheet({
   const [focusMode, setFocusMode] = useState<FocusMode>("flexible");
   const [isSleep, setIsSleep] = useState(false);
   const [selectedApps, setSelectedApps] = useState<ScreenTimeItem[]>([]);
+  const [blockMode, setBlockMode] = useState<BlockMode>("block");
 
   useEffect(() => {
     if (editingPlan) {
@@ -113,6 +118,7 @@ export default function TimedBlockPlanSheet({
       setFocusMode(editingPlan.focusMode);
       setIsSleep(getBlockTypeForPlan(editingPlan) === "sleep");
       setSelectedApps(selectionFromPlan(editingPlan));
+      setBlockMode(editingPlan.blockMode ?? "block");
       return;
     }
 
@@ -141,6 +147,7 @@ export default function TimedBlockPlanSheet({
   const expectedGrowth = estimateGrowthCm({
     minutes: totalMinutes,
     blockType: isSleep ? "sleep" : "scheduled",
+    isHardBlock: isPremium && focusMode === "deep",
     streakDays: growthPreview.streakDays,
     rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
   });
@@ -173,6 +180,7 @@ export default function TimedBlockPlanSheet({
     setFocusMode("flexible");
     setIsSleep(false);
     setSelectedApps([]);
+    setBlockMode("block");
   }, []);
 
   const handleToggleDay = useCallback((day: number) => {
@@ -193,14 +201,32 @@ export default function TimedBlockPlanSheet({
   }, []);
 
   const handleDeepFocusPress = useCallback(() => {
-    Alert.alert(
-      "Premium Feature",
-      "Deep Focus mode with stricter blocking is coming soon for premium members."
-    );
-  }, []);
+    if (!isPremium) {
+      sheetRef.current?.dismiss();
+      router.push("/premium");
+      return;
+    }
+    setFocusMode("deep");
+  }, [isPremium, router, sheetRef]);
+
+  const handleSelectBlockMode = useCallback(
+    (next: BlockMode) => {
+      if (next === "allowOnly" && !isPremium) {
+        sheetRef.current?.dismiss();
+        router.push("/premium");
+        return;
+      }
+      setBlockMode(next);
+    },
+    [isPremium, router, sheetRef]
+  );
 
   const handleSave = useCallback(() => {
     if (totalMinutes === 0 || daysOfWeek.length === 0) return;
+    if (blockMode === "allowOnly" && selectedApps.length === 0) {
+      Alert.alert("Pick something to allow", "Allow Only needs at least one app or website left open.");
+      return;
+    }
 
     const plan = {
       label: label.trim() || `${formatDuration(totalMinutes)} Block`,
@@ -215,6 +241,7 @@ export default function TimedBlockPlanSheet({
       appsSummary: { appCount, catCount, webCount },
       enabled: editingPlan?.enabled ?? true,
       isSleep,
+      blockMode,
     };
 
     if (editingPlan) {
@@ -234,6 +261,7 @@ export default function TimedBlockPlanSheet({
     endHour,
     endMinute,
     focusMode,
+    blockMode,
     isSleep,
     selectedApps,
     appCount,
@@ -348,18 +376,55 @@ export default function TimedBlockPlanSheet({
           </SelectableCard>
           <SelectableCard
             tone="surface"
+            selected={focusMode === "deep"}
             onPress={handleDeepFocusPress}
             style={styles.focusModeCard}
           >
-            <Text style={styles.focusModeTitle}>Deep Focus</Text>
-            <Text style={styles.focusModeDesc}>Strict blocking, no early exit</Text>
-            <View style={styles.proBadge}>
-              <Text style={styles.proBadgeText}>PRO</Text>
+            <View style={styles.focusModeTitleRow}>
+              <Text style={styles.focusModeTitle}>Deep Focus</Text>
+              {!isPremium ? <ProBadge /> : null}
             </View>
+            <Text style={styles.focusModeDesc}>Strict blocking, no early exit</Text>
           </SelectableCard>
         </View>
 
-        <SectionLabel style={styles.sectionTitle}>Applications to Block</SectionLabel>
+        <SectionLabel style={styles.sectionTitle}>
+          {blockMode === "allowOnly" ? "Allowed Apps" : "Applications to Block"}
+        </SectionLabel>
+        <View style={styles.segmented}>
+          <Pressable
+            onPress={() => handleSelectBlockMode("block")}
+            style={[styles.segment, blockMode === "block" && styles.segmentActive]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                blockMode === "block" && styles.segmentTextActive,
+              ]}
+            >
+              Block
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => handleSelectBlockMode("allowOnly")}
+            style={[styles.segment, blockMode === "allowOnly" && styles.segmentActive]}
+          >
+            <Text
+              style={[
+                styles.segmentText,
+                blockMode === "allowOnly" && styles.segmentTextActive,
+              ]}
+            >
+              Allow Only
+            </Text>
+            {!isPremium ? <ProBadge /> : null}
+          </Pressable>
+        </View>
+        <Text style={styles.modeHint}>
+          {blockMode === "allowOnly"
+            ? "Only these apps and websites stay open. Everything else is blocked."
+            : "These apps and websites are blocked while the block runs."}
+        </Text>
         <Card tone="surface" style={styles.card}>
           {totalSelected > 0 ? (
             <Text style={styles.appSummaryText}>
@@ -373,7 +438,11 @@ export default function TimedBlockPlanSheet({
               selected
             </Text>
           ) : (
-            <Text style={styles.noAppsText}>No apps selected (blocks everything)</Text>
+            <Text style={styles.noAppsText}>
+              {blockMode === "allowOnly"
+                ? "Nothing allowed yet — pick at least one app"
+                : "No apps selected (blocks everything)"}
+            </Text>
           )}
 
           <Button
@@ -547,25 +616,54 @@ const styles = StyleSheet.create({
     color: Theme.colors.text,
     marginBottom: 4,
   },
+  focusModeTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
   focusModeDesc: {
     fontSize: 12,
     fontFamily: Theme.fonts.regular,
     color: Theme.colors.textSecondary,
     lineHeight: 16,
   },
-  proBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    backgroundColor: Theme.colors.secondary,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  segmented: {
+    flexDirection: "row",
+    backgroundColor: Theme.colors.lightGray,
+    borderRadius: Theme.radius.pill,
+    padding: 4,
+    gap: 4,
   },
-  proBadgeText: {
-    fontSize: 10,
-    fontFamily: Theme.fonts.bold,
-    color: Theme.colors.white,
+  segment: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Theme.spacing.xs,
+    paddingVertical: 10,
+    borderRadius: Theme.radius.pill,
+  },
+  segmentActive: {
+    backgroundColor: Theme.colors.white,
+    ...Theme.shadows.card,
+  },
+  segmentText: {
+    fontSize: 15,
+    fontFamily: Theme.fonts.medium,
+    color: Theme.colors.textSecondary,
+  },
+  segmentTextActive: {
+    fontFamily: Theme.fonts.semibold,
+    color: Theme.colors.text,
+  },
+  modeHint: {
+    fontSize: 13,
+    fontFamily: Theme.fonts.regular,
+    color: Theme.colors.textSecondary,
+    lineHeight: 18,
+    marginTop: Theme.spacing.md,
+    marginBottom: Theme.spacing.md,
   },
   appSummaryText: {
     fontSize: 14,

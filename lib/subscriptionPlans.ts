@@ -21,7 +21,11 @@ export function yearlySavingsPercent(
   return Math.round((1 - yearlyPriceUsd / yearAtMonthlyRate) * 1000) / 10;
 }
 
-export function formatPlanPrice(plan: SubscriptionPlan): string {
+export function formatPlanPrice(
+  plan: SubscriptionPlan,
+  storeDisplayPrice?: string
+): string {
+  if (storeDisplayPrice) return `${storeDisplayPrice}/${plan.periodLabel}`;
   return `$${plan.priceUsd.toFixed(2)}/${plan.periodLabel}`;
 }
 
