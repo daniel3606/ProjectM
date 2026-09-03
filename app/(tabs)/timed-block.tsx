@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import Theme from "@/constants/theme";
 import { useFocusSession } from "@/contexts/FocusSessionContext";
+import { PREMIUM_TIMED_BLOCK_LIMIT } from "@/constants/subscription";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import {
   useTimedBlockPlans,
@@ -201,13 +202,13 @@ export default function TimedBlockScreen() {
 
   const handleAddPlan = useCallback(() => {
     if (!canAddPlan) {
-      router.push("/premium");
+      if (!isPremium) router.push("/premium");
       return;
     }
     setEditingPlan(null);
     setDraft(null);
     planSheetRef.current?.present();
-  }, [canAddPlan, router]);
+  }, [canAddPlan, isPremium, router]);
 
   const handleEditPlan = useCallback((plan: TimedBlockPlan) => {
     setDraft(null);
@@ -271,6 +272,10 @@ export default function TimedBlockScreen() {
           <Ionicons name="add" size={20} color={Theme.colors.secondary} />
           <Text style={styles.addCardText}>New block</Text>
         </SelectableCard>
+      ) : isPremium ? (
+        <Text style={styles.limitCount} testID="premium-block-limit">
+          You&apos;ve used all {planLimit} scheduled blocks
+        </Text>
       ) : (
         <SelectableCard
           onPress={handleAddPlan}
@@ -282,13 +287,15 @@ export default function TimedBlockScreen() {
             <Text style={styles.upgradeTitle}>
               {planLimit} scheduled blocks on the free plan
             </Text>
-            <Text style={styles.upgradeDesc}>Go Premium for unlimited blocks</Text>
+            <Text style={styles.upgradeDesc}>
+              Go Premium for {PREMIUM_TIMED_BLOCK_LIMIT} scheduled blocks
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color={Theme.colors.gray} />
         </SelectableCard>
       )}
 
-      {!isPremium && plans.length > 0 && (
+      {plans.length > 0 && (canAddPlan || !isPremium) && (
         <Text style={styles.limitCount}>
           {plans.length} of {planLimit} blocks used
         </Text>

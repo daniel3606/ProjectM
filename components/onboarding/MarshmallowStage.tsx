@@ -32,6 +32,8 @@ interface MarshmallowStageProps {
   color: string;
   name: string;
   items?: EquippedItems;
+  /** True shows the smile — the face used during a block. */
+  isBlocking?: boolean;
   /** Feeds the character's own size-driven proportions. Onboarding uses a hatchling. */
   sizeCm?: number;
   /** Layout scale. The stage reserves height for this, so nothing below it shifts. */
@@ -61,6 +63,7 @@ export default function MarshmallowStage({
   color,
   name,
   items,
+  isBlocking,
   sizeCm = 3,
   scale = 1,
   entrance = false,
@@ -165,7 +168,13 @@ export default function MarshmallowStage({
   return (
     <View style={[styles.stage, { height: drawnHeight }, style]}>
       <Animated.View style={characterStyle}>
-        <MarshmallowCharacter color={color} name={name} sizeCm={sizeCm} items={items} />
+        <MarshmallowCharacter
+          color={color}
+          name={name}
+          sizeCm={sizeCm}
+          items={items}
+          isBlocking={isBlocking}
+        />
       </Animated.View>
     </View>
   );

@@ -1,16 +1,16 @@
+import { getItemById, resolveEquippedEmoji, type EquippedItems } from "@/constants/items";
+import Theme from "@/constants/theme";
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withSequence,
-  withDelay,
   cancelAnimation,
   Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
 } from "react-native-reanimated";
-import Theme from "@/constants/theme";
-import { resolveEquippedEmoji, type EquippedItems } from "@/constants/items";
 
 
 
@@ -60,6 +60,7 @@ export default function MarshmallowCharacter({
     wings: wingsEmoji,
     face: faceEmoji,
   } = resolveEquippedEmoji(items);
+  const headwearItem = getItemById(items?.headwear);
   const scale = getMarshmallowIntrinsicScale(sizeCm);
 
   const blinkScaleY = useSharedValue(1);
@@ -114,7 +115,15 @@ export default function MarshmallowCharacter({
           {/* Shine highlight */}
           <View style={styles.shine} />
 
-          {headwearEmoji && <Text style={styles.headwearEmoji}>{headwearEmoji}</Text>}
+          {headwearItem?.image ? (
+            <Image
+              source={headwearItem.image}
+              style={styles.headwearImage}
+              resizeMode="contain"
+            />
+          ) : headwearEmoji ? (
+            <Text style={styles.headwearEmoji}>{headwearEmoji}</Text>
+          ) : null}
 
           <View style={styles.face}>
             <View style={styles.faceShift}>
@@ -262,6 +271,13 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: -34,
     fontSize: 44,
+  },
+  headwearImage: {
+    position: "absolute",
+    top: -40,
+    left: (MARSHMALLOW_BODY_WIDTH - 110) / 2,
+    width: 110,
+    height: 50,
   },
   wingEmoji: {
     position: "absolute",

@@ -1,14 +1,17 @@
 import React, { createContext, useCallback, useContext, useMemo } from "react";
+import {
+  FREE_TIMED_BLOCK_LIMIT,
+  PREMIUM_TIMED_BLOCK_LIMIT,
+} from "@/constants/subscription";
 import { usePersistedState } from "@/lib/storage";
 
-/** Scheduled blocks a free account may keep. Premium is unlimited. */
-export const FREE_TIMED_BLOCK_LIMIT = 2;
+export { FREE_TIMED_BLOCK_LIMIT, PREMIUM_TIMED_BLOCK_LIMIT };
 
 interface SubscriptionContextValue {
   isPremium: boolean;
   /** False until the stored entitlement has been read, so gates don't flash. */
   isSubscriptionLoaded: boolean;
-  /** `Infinity` for premium. */
+  /** Premium is capped; free is the smaller free-tier allowance. */
   timedBlockLimit: number;
   setPremium: (value: boolean) => void;
 }
@@ -35,7 +38,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     () => ({
       isPremium,
       isSubscriptionLoaded,
-      timedBlockLimit: isPremium ? Infinity : FREE_TIMED_BLOCK_LIMIT,
+      timedBlockLimit: isPremium ? PREMIUM_TIMED_BLOCK_LIMIT : FREE_TIMED_BLOCK_LIMIT,
       setPremium,
     }),
     [isPremium, isSubscriptionLoaded, setPremium]
