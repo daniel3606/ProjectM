@@ -10,6 +10,12 @@ import {
   mergeAttemptHistory,
   suggestGoalMinutes,
 } from "@/lib/stats/sources";
+import {
+  applyOverrides,
+  EMPTY_OVERRIDES,
+  setDistracting,
+  type DistractingOverrides,
+} from "@/lib/stats/distractingApps";
 import type {
   GoalSetting,
   PersonalBestRecord,
@@ -37,6 +43,8 @@ interface StatsContextValue {
   setGoalMinutes: (minutes: number) => void;
   /** Marks personal bests as seen, so their reveal doesn't replay. */
   acknowledgePersonalBests: (records: PersonalBestRecord[]) => void;
+  /** Adds or removes an app from the user's distracting list. */
+  setAppDistracting: (appId: string, distracting: boolean) => void;
 }
 
 const StatsContext = createContext<StatsContextValue | null>(null);
@@ -73,6 +81,11 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     "stats.joinedAt",
     null
   );
+  const [distractingOverrides, setDistractingOverrides, overridesLoaded] =
+    usePersistedState<DistractingOverrides>(
+      "stats.distractingOverrides",
+      EMPTY_OVERRIDES
+    );
 
   // Stamped the first time Stats loads for an account that has no join date
   // yet, so lifetime totals have a floor for users who predate this screen.
@@ -103,12 +116,17 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
   // The usage source is pulled once per render pass rather than memoized on a
   // timestamp: it is a synchronous read today, and pinning it to a clock would
   // make a live source go stale for as long as the screen stays open.
-  const usage = useMemo(() => {
+  const rawUsage = useMemo(() => {
     const end = Date.now();
     const start = end - USAGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
     return getUsageSource().getDailyUsage(start, end);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mergedAttempts.length, isPremium]);
+
+  const usage = useMemo(
+    () => applyOverrides(rawUsage, distractingOverrides),
+    [rawUsage, distractingOverrides]
+  );
 
   const schedules = useMemo(() => toScheduleInputs(plans), [plans]);
 
@@ -145,6 +163,12 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
     [setPersonalBests]
   );
 
+  const setAppDistracting = useCallback(
+    (appId: string, distracting: boolean) =>
+      setDistractingOverrides((current) => setDistracting(current, appId, distracting)),
+    [setDistractingOverrides]
+  );
+
   const value = useMemo(
     () => ({
       input,
@@ -154,9 +178,11 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
         isSubscriptionLoaded &&
         goalLoaded &&
         bestsLoaded &&
-        joinedLoaded,
+        joinedLoaded &&
+        overridesLoaded,
       setGoalMinutes,
       acknowledgePersonalBests,
+      setAppDistracting,
     }),
     [
       input,
@@ -166,8 +192,10 @@ export function StatsProvider({ children }: { children: React.ReactNode }) {
       goalLoaded,
       bestsLoaded,
       joinedLoaded,
+      overridesLoaded,
       setGoalMinutes,
       acknowledgePersonalBests,
+      setAppDistracting,
     ]
   );
 

@@ -1,9 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import Animated, {
-  useAnimatedScrollHandler,
-  useSharedValue,
-} from "react-native-reanimated";
+import React, { useCallback, useMemo, useState } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -11,146 +7,46 @@ import Theme from "@/constants/theme";
 import { useStatsData } from "@/contexts/StatsContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { computeStats } from "@/lib/stats/compute";
-import { acknowledgeRecords } from "@/lib/stats/records";
+import { STATS_EVENTS, trackStats } from "@/lib/stats/analytics";
 import {
-  STATS_EVENTS,
-  trackStats,
-  type StatsEventName,
-} from "@/lib/stats/analytics";
-import { FREE_PERIODS, PERIOD_ORDER, startOfDay } from "@/lib/stats/time";
-import type {
-  DistractingApp,
-  Recommendation,
-  StatsModel,
-  StatsPeriodId,
-} from "@/lib/stats/types";
+  FREE_PERIODS,
+  PERIOD_ORDER,
+  periodTitle,
+  startOfDay,
+} from "@/lib/stats/time";
+import type { StatsModel, StatsPeriodId, UsageApp } from "@/lib/stats/types";
 import {
-  DistractionsSection,
-  FocusSection,
-  GoalSection,
-  InsightsSection,
-  OverviewPanel,
+  AppUsageCard,
+  PeriodNavigator,
   PeriodSelector,
-  RecommendationSection,
-  RecordsSection,
-  ReclaimedSection,
-  ScreenTimeSection,
-  SessionsSection,
   StatsSkeleton,
+  SummaryCard,
 } from "@/components/stats";
+import { canShowUsageReport } from "@/components/stats/UsageReport";
 import LockedPeriod from "@/components/stats/LockedPeriod";
 
-const DEFAULT_PERIOD: StatsPeriodId = "week";
-const SCROLL_THROTTLE_MS = 16;
+const DEFAULT_PERIOD: StatsPeriodId = "today";
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { input, isReady, acknowledgePersonalBests } = useStatsData();
+  const { isReady } = useStatsData();
   const { isPremium } = useSubscription();
 
-  const [period, setPeriod] = useState<StatsPeriodId>(DEFAULT_PERIOD);
-  const [viewportHeight, setViewportHeight] = useState(0);
-  const scrollY = useSharedValue(0);
-
-  // Pinned so period boundaries don't shift under the user mid-scroll; it is
-  // refreshed whenever they come back to the tab.
-  const [now, setNow] = useState(() => Date.now());
-
-  useFocusEffect(
-    useCallback(() => {
-      setNow(Date.now());
-      trackStats(STATS_EVENTS.viewed, { period, isPremium, source: "tab" });
-    }, [period, isPremium])
-  );
-
-  const model = useMemo(
-    () => computeStats({ ...input, now }, period),
-    [input, now, period]
-  );
+  const { period, offset, now, model, title, canGoBack, setPeriod, stepPeriod } =
+    useStatsWindow();
+  const reportReady = useReportReadyOnFocus(period, isPremium);
 
   const lockedPeriods = useMemo(
     () => (isPremium ? [] : PERIOD_ORDER.filter((id) => !FREE_PERIODS.includes(id))),
     [isPremium]
   );
 
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollY.value = event.contentOffset.y;
-  });
-
-  const handlePeriodChange = useCallback((next: StatsPeriodId) => {
-    setPeriod(next);
-    scrollY.value = 0;
-    trackStats(STATS_EVENTS.periodChanged, { period: next });
-  }, [scrollY]);
 
   const handleUnlock = useCallback(() => {
     trackStats(STATS_EVENTS.premiumCtaPressed, { period, source: "stats" });
     router.push("/premium");
   }, [period, router]);
-
-  const handleSeeAllApps = useCallback(() => {
-    trackStats(STATS_EVENTS.appBreakdownOpened, { period, source: "see-all" });
-    router.push({ pathname: "/stats/apps", params: { period } });
-  }, [period, router]);
-
-  const handleSelectApp = useCallback(
-    (app: DistractingApp) => {
-      Haptics.selectionAsync();
-      trackStats(STATS_EVENTS.appBreakdownOpened, {
-        period,
-        source: "row",
-        itemId: app.appId,
-      });
-      router.push({ pathname: "/stats/apps", params: { period, focus: app.appId } });
-    },
-    [period, router]
-  );
-
-  const handleRecommendation = useCallback(
-    (recommendation: Recommendation) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      trackStats(STATS_EVENTS.recommendationActioned, {
-        period,
-        itemId: recommendation.action.id,
-      });
-      const { draft } = recommendation.action;
-      router.push({
-        pathname: "/(tabs)/timed-block",
-        params: {
-          draftLabel: draft.label,
-          draftStartHour: String(draft.startHour),
-          draftEndHour: String(draft.endHour),
-          draftDays: draft.daysOfWeek.join(","),
-          draftSource: "stats-recommendation",
-        },
-      });
-    },
-    [period, router]
-  );
-
-  // Guards the haptic against replaying: the bests are marked seen the moment
-  // the grid appears, and `computeRecords` only flags what beats what's stored.
-  const acknowledgedRef = useRef(false);
-  const handleRecordsRevealed = useCallback(() => {
-    if (acknowledgedRef.current) return;
-    acknowledgedRef.current = true;
-
-    if (model.records.newlySet.length === 0) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    trackStats(STATS_EVENTS.personalBestViewed, {
-      period,
-      itemId: model.records.newlySet[0],
-    });
-    acknowledgePersonalBests(acknowledgeRecords(model.records.bests, now));
-  }, [model.records, period, now, acknowledgePersonalBests]);
-
-  useSectionImpressions(model, period, isReady);
-
-  const todayIndex = useMemo(
-    () => model.focus.series.findIndex((point) => point.at === startOfDay(now)),
-    [model.focus.series, now]
-  );
 
   const contentStyle = useMemo(
     () => [styles.content, { paddingBottom: insets.bottom + 48 }],
@@ -158,15 +54,10 @@ export default function StatsScreen() {
   );
 
   return (
-    <View
-      style={[styles.screen, { paddingTop: insets.top }]}
-      onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
-    >
-      <Animated.ScrollView
+    <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <ScrollView
         contentContainerStyle={contentStyle}
         showsVerticalScrollIndicator={false}
-        onScroll={scrollHandler}
-        scrollEventThrottle={SCROLL_THROTTLE_MS}
         testID="stats-scroll"
       >
         <Text style={styles.title}>Stats</Text>
@@ -174,7 +65,7 @@ export default function StatsScreen() {
         <View style={styles.selector}>
           <PeriodSelector
             value={period}
-            onChange={handlePeriodChange}
+            onChange={setPeriod}
             lockedPeriods={lockedPeriods}
           />
         </View>
@@ -184,88 +75,168 @@ export default function StatsScreen() {
         ) : model.periodLocked ? (
           <LockedPeriod period={period} onUnlock={handleUnlock} />
         ) : (
-          <>
-            <OverviewPanel overview={model.overview} period={period} />
-
-            <ScreenTimeSection model={model.screenTime} period={period} />
-
-            <FocusSection
-              model={model.focus}
-              range={model.period}
-              highlightIndex={todayIndex >= 0 ? todayIndex : undefined}
-            />
-
-            <ReclaimedSection
-              model={model.reclaimed}
-              range={model.period}
-              scrollY={scrollY}
-              viewportHeight={viewportHeight}
-            />
-
-            <DistractionsSection
-              model={model.distractions}
-              onSeeAll={handleSeeAllApps}
-              onSelectApp={handleSelectApp}
-            />
-
-            <GoalSection model={model.goal} animationKey={period} />
-
-            <SessionsSection model={model.sessions} />
-
-            <RecordsSection
-              model={model.records}
-              scrollY={scrollY}
-              viewportHeight={viewportHeight}
-              onReveal={handleRecordsRevealed}
-            />
-
-            <InsightsSection model={model.insights} onUnlock={handleUnlock} />
-
-            <RecommendationSection
-              recommendation={model.recommendation}
-              onAction={handleRecommendation}
-            />
-          </>
+          <StatsCards
+            model={model}
+            now={now}
+            period={period}
+            title={title}
+            canGoBack={canGoBack}
+            canGoForward={offset < 0}
+            reportReady={reportReady}
+            onStep={stepPeriod}
+          />
         )}
-      </Animated.ScrollView>
+      </ScrollView>
     </View>
   );
 }
 
 /**
- * Fires the once-per-period impression events. Deduped by a key set so a
- * re-render, a scroll or a return to the tab doesn't resend them.
+ * Whether the Screen Time report can draw, re-checked whenever the tab is
+ * opened — the answer changes when the user comes back from granting access
+ * in Settings. The screen's "viewed" event rides along, since it is the same
+ * moment.
  */
-function useSectionImpressions(
-  model: StatsModel,
-  period: StatsPeriodId,
-  isReady: boolean
-) {
-  const sent = useRef(new Set<string>());
+function useReportReadyOnFocus(period: StatsPeriodId, isPremium: boolean): boolean {
+  const [ready, setReady] = useState(canShowUsageReport);
 
-  useEffect(() => {
-    if (!isReady || model.periodLocked) return;
+  useFocusEffect(
+    useCallback(() => {
+      setReady(canShowUsageReport());
+      trackStats(STATS_EVENTS.viewed, { period, isPremium, source: "tab" });
+    }, [period, isPremium])
+  );
 
-    const send = (name: StatsEventName, key: string, props: Parameters<typeof trackStats>[1]) => {
-      const dedupeKey = `${name}:${key}`;
-      if (sent.current.has(dedupeKey)) return;
-      sent.current.add(dedupeKey);
-      trackStats(name, props);
-    };
+  return ready;
+}
 
-    if (model.goal.unavailable === null) {
-      send(STATS_EVENTS.goalViewed, period, { period, hasData: true });
-    }
-    if (model.insights.locked) {
-      send(STATS_EVENTS.premiumInsightPreviewed, period, { period, isPremium: false });
-    }
-    if (model.recommendation) {
-      send(STATS_EVENTS.recommendationViewed, model.recommendation.action.id, {
+interface StatsCardsProps {
+  model: StatsModel;
+  /** The screen's pinned clock, used to find today's column in the chart. */
+  now: number;
+  period: StatsPeriodId;
+  title: string;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  reportReady: boolean;
+  onStep: (step: -1 | 1) => void;
+}
+
+/** Everything below the period tabs once there is a window worth drawing. */
+const StatsCards = React.memo(function StatsCards({
+  model,
+  now,
+  period,
+  title,
+  canGoBack,
+  canGoForward,
+  reportReady,
+  onStep,
+}: StatsCardsProps) {
+  const { setAppDistracting } = useStatsData();
+
+  const handleToggleDistracting = useCallback(
+    (app: UsageApp) => {
+      Haptics.selectionAsync();
+      setAppDistracting(app.appId, !app.distracting);
+      // Which app someone wants less of is exactly what stats analytics must
+      // not carry, so only the direction of the change is reported.
+      trackStats(STATS_EVENTS.appFlagged, {
         period,
-        itemId: model.recommendation.action.id,
+        source: app.distracting ? "unflag" : "flag",
       });
-    }
-  }, [model, period, isReady]);
+    },
+    [period, setAppDistracting]
+  );
+
+  // The trend chart draws today's column at full strength. -1 from findIndex
+  // means the window doesn't contain today, so nothing is highlighted.
+  const todayIndex = useMemo(() => {
+    const points = model.summary.trend?.series[0]?.points;
+    const index = points?.findIndex((point) => point.at === startOfDay(now)) ?? -1;
+    return index >= 0 ? index : undefined;
+  }, [model.summary.trend, now]);
+
+  return (
+    <>
+      <PeriodNavigator
+        title={title}
+        canGoBack={canGoBack}
+        canGoForward={canGoForward}
+        onChange={onStep}
+      />
+
+      <SummaryCard
+        summary={model.summary}
+        range={model.period}
+        title={title}
+        reportReady={reportReady}
+        highlightIndex={todayIndex}
+      />
+
+      <AppUsageCard
+        model={model.appUsage}
+        range={model.period}
+        reportReady={reportReady}
+        onToggleDistracting={handleToggleDistracting}
+      />
+    </>
+  );
+});
+
+/**
+ * Which window the screen is showing, and everything derived from it. Kept out
+ * of the component so the screen itself is only layout and handlers.
+ */
+function useStatsWindow() {
+  const { input } = useStatsData();
+
+  const [period, setStoredPeriod] = useState<StatsPeriodId>(DEFAULT_PERIOD);
+  // How far back the shown window is stepped, in the period's own unit.
+  const [offset, setOffset] = useState(0);
+
+  // Pinned so window boundaries don't shift under the user mid-scroll; it is
+  // refreshed whenever they come back to the tab.
+  const [now, setNow] = useState(() => Date.now());
+  useFocusEffect(useCallback(() => setNow(Date.now()), []));
+
+  const model = useMemo(
+    () => computeStats({ ...input, now }, period, offset),
+    [input, now, period, offset]
+  );
+
+  // Changing the size of the window drops back to the current one; a week three
+  // steps back has no meaningful counterpart in months.
+  const setPeriod = useCallback((next: StatsPeriodId) => {
+    setStoredPeriod(next);
+    setOffset(0);
+    trackStats(STATS_EVENTS.periodChanged, { period: next });
+  }, []);
+
+  const stepPeriod = useCallback(
+    (step: -1 | 1) => {
+      setOffset((current) => Math.min(0, current + step));
+      trackStats(STATS_EVENTS.periodStepped, {
+        period,
+        source: step === -1 ? "back" : "forward",
+      });
+    },
+    [period]
+  );
+
+  return {
+    period,
+    offset,
+    now,
+    model,
+    title: periodTitle(model.period, now),
+    // Nothing was measured before the account existed, so stepping back stops
+    // at the window holding the join date rather than running on forever.
+    canGoBack:
+      input.joinedAt === null || model.period.start > startOfDay(input.joinedAt),
+    setPeriod,
+    stepPeriod,
+  };
 }
 
 const styles = StyleSheet.create({

@@ -39,6 +39,27 @@ interface SuggestedListNativeProps {
   style?: StyleProp<ViewStyle>;
 }
 
+interface TokenIconNativeProps {
+  item: TokenItemInput;
+  size: number;
+  cornerRadius: number;
+  style?: StyleProp<ViewStyle>;
+}
+
+interface UsageReportNativeProps {
+  /** Scene registered by the MarshmallowUsageReport extension. */
+  reportContext: string;
+  /** Left edge of the filter: the start of the comparison window, in ms. */
+  startMs: number;
+  /** Right edge of the filter: the end of the shown window, in ms. */
+  endMs: number;
+  /** Where the comparison window ends and the shown one begins, in ms. */
+  boundaryMs: number;
+  /** How finely the filter is segmented; scales with the window's length. */
+  segment: "hourly" | "daily" | "weekly";
+  style?: StyleProp<ViewStyle>;
+}
+
 // The views only exist in a native build carrying the ScreenTime module, so
 // resolve them defensively — Expo warns and rendering throws when a view config
 // is missing, as on an older dev client.
@@ -59,6 +80,8 @@ function loadNativeView<Props>(viewName: string): React.ComponentType<Props> | n
 // index never reaches for anything native on its own.
 let selectionList: React.ComponentType<SelectionListNativeProps> | null | undefined;
 let suggestedList: React.ComponentType<SuggestedListNativeProps> | null | undefined;
+let tokenIcon: React.ComponentType<TokenIconNativeProps> | null | undefined;
+let usageReport: React.ComponentType<UsageReportNativeProps> | null | undefined;
 
 export function getSelectionListView() {
   if (selectionList === undefined) {
@@ -74,9 +97,34 @@ export function getSuggestedListView() {
   return suggestedList;
 }
 
+/** Draws one app's icon on its own. Null on a build without the module. */
+export function getTokenIconView() {
+  if (tokenIcon === undefined) {
+    tokenIcon = loadNativeView<TokenIconNativeProps>("ScreenTimeTokenIconView");
+  }
+  return tokenIcon;
+}
+
+/**
+ * Draws a DeviceActivityReport scene. Null on a build without the module, and
+ * on anything that isn't iOS 16+ — real usage figures exist nowhere else.
+ */
+export function getUsageReportView() {
+  if (usageReport === undefined) {
+    usageReport = loadNativeView<UsageReportNativeProps>("ScreenTimeUsageReportView");
+  }
+  return usageReport;
+}
+
 /** True when this build can draw Screen Time selections natively. */
 export function hasNativeLists(): boolean {
   return getSelectionListView() !== null && getSuggestedListView() !== null;
 }
 
-export type { SelectionListNativeProps, SuggestedListNativeProps, TokenIdEvent };
+export type {
+  SelectionListNativeProps,
+  SuggestedListNativeProps,
+  TokenIconNativeProps,
+  TokenIdEvent,
+  UsageReportNativeProps,
+};

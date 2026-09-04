@@ -56,6 +56,7 @@ export function mergeAttemptHistory(
       completed: true,
       planId: s.planId,
       planLabel: s.label,
+      growthCm: s.awardedGrowthCm ?? s.expectedGrowthCm,
     }));
 
   return [...attempts, ...legacy].sort((a, b) => a.startedAt - b.startedAt);

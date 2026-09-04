@@ -529,6 +529,45 @@ public class ScreenTimeModule: Module {
             }
         }
 
+        // Real screen-time figures, drawn by the MarshmallowUsageReport
+        // extension — see ScreenTimeUsageReportView for why they cannot be
+        // handed to JS instead.
+        View(ScreenTimeUsageReportView.self) {
+            Prop("reportContext") { (view: ScreenTimeUsageReportView, value: String) in
+                view.reportContext = value
+            }
+            Prop("startMs") { (view: ScreenTimeUsageReportView, value: Double) in
+                view.startMs = value
+            }
+            Prop("endMs") { (view: ScreenTimeUsageReportView, value: Double) in
+                view.endMs = value
+            }
+            Prop("boundaryMs") { (view: ScreenTimeUsageReportView, value: Double) in
+                view.boundaryMs = value
+            }
+            Prop("segment") { (view: ScreenTimeUsageReportView, value: String) in
+                view.segment = value
+            }
+            OnViewDidUpdateProps { (view: ScreenTimeUsageReportView) in
+                view.rebuild()
+            }
+        }
+
+        View(ScreenTimeTokenIconView.self) {
+            Prop("item") { (view: ScreenTimeTokenIconView, item: TokenItemRecord) in
+                view.item = item
+            }
+            Prop("size") { (view: ScreenTimeTokenIconView, value: Double) in
+                view.size = CGFloat(value)
+            }
+            Prop("cornerRadius") { (view: ScreenTimeTokenIconView, value: Double) in
+                view.cornerRadius = CGFloat(value)
+            }
+            OnViewDidUpdateProps { (view: ScreenTimeTokenIconView) in
+                view.rebuild()
+            }
+        }
+
         View(ScreenTimeSuggestedListView.self) {
             Events("onToggle")
 

@@ -22,7 +22,17 @@ export interface SessionAttempt {
   planLabel?: string;
   /** Apps/categories the block hid. Empty means it blocked everything. */
   appIds?: string[];
+  /**
+   * Centimetres the marshmallow grew for this block, after the daily soft cap.
+   * Only completed blocks earn any. Absent on attempts recorded before growth
+   * was tracked per attempt, which is why the summary card reports growth as
+   * unavailable rather than zero when nothing in the window carries it.
+   */
+  growthCm?: number;
 }
+
+/** Which `Label` initializer a FamilyControls token needs to draw itself. */
+export type ScreenTimeItemType = "application" | "category" | "webDomain";
 
 /** Per-app usage for a single calendar day. */
 export interface AppUsageSample {
@@ -31,6 +41,14 @@ export interface AppUsageSample {
   minutes: number;
   /** True when the user has flagged this app as one they want less of. */
   distracting: boolean;
+  /**
+   * Opaque FamilyControls token. Only a token can draw an app's real icon and
+   * name — iOS never hands either over as data — so a sample without one falls
+   * back to a monogram tile and `label`.
+   */
+  token?: string;
+  /** Defaults to "application" when the source doesn't say. */
+  itemType?: ScreenTimeItemType;
 }
 
 /** One calendar day of device usage. Absent days mean "no data", never zero. */
@@ -95,6 +113,8 @@ export type BucketUnit = "hour" | "day" | "week" | "month";
 export interface PeriodRange {
   id: StatsPeriodId;
   label: string;
+  /** How far back the window is stepped, in its own unit. 0 is the current one. */
+  offset: number;
   /** Inclusive, ms. */
   start: number;
   /** Exclusive, ms. */
@@ -334,10 +354,95 @@ export interface Recommendation {
   action: RecommendationAction;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Summary card
+//
+// The card the screen leads with. Today shows the growth the marshmallow
+// earned; longer periods show a daily chart instead. Both then carry the same
+// three stats: time blocked, screen time and the apps used most.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface GrowthModel {
+  unavailable: UnavailableReason | null;
+  /** Centimetres earned inside the period. */
+  periodCm: number;
+  /** Formatted headline, e.g. "12.7cm". */
+  display: string;
+  delta: MetricDelta | null;
+  /** "↑ 18% vs yesterday". Absent when the previous window earned nothing. */
+  comparison: string | null;
+  tone: MetricDelta["tone"];
+}
+
+export type SummaryStatId = "timeBlocked" | "screenTime";
+
+/** One column of the stat row under the card's headline. */
+export interface SummaryStat {
+  id: SummaryStatId;
+  label: string;
+  /** Formatted total, e.g. "3h 20m". */
+  value: string;
+  /** "↑ 12%" — the period label lives on the card, not on every column. */
+  change: string | null;
+  tone: MetricDelta["tone"];
+  delta: MetricDelta | null;
+  unavailable: UnavailableReason | null;
+}
+
+/** An app as a usage row draws it. */
+export interface UsageApp {
+  appId: string;
+  label: string;
+  /** Draws the real icon and name when present; null falls back to `label`. */
+  token: string | null;
+  itemType: ScreenTimeItemType;
+  minutes: number;
+  /** Formatted total, e.g. "1h 53m". */
+  display: string;
+  /** Share of the period's busiest app, 0–1. Scales the row's bar. */
+  share: number;
+  /** True when the app is already on the user's distracting list. */
+  distracting: boolean;
+  delta: MetricDelta | null;
+}
+
+export interface AppUsageModel {
+  unavailable: UnavailableReason | null;
+  /** Ranked, longest first. */
+  apps: UsageApp[];
+  totalMinutes: number;
+}
+
+/** One line of the daily chart on the Week/Month/Year card. */
+export interface TrendSeries {
+  id: "screenTime" | "blocked";
+  label: string;
+  points: SeriesPoint[];
+  unavailable: UnavailableReason | null;
+}
+
+export interface TrendModel {
+  unavailable: UnavailableReason | null;
+  /** Screen time first, blocked time second — the legend follows this order. */
+  series: TrendSeries[];
+}
+
+export interface SummaryModel {
+  /** Today only; longer periods lead with `trend` instead. */
+  growth: GrowthModel;
+  /** Null on Today, where there is only one bucket to chart. */
+  trend: TrendModel | null;
+  stats: SummaryStat[];
+  /** The few apps whose icons sit in the card's third column. */
+  mostUsed: UsageApp[];
+}
+
 export interface StatsModel {
   period: PeriodRange;
   /** True when the whole period is behind the paywall for this account. */
   periodLocked: boolean;
+  summary: SummaryModel;
+  appUsage: AppUsageModel;
   overview: OverviewModel;
   screenTime: ScreenTimeModel;
   focus: FocusModel;

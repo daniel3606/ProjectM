@@ -408,6 +408,16 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
                 Math.round((endedAt - current.startedAt) / 60_000)
               )
             );
+        // Ended early (cancelled, or the underlying plan changed mid-window):
+        // no growth, and it doesn't count as a completed session. A Hard Block
+        // exited this way earns no Hard Block bonus either.
+        //
+        // Priced now rather than at start. A block that runs past midnight is
+        // charged against the new day's soft cap, which the estimate shown
+        // when it began could not know.
+        const award = ranFullDuration ? awardGrowthFor(current, endedAt) : null;
+        const growthCm = award ? roundGrowthCm(award.awardedGrowthCm) : 0;
+
         setAttempts((prev) =>
           [
             ...prev,
@@ -421,21 +431,14 @@ export function FocusSessionProvider({ children }: { children: React.ReactNode }
               planId: current.planId,
               planLabel: current.label,
               appIds: current.appIds,
+              growthCm,
             } satisfies SessionAttempt,
           ].slice(-MAX_ATTEMPTS)
         );
 
-        // Ended early (cancelled, or the underlying plan changed mid-window):
-        // no growth, and it doesn't count as a completed session. A Hard Block
-        // exited this way earns no Hard Block bonus either.
-        if (ranFullDuration) {
+        if (award) {
           const { startedAt, ...config } = current;
-
-          // Priced now rather than at start. A block that runs past midnight is
-          // charged against the new day's soft cap, which the estimate shown
-          // when it began could not know.
-          const { rawGrowthCm, awardedGrowthCm } = awardGrowthFor(current, endedAt);
-          const growthCm = roundGrowthCm(awardedGrowthCm);
+          const { rawGrowthCm, awardedGrowthCm } = award;
 
           const completed: CompletedSession = {
             ...config,

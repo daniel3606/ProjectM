@@ -14,7 +14,7 @@ export const FREE_PERIODS: StatsPeriodId[] = ["today", "week"];
 export const PERIOD_ORDER: StatsPeriodId[] = ["today", "week", "month", "year"];
 
 export const PERIOD_LABELS: Record<StatsPeriodId, string> = {
-  today: "Today",
+  today: "Day",
   week: "Week",
   month: "Month",
   year: "Year",
@@ -38,6 +38,13 @@ export function startOfWeek(ts: number): number {
   // the week chart is labelled (Mon…Sun).
   const offset = (d.getDay() + 6) % 7;
   return d.getTime() - offset * DAY_MS;
+}
+
+export function startOfYear(ts: number): number {
+  const d = new Date(ts);
+  d.setMonth(0, 1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
 }
 
 export function startOfMonth(ts: number): number {
@@ -80,61 +87,55 @@ interface PeriodShape {
   previousStart: number;
   previousEnd: number;
   bucketUnit: BucketUnit;
-  comparisonLabel: string;
 }
 
-function todayShape(now: number): PeriodShape {
-  const start = startOfDay(now);
+function todayShape(now: number, offset: number): PeriodShape {
+  const start = addDays(startOfDay(now), offset);
   return {
     start,
     end: addDays(start, 1),
     previousStart: addDays(start, -1),
     previousEnd: start,
     bucketUnit: "hour",
-    comparisonLabel: "yesterday",
   };
 }
 
-function weekShape(now: number): PeriodShape {
-  const start = startOfWeek(now);
+function weekShape(now: number, offset: number): PeriodShape {
+  const start = addDays(startOfWeek(now), offset * 7);
   return {
     start,
     end: addDays(start, 7),
     previousStart: addDays(start, -7),
     previousEnd: start,
     bucketUnit: "day",
-    comparisonLabel: "last week",
   };
 }
 
-function monthShape(now: number): PeriodShape {
-  const start = startOfMonth(now);
+function monthShape(now: number, offset: number): PeriodShape {
+  // Offsetting the month start rather than `now` keeps a 31st from spilling
+  // into the month after next.
+  const start = addMonths(startOfMonth(now), offset);
   return {
     start,
     end: addMonths(start, 1),
     previousStart: addMonths(start, -1),
     previousEnd: start,
     bucketUnit: "day",
-    comparisonLabel: "last month",
   };
 }
 
-function yearShape(now: number): PeriodShape {
-  const january = new Date(now);
-  january.setMonth(0, 1);
-  january.setHours(0, 0, 0, 0);
-  const start = january.getTime();
+function yearShape(now: number, offset: number): PeriodShape {
+  const start = addMonths(startOfYear(now), offset * 12);
   return {
     start,
     end: addMonths(start, 12),
     previousStart: addMonths(start, -12),
     previousEnd: start,
     bucketUnit: "month",
-    comparisonLabel: "last year",
   };
 }
 
-const SHAPES: Record<StatsPeriodId, (now: number) => PeriodShape> = {
+const SHAPES: Record<StatsPeriodId, (now: number, offset: number) => PeriodShape> = {
   today: todayShape,
   week: weekShape,
   month: monthShape,
@@ -142,16 +143,37 @@ const SHAPES: Record<StatsPeriodId, (now: number) => PeriodShape> = {
 };
 
 /**
+ * How the window before this one is named. Only the current window can call it
+ * "yesterday" or "last week" — from a window the user has already stepped back
+ * to, those words would point at the wrong place.
+ */
+const COMPARISON_LABELS: Record<StatsPeriodId, [current: string, earlier: string]> = {
+  today: ["yesterday", "the day before"],
+  week: ["last week", "the week before"],
+  month: ["last month", "the month before"],
+  year: ["last year", "the year before"],
+};
+
+/**
  * Resolves a period id into the window it covers plus the equally sized window
  * before it. Every comparison in Stats is against that previous window, so the
  * two are derived together and never diverge.
+ *
+ * `offset` steps the window backwards in its own unit — -1 is yesterday, last
+ * week, last month or last year, depending on `id`.
  */
-export function resolvePeriod(id: StatsPeriodId, now: number): PeriodRange {
-  const shape = SHAPES[id](now);
+export function resolvePeriod(
+  id: StatsPeriodId,
+  now: number,
+  offset: number = 0
+): PeriodRange {
+  const shape = SHAPES[id](now, offset);
   return {
     ...shape,
     id,
+    offset,
     label: PERIOD_LABELS[id],
+    comparisonLabel: COMPARISON_LABELS[id][offset === 0 ? 0 : 1],
     dayCount: dayCountBetween(shape.start, shape.end),
     requiresPremium: isPremiumPeriod(id),
   };
@@ -264,7 +286,45 @@ export function bucketUnitToDays(unit: BucketUnit): number {
   }
 }
 
-/** "Today", "This week" — how a period is referred to in body copy. */
+/** "Today", "This week" — how the current window is referred to in body copy. */
 export function periodCaption(id: StatsPeriodId): string {
   return id === "today" ? "Today" : `This ${PERIOD_LABELS[id].toLowerCase()}`;
+}
+
+/** "28 Aug", or "28 Aug 2024" once the year stops being the obvious one. */
+function dayLabel(ts: number, now: number): string {
+  const d = new Date(ts);
+  const year =
+    d.getFullYear() === new Date(now).getFullYear() ? "" : ` ${d.getFullYear()}`;
+  return `${d.getDate()} ${monthLabel(ts)}${year}`;
+}
+
+const RELATIVE_TITLES: Record<StatsPeriodId, Record<number, string>> = {
+  today: { 0: "Today", [-1]: "Yesterday" },
+  week: { 0: "This Week", [-1]: "Last Week" },
+  month: { 0: "This Month", [-1]: "Last Month" },
+  year: { 0: "This Year", [-1]: "Last Year" },
+};
+
+/**
+ * What the navigator prints above the card. The two most recent windows read
+ * relatively, because that is how the user thinks of them; anything further
+ * back is named by its dates, which is the only way to tell them apart.
+ */
+export function periodTitle(range: PeriodRange, now: number): string {
+  const relative: string | undefined = RELATIVE_TITLES[range.id][range.offset];
+  if (relative) return relative;
+
+  switch (range.id) {
+    case "today":
+      return `${weekdayLabel(range.start)} ${dayLabel(range.start, now)}`;
+    case "week":
+      // The window is exclusive at the end, so the last day it covers is the
+      // one before it.
+      return `${dayLabel(range.start, now)} – ${dayLabel(addDays(range.end, -1), now)}`;
+    case "month":
+      return `${monthLabel(range.start)} ${new Date(range.start).getFullYear()}`;
+    case "year":
+      return String(new Date(range.start).getFullYear());
+  }
 }

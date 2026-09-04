@@ -42,6 +42,13 @@ enum SharedBlockState {
     // only actually awarded by the app on completion.
     static let activeGrowthCmKey = "marshmallow_active_native_growth_cm"
 
+    // Start of the window the Stats screen is currently showing, as seconds
+    // since 1970. The MarshmallowUsageReport extension is handed a filter
+    // spanning that window plus the equally sized one before it, and this is
+    // the only way it can be told where the boundary between the two falls —
+    // a report extension receives nothing from the app but its context name.
+    static let usageReportBoundaryKey = "marshmallow_usage_report_boundary"
+
     // Kept in sync from JS (FocusSessionContext/MarshmallowProfileContext) so
     // MarshmallowWidget and MarshmallowShield can render the user's own
     // marshmallow, and talk about it by name, without the app being open.
