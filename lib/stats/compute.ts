@@ -27,6 +27,7 @@ import type {
 } from "./types";
 import { computeInsights, computeRecommendation } from "./insights";
 import { computeRecords } from "./records";
+import { computeAppUsage, computeSummary } from "./summary";
 
 /** Below this, a change is noise and the UI says "no change" rather than picking a direction. */
 const NEGLIGIBLE_MINUTES = 1;
@@ -655,8 +656,13 @@ export function computeOverview(
 // Entry point
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function computeStats(input: StatsInput, periodId: StatsPeriodId): StatsModel {
-  const range = resolvePeriod(periodId, input.now);
+export function computeStats(
+  input: StatsInput,
+  periodId: StatsPeriodId,
+  /** Steps the window back in its own unit; 0 is the current one. */
+  periodOffset: number = 0
+): StatsModel {
+  const range = resolvePeriod(periodId, input.now, periodOffset);
   const periodLocked = range.requiresPremium && !input.isPremium;
   const buckets = bucketsFor(range);
 
@@ -669,10 +675,13 @@ export function computeStats(input: StatsInput, periodId: StatsPeriodId): StatsM
   const records = computeRecords(input);
   const insights = computeInsights(input, range);
   const recommendation = computeRecommendation(input, range, insights.insights);
+  const appUsage = computeAppUsage(input, range);
 
   return {
     period: range,
     periodLocked,
+    summary: computeSummary(input, range, appUsage),
+    appUsage,
     overview: computeOverview(range, focus, screenTime, reclaimed, sessions),
     screenTime,
     focus,

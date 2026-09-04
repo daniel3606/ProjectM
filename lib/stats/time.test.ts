@@ -4,6 +4,7 @@ import {
   bucketsFor,
   formatHourWindow,
   periodCaption,
+  periodTitle,
   resolvePeriod,
   startOfWeek,
 } from "@/lib/stats/time";
@@ -97,5 +98,75 @@ describe("periodCaption", () => {
     expect(periodCaption("today")).toBe("Today");
     expect(periodCaption("week")).toBe("This week");
     expect(periodCaption("year")).toBe("This year");
+  });
+});
+
+describe("resolvePeriod — stepping back", () => {
+  it("moves a day, a week, a month and a year by their own unit", () => {
+    expect(resolvePeriod("today", WEDNESDAY, -1).start).toBe(at(2024, 1, 2));
+    expect(resolvePeriod("week", WEDNESDAY, -1).start).toBe(at(2023, 12, 25));
+    expect(resolvePeriod("month", WEDNESDAY, -1).start).toBe(at(2023, 12, 1));
+    expect(resolvePeriod("year", WEDNESDAY, -1).start).toBe(at(2023, 1, 1));
+  });
+
+  it("keeps comparing a stepped-back window with the one before it", () => {
+    const range = resolvePeriod("week", WEDNESDAY, -2);
+
+    expect(range.start).toBe(at(2023, 12, 18));
+    expect(range.end).toBe(at(2023, 12, 25));
+    expect(range.previousStart).toBe(at(2023, 12, 11));
+    expect(range.previousEnd).toBe(range.start);
+  });
+
+  it("steps whole months from a 31st without skipping one", () => {
+    const halloween = at(2024, 10, 31, 12);
+
+    expect(resolvePeriod("month", halloween, -1).start).toBe(at(2024, 9, 1));
+    expect(resolvePeriod("month", halloween, -2).start).toBe(at(2024, 8, 1));
+  });
+
+  it("still buckets a stepped-back window the same way", () => {
+    expect(bucketsFor(resolvePeriod("week", WEDNESDAY, -3))).toHaveLength(7);
+    expect(bucketsFor(resolvePeriod("today", WEDNESDAY, -3))).toHaveLength(8);
+  });
+});
+
+describe("resolvePeriod — comparison label", () => {
+  it('says "yesterday" only from today, and "the day before" once stepped back', () => {
+    expect(resolvePeriod("today", WEDNESDAY).comparisonLabel).toBe("yesterday");
+    expect(resolvePeriod("today", WEDNESDAY, -1).comparisonLabel).toBe(
+      "the day before"
+    );
+    expect(resolvePeriod("week", WEDNESDAY, -3).comparisonLabel).toBe(
+      "the week before"
+    );
+  });
+});
+
+describe("periodTitle", () => {
+  it("names the two most recent windows relatively", () => {
+    expect(periodTitle(resolvePeriod("today", WEDNESDAY), WEDNESDAY)).toBe("Today");
+    expect(periodTitle(resolvePeriod("today", WEDNESDAY, -1), WEDNESDAY)).toBe(
+      "Yesterday"
+    );
+    expect(periodTitle(resolvePeriod("week", WEDNESDAY, -1), WEDNESDAY)).toBe(
+      "Last Week"
+    );
+  });
+
+  it("dates anything further back, since relative names stop distinguishing", () => {
+    expect(periodTitle(resolvePeriod("today", WEDNESDAY, -2), WEDNESDAY)).toBe(
+      "Mon 1 Jan"
+    );
+    expect(periodTitle(resolvePeriod("month", WEDNESDAY, -2), WEDNESDAY)).toBe(
+      "Nov 2023"
+    );
+    expect(periodTitle(resolvePeriod("year", WEDNESDAY, -2), WEDNESDAY)).toBe("2022");
+  });
+
+  it("names a week by the days it actually covers, ends included", () => {
+    expect(periodTitle(resolvePeriod("week", WEDNESDAY, -2), WEDNESDAY)).toBe(
+      "18 Dec 2023 – 24 Dec 2023"
+    );
   });
 });

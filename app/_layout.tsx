@@ -171,7 +171,6 @@ export default function Layout() {
                               options={{ headerShown: false, presentation: "card" }}
                             />
 
-                            <Stack.Screen name="stats/apps" options={{ presentation: "card" }} />
                           </Stack>
                         </OnboardingProvider>
                       </FriendsProvider>

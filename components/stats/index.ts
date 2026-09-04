@@ -1,4 +1,9 @@
 export { default as PeriodSelector } from "./PeriodSelector";
+export { default as PeriodNavigator } from "./PeriodNavigator";
+export { default as SummaryCard } from "./SummaryCard";
+export { default as AppUsageCard, AppUsageRow } from "./AppUsageCard";
+export { default as AppIcon } from "./AppIcon";
+export { default as UsageReport, USAGE_REPORT } from "./UsageReport";
 export { default as OverviewPanel } from "./OverviewPanel";
 export { default as ScreenTimeSection } from "./ScreenTimeSection";
 export { default as FocusSection } from "./FocusSection";
@@ -16,3 +21,4 @@ export { default as StatsSkeleton } from "./StatsSkeleton";
 export { default as StatsSection, Interpretation } from "./StatsSection";
 export { default as BarChart } from "./charts/BarChart";
 export { default as LineChart } from "./charts/LineChart";
+export { default as GroupedBarChart } from "./charts/GroupedBarChart";

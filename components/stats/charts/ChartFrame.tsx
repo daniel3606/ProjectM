@@ -6,6 +6,8 @@ import type { ChartScale } from "./chartScale";
 
 export const PLOT_HEIGHT = 148;
 const LABEL_ROW_HEIGHT = 20;
+/** How far an axis label may spill into the empty slots beside it. */
+const LABEL_BLEED = 16;
 
 interface ChartFrameProps {
   points: SeriesPoint[];
@@ -117,8 +119,16 @@ const styles = StyleSheet.create({
   labelSlot: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
+  // A month's slots are narrower than a two-digit label, so the label is taken
+  // out of the flow and allowed to bleed into the blank slots either side of
+  // it rather than being ellipsized down to "2..".
   label: {
+    position: "absolute",
+    left: -LABEL_BLEED,
+    right: -LABEL_BLEED,
+    textAlign: "center",
     fontSize: 11,
     fontFamily: Theme.fonts.medium,
     color: Theme.colors.textSecondary,

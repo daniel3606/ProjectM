@@ -9,7 +9,9 @@ import type { StatsPeriodId } from "./types";
 export const STATS_EVENTS = {
   viewed: "stats_viewed",
   periodChanged: "stats_period_changed",
+  periodStepped: "stats_period_stepped",
   appBreakdownOpened: "stats_app_breakdown_opened",
+  appFlagged: "stats_app_flagged",
   goalViewed: "stats_goal_viewed",
   personalBestViewed: "stats_personal_best_viewed",
   premiumInsightPreviewed: "stats_premium_insight_previewed",

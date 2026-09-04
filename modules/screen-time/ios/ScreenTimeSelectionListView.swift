@@ -158,6 +158,24 @@ private struct SelectionListContent: View {
     }
 }
 
+// MARK: - Single icon
+
+@available(iOS 16.0, *)
+private struct TokenIconContent: View {
+    let item: ResolvedItem
+    let size: CGFloat
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        TokenGlyph(item: item, kind: .icon)
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .unredacted()
+            .environment(\.redactionReasons, [])
+            .privacySensitive(false)
+    }
+}
+
 // MARK: - Suggested strip
 
 @available(iOS 16.0, *)
@@ -302,6 +320,32 @@ final class ScreenTimeSelectionListView: ScreenTimeHostingView {
 
     override var intrinsicContentSize: CGSize {
         CGSize(width: UIView.noIntrinsicMetric, height: CGFloat(items.count) * rowHeight)
+    }
+}
+
+/// One app's icon on its own, for the usage rows and the most-used strip on
+/// Stats. A token only draws through SwiftUI's `Label`, so even a bare icon has
+/// to be hosted; JS fixes the frame, which is why nothing is measured back.
+final class ScreenTimeTokenIconView: ScreenTimeHostingView {
+    var item = TokenItemRecord()
+    var size: CGFloat = 40
+    var cornerRadius: CGFloat = 10
+
+    func rebuild() {
+        guard #available(iOS 16.0, *) else { return }
+
+        host(
+            TokenIconContent(
+                item: ResolvedItem(record: item),
+                size: size,
+                cornerRadius: cornerRadius
+            )
+        )
+        invalidateIntrinsicContentSize()
+    }
+
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: size, height: size)
     }
 }
 
