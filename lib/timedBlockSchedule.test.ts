@@ -1,6 +1,12 @@
 /** @jest-environment node */
 
-import { findActiveOccurrence, occurrenceKey } from "@/lib/timedBlockSchedule";
+import {
+  findActiveOccurrence,
+  findPlanOccurrence,
+  occurrenceKey,
+  occurrenceRun,
+  planSchedulesRun,
+} from "@/lib/timedBlockSchedule";
 import type { TimedBlockPlan } from "@/contexts/TimedBlockPlansContext";
 
 function makePlan(overrides: Partial<TimedBlockPlan> = {}): TimedBlockPlan {
@@ -87,5 +93,91 @@ describe("occurrenceKey", () => {
   it("is stable for the same run", () => {
     const startsAt = at(2024, 1, 1, 9);
     expect(occurrenceKey("plan-1", startsAt)).toBe(occurrenceKey("plan-1", startsAt));
+  });
+});
+
+describe("findPlanOccurrence", () => {
+  it("matches the named plan, not whichever plan is in window", () => {
+    const other = makePlan({ id: "other" });
+    const wanted = makePlan({ id: "wanted" });
+
+    const occurrence = findPlanOccurrence([other, wanted], "wanted", at(2024, 1, 1, 10));
+    expect(occurrence!.plan.id).toBe("wanted");
+  });
+
+  it("returns null for a disabled plan", () => {
+    const plan = makePlan({ enabled: false });
+    expect(findPlanOccurrence([plan], "plan-1", at(2024, 1, 1, 10))).toBeNull();
+  });
+
+  it("returns null for a plan that no longer exists", () => {
+    expect(findPlanOccurrence([], "plan-1", at(2024, 1, 1, 10))).toBeNull();
+  });
+
+  it("returns null outside the plan's window", () => {
+    const plan = makePlan();
+    expect(findPlanOccurrence([plan], "plan-1", at(2024, 1, 1, 12))).toBeNull();
+  });
+});
+
+describe("occurrenceRun", () => {
+  const occurrence = {
+    plan: makePlan(),
+    startsAt: at(2024, 1, 1, 9),
+    endsAt: at(2024, 1, 1, 11),
+  };
+
+  it("runs the whole window when blocking starts on time", () => {
+    const run = occurrenceRun(occurrence, occurrence.startsAt);
+    expect(run).toEqual({ startedAt: occurrence.startsAt, durationMinutes: 120 });
+  });
+
+  it("counts only what is left when the window is joined late", () => {
+    const run = occurrenceRun(occurrence, at(2024, 1, 1, 10, 30));
+    expect(run).toEqual({ startedAt: at(2024, 1, 1, 10, 30), durationMinutes: 30 });
+  });
+
+  it("still ends exactly when the window does", () => {
+    const run = occurrenceRun(occurrence, at(2024, 1, 1, 10, 30) + 20_000)!;
+    expect(run.startedAt + run.durationMinutes * 60_000).toBe(occurrence.endsAt);
+  });
+
+  it("never credits time before the window opened", () => {
+    const run = occurrenceRun(occurrence, at(2024, 1, 1, 8));
+    expect(run!.durationMinutes).toBe(120);
+  });
+
+  it("returns null when under half a minute is left", () => {
+    expect(occurrenceRun(occurrence, occurrence.endsAt - 20_000)).toBeNull();
+  });
+});
+
+describe("planSchedulesRun", () => {
+  const startsAt = at(MONDAY.year, MONDAY.month, MONDAY.day, 9);
+
+  it("stands behind a run at its own start time", () => {
+    expect(planSchedulesRun(makePlan(), startsAt)).toBe(true);
+  });
+
+  it("withdraws a run once the plan is turned off", () => {
+    expect(planSchedulesRun(makePlan({ enabled: false }), startsAt)).toBe(false);
+  });
+
+  it("withdraws a run once the plan moves to another time", () => {
+    expect(planSchedulesRun(makePlan({ startHour: 14 }), startsAt)).toBe(false);
+  });
+
+  it("withdraws a run once the plan drops that day", () => {
+    expect(planSchedulesRun(makePlan({ daysOfWeek: [2] }), startsAt)).toBe(false);
+  });
+
+  it("keeps standing behind a run whose length was edited", () => {
+    expect(planSchedulesRun(makePlan({ durationMinutes: 30 }), startsAt)).toBe(true);
+  });
+
+  it("stands behind an overnight run on the day it started", () => {
+    const plan = makePlan({ startHour: 23, endHour: 3, durationMinutes: 240 });
+    const overnightStart = at(MONDAY.year, MONDAY.month, MONDAY.day, 23);
+    expect(planSchedulesRun(plan, overnightStart)).toBe(true);
   });
 });

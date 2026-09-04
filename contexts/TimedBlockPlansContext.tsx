@@ -3,9 +3,21 @@ import { AppState } from "react-native";
 import { usePersistedState } from "@/lib/storage";
 import { estimateGrowthCm, type FocusMode } from "@/constants/marshmallow";
 import { getBlockTypeForPlan } from "@/lib/growthModel";
-import { useFocusSession, type FocusSessionConfig } from "@/contexts/FocusSessionContext";
+import {
+  useFocusSession,
+  type ActiveSession,
+  type FocusSessionConfig,
+} from "@/contexts/FocusSessionContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { findActiveOccurrence, occurrenceKey } from "@/lib/timedBlockSchedule";
+import {
+  findActiveOccurrence,
+  findPlanOccurrence,
+  occurrenceKey,
+  occurrenceRun,
+  planSchedulesRun,
+  type OccurrenceRun,
+  type PlanOccurrence,
+} from "@/lib/timedBlockSchedule";
 import { notifyBlockStarted } from "@/lib/notifications";
 import {
   scheduledBlockIsHard,
@@ -73,29 +85,45 @@ function normalizePlan(plan: TimedBlockPlan): TimedBlockPlan {
   return { ...plan, daysOfWeek: typeof legacyDay === "number" ? [legacyDay] : [] };
 }
 
-function sessionConfigFromPlan(
-  plan: TimedBlockPlan,
+/**
+ * The session one run of a plan should start with. Everything time-based comes
+ * from `run`, not from the plan: a window joined part-way through is a shorter
+ * block and earns the growth of the minutes it actually blocks.
+ */
+function sessionConfigFromRun(
+  occurrence: PlanOccurrence,
+  run: OccurrenceRun,
   growthPreview: { streakDays: number; rawGrowthTodayCm: number },
   isPremium: boolean
 ): FocusSessionConfig {
+  const { plan } = occurrence;
   const isHardMode = scheduledBlockIsHard(plan, isPremium);
   return {
-    durationMinutes: plan.durationMinutes,
+    durationMinutes: run.durationMinutes,
     focusMode: isHardMode ? "deep" : "flexible",
     blockType: getBlockTypeForPlan(plan),
     expectedGrowthCm: estimateGrowthCm({
-      minutes: plan.durationMinutes,
+      minutes: run.durationMinutes,
       blockType: getBlockTypeForPlan(plan),
       isHardBlock: isHardMode,
       streakDays: growthPreview.streakDays,
       rawGrowthTodayCm: growthPreview.rawGrowthTodayCm,
     }),
     planId: plan.id,
+    occurrenceStartsAt: occurrence.startsAt,
     label: plan.label,
     appIds: plan.appIds,
     blockMode: scheduledBlockMode(plan, isPremium),
     isHardMode,
   };
+}
+
+/**
+ * Which scheduled run a session belongs to. Sessions saved before partial runs
+ * existed pinned `startedAt` to the scheduled start, so fall back to it.
+ */
+function runOccurrenceStartsAt(session: ActiveSession): number {
+  return session.occurrenceStartsAt ?? session.startedAt;
 }
 
 export function TimedBlockPlansProvider({ children }: { children: React.ReactNode }) {
@@ -135,13 +163,6 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
     [setPlans]
   );
 
-  const setPlanEnabled = useCallback(
-    (id: string, enabled: boolean) => {
-      setPlans((prev) => prev.map((p) => (p.id === id ? { ...p, enabled } : p)));
-    },
-    [setPlans]
-  );
-
   const { activeSession, isSessionLoaded, startSession, stopSession, growthPreview } =
     useFocusSession();
 
@@ -158,6 +179,25 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
   const dismissedRef = useRef<Map<string, number>>(new Map());
 
   const prevSessionRef = useRef(activeSession);
+
+  const setPlanEnabled = useCallback(
+    (id: string, enabled: boolean) => {
+      // Switching a plan back on asks for its current window again, so drop
+      // the record of the run that switching it off ended. Without this the
+      // plan would stay quiet until its next occurrence.
+      if (enabled) {
+        const prefix = `${id}-`;
+        for (const key of dismissedRef.current.keys()) {
+          if (key.startsWith(prefix)) dismissedRef.current.delete(key);
+        }
+        setDismissedOccurrences((current) =>
+          current.filter((d) => !d.key.startsWith(prefix))
+        );
+      }
+      setPlans((prev) => prev.map((p) => (p.id === id ? { ...p, enabled } : p)));
+    },
+    [setDismissedOccurrences, setPlans]
+  );
 
   const isReady = plansLoaded && dismissalsLoaded && isSessionLoaded;
 
@@ -195,7 +235,13 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         focusMode: plan.focusMode,
         blockMode: scheduledBlockMode(plan, isPremium),
       }));
-    if (schedulable.length === 0) return;
+    // An empty list is a no-op on the native side, so the last plan being
+    // turned off or deleted has to unregister explicitly. Otherwise iOS keeps
+    // firing the extension and shielding apps for a plan that is switched off.
+    if (schedulable.length === 0) {
+      ScreenTime.clearScheduledBlocks().catch(() => {});
+      return;
+    }
     ScreenTime.scheduleTimedBlocks(schedulable).catch(() => {});
   }, [plans, plansLoaded, isPremium]);
 
@@ -228,16 +274,17 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
     const adoptNativeBlock = () => {
       ScreenTime.getActiveNativeBlock().then((native) => {
         if (cancelled || !native) return;
-        const plan = plans.find((p) => p.id === native.planId);
-        if (!plan) return;
 
-        // The user ended this run by hand; the extension's leftover state is
-        // stale, so clear it rather than resurrecting the block.
-        const occurrence = findActiveOccurrence(plans, Date.now());
+        // Only adopt a run the schedule still agrees is happening. A plan the
+        // user has since turned off, edited or deleted — or one whose window
+        // has closed — leaves state behind that must be cleared, not revived;
+        // so does a run the user ended by hand.
+        const occurrence = findPlanOccurrence(plans, native.planId, Date.now());
+        const run = occurrence && occurrenceRun(occurrence, native.startedAt);
         if (
-          occurrence &&
-          occurrence.plan.id === plan.id &&
-          dismissedRef.current.has(occurrenceKey(plan.id, occurrence.startsAt))
+          !occurrence ||
+          !run ||
+          dismissedRef.current.has(occurrenceKey(native.planId, occurrence.startsAt))
         ) {
           ScreenTime.clearActiveNativeBlock().catch(() => {});
           ScreenTime.clearBlocking().catch(() => {});
@@ -248,11 +295,14 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
         // Re-apply blocking from the main app process — the extension's
         // ManagedSettingsStore may not have persisted across cold launch.
         ScreenTime.applyBlockMode(
-          scheduledBlockMode(plan, isPremium),
-          plan.appIds
+          scheduledBlockMode(occurrence.plan, isPremium),
+          occurrence.plan.appIds
         ).catch(() => {});
 
-        startSession(sessionConfigFromPlan(plan, growthPreview, isPremium), native.startedAt);
+        startSession(
+          sessionConfigFromRun(occurrence, run, growthPreview, isPremium),
+          run.startedAt
+        );
       }).catch(() => {});
     };
 
@@ -267,61 +317,63 @@ export function TimedBlockPlansProvider({ children }: { children: React.ReactNod
     };
   }, [isReady, activeSession, plans, startSession, growthPreview, isPremium]);
 
-  // Records the stop when a plan-driven session disappears mid-window.
+  // Records the stop when a plan-driven session disappears mid-window. Read off
+  // the session, not the schedule: the usual reason a run ends early is its plan
+  // being turned off or deleted, which erases the run from the schedule.
   useEffect(() => {
     const prev = prevSessionRef.current;
     prevSessionRef.current = activeSession;
     if (!isReady || !prev?.planId || activeSession) return;
 
-    const occurrence = findActiveOccurrence(plans, Date.now());
-    if (!occurrence || occurrence.plan.id !== prev.planId) return;
-    if (occurrence.startsAt !== prev.startedAt) return;
+    // A run that reached its end needs no record; its window is closed.
+    const endsAt = prev.startedAt + prev.durationMinutes * 60_000;
+    if (Date.now() >= endsAt) return;
 
-    const key = occurrenceKey(prev.planId, prev.startedAt);
+    const key = occurrenceKey(prev.planId, runOccurrenceStartsAt(prev));
     // Mirror first: the tick effect below runs later in this same commit.
-    dismissedRef.current.set(key, occurrence.endsAt);
+    dismissedRef.current.set(key, endsAt);
     setDismissedOccurrences((current) =>
-      current.some((d) => d.key === key)
-        ? current
-        : [...current, { key, endsAt: occurrence.endsAt }]
+      current.some((d) => d.key === key) ? current : [...current, { key, endsAt }]
     );
-  }, [isReady, activeSession, plans, setDismissedOccurrences]);
+  }, [isReady, activeSession, setDismissedOccurrences]);
 
   useEffect(() => {
     if (!isReady) return;
 
     const tick = () => {
       const now = Date.now();
-      const occurrence = findActiveOccurrence(plans, now);
 
       if (activeSession?.planId) {
-        const stillRunning =
-          !!occurrence &&
-          occurrence.plan.id === activeSession.planId &&
-          occurrence.startsAt === activeSession.startedAt;
-        if (!stillRunning) {
-          // The plan was disabled/edited/deleted mid-window — end early.
-          // The normal end-of-window case is instead caught by
-          // FocusSessionContext's own duration timer, which also fires the
-          // "Block Ended" notification.
+        // A running block owns its own clock; FocusSessionContext ends it when
+        // it is up, and fires the "Block Ended" notification. The schedule only
+        // cuts in when the plan behind the run is withdrawn — turned off,
+        // deleted, or moved to another time — which ends it early and unpaid.
+        const plan = plans.find((p) => p.id === activeSession.planId);
+        if (!plan || !planSchedulesRun(plan, runOccurrenceStartsAt(activeSession))) {
           stopSession();
         }
         return;
       }
 
       // A manual (non-plan) focus session is running — never interrupt it.
-      if (activeSession || !occurrence) return;
+      if (activeSession) return;
+
+      const occurrence = findActiveOccurrence(plans, now);
+      if (!occurrence) return;
       if (dismissedRef.current.has(occurrenceKey(occurrence.plan.id, occurrence.startsAt))) return;
+
+      // Joining a window already under way runs only what is left of it, and
+      // pays out only what that is worth. Under a minute left is not worth
+      // starting at all.
+      const run = occurrenceRun(occurrence, now);
+      if (!run) return;
 
       ScreenTime.applyBlockMode(
         scheduledBlockMode(occurrence.plan, isPremium),
         occurrence.plan.appIds
       ).catch(() => {});
 
-      startSession(
-        sessionConfigFromPlan(occurrence.plan, growthPreview, isPremium),
-        occurrence.startsAt
-      );
+      startSession(sessionConfigFromRun(occurrence, run, growthPreview, isPremium), run.startedAt);
       notifyBlockStarted(occurrence.plan.label);
     };
 

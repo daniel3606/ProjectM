@@ -49,6 +49,12 @@ export interface FocusSessionConfig {
   blockType?: GrowthBlockType;
   /** Set when this session was auto-started by a Timed Block plan rather than manually. */
   planId?: string;
+  /**
+   * Scheduled start of the plan window this run belongs to. Identifies the run
+   * to the scheduler, which `startedAt` no longer can: a window joined
+   * part-way through starts blocking later than it was scheduled to.
+   */
+  occurrenceStartsAt?: number;
   /** Plan label, used to personalize the auto-dismiss notification for Timed Block sessions. */
   label?: string;
 }
@@ -102,7 +108,7 @@ interface FocusSessionContextValue {
   pendingGrowthResult: PendingGrowthResult | null;
   /** Streak and day-so-far raw growth, for previewing what a block would earn. */
   growthPreview: GrowthPreview;
-  /** `startedAt` defaults to now; pass it explicitly to pin a session to a real scheduled start time. */
+  /** `startedAt` defaults to now; pass it explicitly to pin a session to when blocking really began. */
   startSession: (config: FocusSessionConfig, startedAt?: number) => void;
   stopSession: () => void;
   /** Patches the running session in place (e.g. duration/growth from an edit) without resetting `startedAt`. No-op if nothing is active. */
